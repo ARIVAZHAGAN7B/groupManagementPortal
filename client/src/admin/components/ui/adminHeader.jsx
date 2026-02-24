@@ -1,7 +1,9 @@
-// src/ui/adminHeader.jsx
 import { useEffect, useMemo, useState } from "react";
+import MenuRoundedIcon from "@mui/icons-material/MenuRounded";
 import Icons from "../../../assets/Icons";
+import { useAuth } from "../../../utils/AuthContext";
 import { fetchCurrentPhase, fetchPhaseTargets } from "../../../service/phase.api";
+import { getProfile } from "../../../service/joinRequests.api";
 
 const TARGET_TIER_ORDER = ["D", "C", "B", "A"];
 const PHASE_END_HOUR = 18;
@@ -14,26 +16,52 @@ const formatShortDate = (value) => {
 };
 
 const toPhaseEndDateTime = (value) => {
-  if (typeof value === "string") {
-    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (match) {
-      const year = Number(match[1]);
-      const monthIndex = Number(match[2]) - 1;
-      const day = Number(match[3]);
-      return new Date(year, monthIndex, day, PHASE_END_HOUR, 0, 0, 0);
-    }
-  }
-
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), PHASE_END_HOUR, 0, 0, 0);
+
+  return new Date(
+    d.getFullYear(),
+    d.getMonth(),
+    d.getDate(),
+    PHASE_END_HOUR,
+    0,
+    0,
+    0
+  );
+};
+
+const getInitials = (name) => {
+  if (!name) return "AD";
+  return name
+    .trim()
+    .split(" ")
+    .slice(0, 2)
+    .map((n) => n[0]?.toUpperCase())
+    .join("");
+};
+
+const formatRoleLabel = (role) => {
+  if (!role) return "Admin";
+  return String(role)
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 };
 
 const AdminHeader = () => {
+  const { user } = useAuth();
+
   const [phase, setPhase] = useState(null);
   const [phaseTargets, setPhaseTargets] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState(null);
 
+  const [loading, setLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(true);
+
+  // =========================
+  // Load Phase
+  // =========================
   useEffect(() => {
     let mounted = true;
 
@@ -43,11 +71,9 @@ const AdminHeader = () => {
         let targetData = null;
 
         if (data?.phase_id) {
-          try {
-            targetData = await fetchPhaseTargets(data.phase_id);
-          } catch {
-            targetData = null;
-          }
+          targetData = await fetchPhaseTargets(data.phase_id).catch(
+            () => null
+          );
         }
 
         if (!mounted) return;
@@ -64,7 +90,7 @@ const AdminHeader = () => {
     };
 
     loadPhase();
-    const intervalId = setInterval(loadPhase, 60 * 1000);
+    const intervalId = setInterval(loadPhase, 60000);
 
     return () => {
       mounted = false;
@@ -72,39 +98,60 @@ const AdminHeader = () => {
     };
   }, []);
 
+  // =========================
+  // Load Profile (NEW)
+  // =========================
+  useEffect(() => {
+    let mounted = true;
+
+    const loadProfile = async () => {
+      if (!user) {
+        setProfile(null);
+        setProfileLoading(false);
+        return;
+      }
+
+      setProfileLoading(true);
+
+      try {
+        const data = await getProfile(); // ✅ no userId
+        if (!mounted) return;
+        setProfile(data);
+      } catch {
+        if (!mounted) return;
+        setProfile(null);
+      } finally {
+        if (!mounted) return;
+        setProfileLoading(false);
+      }
+    };
+
+    loadProfile();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user]);
+
+  // =========================
+  // Phase Derived
+  // =========================
   const remainingText = useMemo(() => {
     if (loading) return "Loading phase...";
     if (!phase?.end_date) return "No active phase";
 
     const endDate = toPhaseEndDateTime(phase.end_date);
-    const now = new Date();
-    if (endDate && now > endDate) return "Phase ended";
+    if (endDate && new Date() > endDate) return "Phase ended";
 
-    if (
-      endDate &&
-      now.getFullYear() === endDate.getFullYear() &&
-      now.getMonth() === endDate.getMonth() &&
-      now.getDate() === endDate.getDate()
-    ) {
-      return "Ends today at 6:00 PM";
+    const days = Number(phase?.remaining_working_days);
+
+    if (!Number.isNaN(days)) {
+      if (days <= 0) return "Phase ended";
+      if (days === 1) return "1 Day Remaining";
+      return `${days} Days Remaining`;
     }
 
-    const workingDays = Number(phase?.remaining_working_days);
-    if (!Number.isNaN(workingDays)) {
-      if (workingDays <= 0) return "Phase ended";
-      if (workingDays === 1) return "1 Day Remaining";
-      return `${workingDays} Days Remaining`;
-    }
-    if (!endDate) return "No active phase";
-
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-    const diffDays = Math.ceil((endDate.getTime() - endOfToday.getTime()) / msPerDay);
-
-    if (diffDays < 0) return "Phase ended";
-    if (diffDays === 0) return "Ends today at 6:00 PM";
-    if (diffDays === 1) return "1 Day Remaining";
-    return `${diffDays} Days Remaining`;
+    return "Ongoing";
   }, [loading, phase]);
 
   const phaseSummaryText = useMemo(() => {
@@ -113,7 +160,8 @@ const AdminHeader = () => {
 
     const start = formatShortDate(phase.start_date);
     const end = formatShortDate(phase.end_date);
-    if (start && end) return `${start} – ${end} · 6:00 PM`;
+
+    if (start && end) return `${start} - ${end} | 6:00 PM`;
 
     return `ID ${String(phase.phase_id).slice(0, 8)}`;
   }, [loading, phase]);
@@ -123,7 +171,10 @@ const AdminHeader = () => {
     if (!phase?.phase_id) return "No phase target";
     if (!phaseTargets) return "Target unavailable";
 
-    const rows = Array.isArray(phaseTargets?.targets) ? phaseTargets.targets : [];
+    const rows = Array.isArray(phaseTargets?.targets)
+      ? phaseTargets.targets
+      : [];
+
     const targetsByTier = rows.reduce((acc, row) => {
       const tier = String(row?.tier || "").toUpperCase();
       if (tier) acc[tier] = row?.group_target;
@@ -131,84 +182,96 @@ const AdminHeader = () => {
     }, {});
 
     const tierText = TARGET_TIER_ORDER
-      .filter((tier) => targetsByTier[tier] !== undefined && targetsByTier[tier] !== null)
+      .filter((tier) => targetsByTier[tier] !== undefined)
       .map((tier) => `${tier}: ${targetsByTier[tier]}`)
-      .join("  ·  ");
+      .join(" | ");
 
     const individualTarget = phaseTargets?.individual_target;
-    const hasIndividual =
-      individualTarget !== undefined && individualTarget !== null && individualTarget !== "";
 
-    if (hasIndividual && tierText) return `Ind: ${individualTarget}  ·  ${tierText}`;
-    if (hasIndividual) return `Ind: ${individualTarget}`;
+    if (individualTarget && tierText)
+      return `Ind: ${individualTarget} | ${tierText}`;
+    if (individualTarget) return `Ind: ${individualTarget}`;
     if (tierText) return tierText;
+
     return "No phase target";
   }, [loading, phase, phaseTargets]);
 
+  // =========================
+  // Profile Derived (UPDATED)
+  // =========================
+  const userName = profile?.name || user?.name || "Admin";
+  const roleLabel = formatRoleLabel(profile?.role || user?.role);
+  const adminId = profile?.adminId || null;
+
+  const profileSubtitle = profileLoading
+    ? "Loading profile..."
+    : adminId
+    ? `${roleLabel} ID: ${adminId}`
+    : `${roleLabel} ID unavailable`;
+
+  const initials = getInitials(userName);
+
+  // =========================
+  // UI
+  // =========================
+
   return (
-    <div className="w-full flex items-center justify-between">
-      {/* Left – Brand */}
-      <div className="flex items-center gap-2.5">
-        <div className="size-9 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-sm">
+    <div className="flex w-full items-center justify-between gap-3">
+      {/* LEFT */}
+      <div className="flex items-center gap-3">
+        <button className="grid h-10 w-10 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden">
+          <MenuRoundedIcon fontSize="small" />
+        </button>
+
+        <div className="grid h-10 w-10 place-items-center rounded-lg bg-[#3211d4] text-white">
           <Icons.School fontSize="small" />
         </div>
-        <div className="leading-tight">
-          <h1 className="text-sm font-bold tracking-tight text-gray-900">GMP Portal</h1>
-          <p className="text-[10px] font-medium text-gray-400 uppercase tracking-widest">
+
+        <div className="hidden sm:block">
+          <h1 className="text-lg font-bold text-slate-900">
+            UniPortal
+          </h1>
+          <p className="text-[10px] font-semibold uppercase text-slate-500">
             Admin Console
           </p>
         </div>
       </div>
 
-      {/* Right – Meta + Actions */}
-      <div className="flex items-center gap-2">
+      {/* RIGHT */}
+      <div className="flex items-center gap-4">
 
-        {/* Phase Info Card */}
-        <div
-          className="hidden lg:flex flex-col px-3 py-1.5 rounded-lg border border-gray-100 bg-gray-50 max-w-[400px]"
-          title={`Current Phase: ${phaseSummaryText}\nTarget: ${targetSummaryText}`}
-        >
-          <span className="text-[9.5px] font-semibold uppercase tracking-widest text-gray-400 mb-0.5">
-            Current Phase
-          </span>
-          <span className="text-[11.5px] font-semibold text-gray-700 truncate leading-tight">
+        <div className="hidden sm:flex text-xs font-bold text-[#3211d4]">
+          {remainingText}
+        </div>
+
+        <div className="hidden xl:flex text-xs">
+          Current Phase:{" "}
+          <span className="font-bold ml-1">
             {phaseSummaryText}
           </span>
-          <span className="text-[10.5px] text-blue-600 truncate leading-tight mt-0.5">
+        </div>
+
+        <div className="hidden xl:flex text-xs">
+          Targets:{" "}
+          <span className="font-bold ml-1">
             {targetSummaryText}
           </span>
         </div>
 
-        {/* Countdown */}
-        <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-50 border border-red-100">
-          <Icons.Timer fontSize="small" className="text-red-400" />
-          <span className="text-xs font-semibold text-red-500 whitespace-nowrap">
-            {remainingText}
-          </span>
-        </div>
-
-        {/* Divider */}
-        <div className="h-5 w-px bg-gray-200 hidden sm:block mx-0.5" />
-
-        {/* Notifications */}
-        <button className="relative size-9 rounded-lg border border-gray-100 bg-white hover:bg-gray-50 flex items-center justify-center text-gray-500 transition-colors">
-          <Icons.Notifications fontSize="small" />
-          <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-red-500" />
-        </button>
-
-        {/* User */}
-        <div className="flex items-center gap-2 pl-1">
-          <div className="size-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-            <Icons.Person fontSize="small" />
-          </div>
-          <div className="hidden md:block leading-tight">
-            <p className="text-xs font-semibold text-gray-800">Admin</p>
-            <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">
-              Control Panel
+        <div className="flex items-center gap-3">
+          <div className="hidden lg:block text-right">
+            <p className="text-sm font-bold text-slate-900">
+              {userName}
+            </p>
+            <p className="text-[10px] text-slate-500">
+              {profileSubtitle}
             </p>
           </div>
-        </div>
 
+          <div className="grid h-10 w-10 place-items-center rounded-full bg-slate-200 text-xs font-bold text-slate-700">
+            {initials}
+          </div>
+        </div>
       </div>
     </div>
   );

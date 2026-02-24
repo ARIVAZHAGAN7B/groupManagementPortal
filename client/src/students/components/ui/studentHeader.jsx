@@ -1,189 +1,257 @@
-// src/ui/adminHeader.jsx
 import { useEffect, useMemo, useState } from "react";
+import MenuRoundedIcon from "@mui/icons-material/MenuRounded";
 import Icons from "../../../assets/Icons";
+import { useAuth } from "../../../utils/AuthContext";
 import { fetchMyGroup } from "../../../service/membership.api";
 import { fetchCurrentPhase, fetchPhaseTargets } from "../../../service/phase.api";
+import { getProfile } from "../../../service/joinRequests.api";
 
 const PHASE_END_HOUR = 18;
 
 const toPhaseEndDateTime = (value) => {
-  if (typeof value === "string") {
-    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (match) {
-      const year = Number(match[1]);
-      const monthIndex = Number(match[2]) - 1;
-      const day = Number(match[3]);
-      return new Date(year, monthIndex, day, PHASE_END_HOUR, 0, 0, 0);
-    }
-  }
-
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), PHASE_END_HOUR, 0, 0, 0);
+
+  return new Date(
+    d.getFullYear(),
+    d.getMonth(),
+    d.getDate(),
+    PHASE_END_HOUR,
+    0,
+    0,
+    0
+  );
+};
+
+const getInitials = (name) => {
+  if (!name) return "ST";
+  return name
+    .trim()
+    .split(" ")
+    .slice(0, 2)
+    .map((n) => n[0]?.toUpperCase())
+    .join("");
 };
 
 const StudentHeader = () => {
+  const { user } = useAuth();
+
   const [phase, setPhase] = useState(null);
   const [phaseTargets, setPhaseTargets] = useState(null);
   const [myGroup, setMyGroup] = useState(null);
+
+  const [profile, setProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(true);
   const [loading, setLoading] = useState(true);
 
+  // =========================
+  // Load Phase + Group
+  // =========================
   useEffect(() => {
     let mounted = true;
 
-    const loadPhase = async () => {
+    const loadData = async () => {
       try {
-        const [data, myGroupRes] = await Promise.all([
+        const [phaseRes, groupRes] = await Promise.all([
           fetchCurrentPhase(),
-          fetchMyGroup().catch(() => ({ group: null }))
+          fetchMyGroup().catch(() => ({ group: null })),
         ]);
-        let targetData = null;
 
-        if (data?.phase_id) {
-          try {
-            targetData = await fetchPhaseTargets(data.phase_id);
-          } catch {
-            targetData = null;
-          }
+        let targetRes = null;
+
+        if (phaseRes?.phase_id) {
+          targetRes = await fetchPhaseTargets(phaseRes.phase_id).catch(
+            () => null
+          );
         }
 
         if (!mounted) return;
-        setPhase(data || null);
-        setPhaseTargets(targetData);
-        setMyGroup(myGroupRes?.group ?? null);
+
+        setPhase(phaseRes || null);
+        setMyGroup(groupRes?.group ?? null);
+        setPhaseTargets(targetRes);
       } catch {
         if (!mounted) return;
         setPhase(null);
-        setPhaseTargets(null);
         setMyGroup(null);
+        setPhaseTargets(null);
       } finally {
         if (!mounted) return;
         setLoading(false);
       }
     };
 
-    loadPhase();
-    const intervalId = setInterval(loadPhase, 60 * 1000);
+    loadData();
+    const interval = setInterval(loadData, 60000);
 
     return () => {
       mounted = false;
-      clearInterval(intervalId);
+      clearInterval(interval);
     };
   }, []);
+
+  // =========================
+  // Load Profile
+  // =========================
+  useEffect(() => {
+    let mounted = true;
+
+    const loadProfile = async () => {
+      if (!user) {
+        setProfile(null);
+        setProfileLoading(false);
+        return;
+      }
+
+      setProfileLoading(true);
+
+      try {
+        const data = await getProfile(); // ✅ no userId
+        if (!mounted) return;
+        setProfile(data);
+      } catch {
+        if (!mounted) return;
+        setProfile(null);
+      } finally {
+        if (!mounted) return;
+        setProfileLoading(false);
+      }
+    };
+
+    loadProfile();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user]);
+
+  // =========================
+  // Derived Values
+  // =========================
+
+  const studentName = useMemo(() => {
+    return profile?.name || user?.name || "Student";
+  }, [profile, user]);
+
+  const studentId = useMemo(() => {
+    return profile?.studentId || "";
+  }, [profile]);
 
   const remainingText = useMemo(() => {
     if (loading) return "Loading phase...";
     if (!phase?.end_date) return "No active phase";
 
     const endDate = toPhaseEndDateTime(phase.end_date);
-    const now = new Date();
-    if (endDate && now > endDate) return "Phase ended";
+    if (endDate && new Date() > endDate) return "Phase ended";
 
-    if (
-      endDate &&
-      now.getFullYear() === endDate.getFullYear() &&
-      now.getMonth() === endDate.getMonth() &&
-      now.getDate() === endDate.getDate()
-    ) {
-      return "Ends today at 6:00 PM";
+    const days = Number(phase?.remaining_working_days);
+
+    if (!Number.isNaN(days)) {
+      if (days <= 0) return "Phase ended";
+      if (days === 1) return "1 Day Remaining";
+      return `${days} Days Remaining`;
     }
 
-    const workingDays = Number(phase?.remaining_working_days);
-    if (!Number.isNaN(workingDays)) {
-      if (workingDays <= 0) return "Phase ended";
-      if (workingDays === 1) return "1 Day Remaining";
-      return `${workingDays} Days Remaining`;
-    }
-    if (!endDate) return "No active phase";
-
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-    const diffDays = Math.ceil((endDate.getTime() - endOfToday.getTime()) / msPerDay);
-
-    if (diffDays < 0) return "Phase ended";
-    if (diffDays === 0) return "Ends today at 6:00 PM";
-    if (diffDays === 1) return "1 Day Remaining";
-    return `${diffDays} Days Remaining`;
+    return "Ongoing";
   }, [loading, phase]);
 
   const eligibilityTargetText = useMemo(() => {
-    if (loading) return "Loading target...";
-    if (!phase?.phase_id) return "No active phase";
+    if (loading) return "Loading...";
+    if (!phase?.phase_id) return "No phase";
 
-    const target = phaseTargets?.individual_target;
-    if (target === undefined || target === null || target === "") {
-      return "Target not set";
-    }
-
-    return `${target} points`;
+    return phaseTargets?.individual_target
+      ? `${phaseTargets.individual_target} pts`
+      : "Not set";
   }, [loading, phase, phaseTargets]);
 
-  const groupTierTargetText = useMemo(() => {
-    if (!myGroup?.group_id || !myGroup?.tier) return "";
-    if (!phase?.phase_id) return "";
-
-    const tier = String(myGroup.tier).toUpperCase();
-    const rows = Array.isArray(phaseTargets?.targets) ? phaseTargets.targets : [];
-    const row = rows.find((item) => String(item?.tier || "").toUpperCase() === tier);
-
-    if (!row || row.group_target === undefined || row.group_target === null || row.group_target === "") {
-      return `Group (${tier}) target not set`;
+  const groupTierWidget = useMemo(() => {
+    if (!myGroup?.tier || !phase?.phase_id) {
+      return { label: "Group Target", value: "Unavailable" };
     }
 
-    return `Group (${tier}) target: ${row.group_target} points`;
+    const tier = myGroup.tier.toUpperCase();
+    const rows = Array.isArray(phaseTargets?.targets)
+      ? phaseTargets.targets
+      : [];
+
+    const row = rows.find(
+      (item) => item?.tier?.toUpperCase() === tier
+    );
+
+    if (!row?.group_target) {
+      return { label: `${tier} Tier`, value: "Not set" };
+    }
+
+    return {
+      label: `${tier} Tier`,
+      value: `${row.group_target} pts`,
+    };
   }, [myGroup, phase, phaseTargets]);
 
+  const initials = getInitials(studentName);
+
+  // =========================
+  // UI
+  // =========================
+
   return (
-    <div className="w-full flex items-center justify-between">
+    <div className="flex w-full items-center justify-between gap-3">
+
       {/* Left */}
       <div className="flex items-center gap-3">
-        <div className="size-10 rounded-lg bg-blue-700 text-white flex items-center justify-center">
+        <button className="grid h-10 w-10 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden">
+          <MenuRoundedIcon fontSize="small" />
+        </button>
+
+        <div className="grid h-10 w-10 place-items-center rounded-lg bg-[#3211d4] text-white">
           <Icons.School fontSize="small" />
         </div>
-        <div className="leading-tight">
-          <h1 className="text-base font-bold text-gray-900">UniPortal</h1>
-          <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider">
-            Admin Console
+
+        <div className="hidden sm:block">
+          <h1 className="text-lg font-bold text-slate-900">GM Portal</h1>
+          <p className="text-[10px] font-semibold uppercase text-slate-500">
+            Student Portal
           </p>
         </div>
       </div>
 
       {/* Right */}
-      <div className="flex items-center gap-3">
-        <div className="hidden md:flex flex-col px-3 py-2 rounded-lg border border-gray-200 bg-white">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
-            Eligibility Target
-          </span>
-          <span className="text-xs font-semibold text-blue-700">
+      <div className="flex items-center gap-4">
+
+        <div className="hidden sm:flex text-xs font-bold text-[#3211d4]">
+          {remainingText}
+        </div>
+
+        <div className="hidden md:flex text-xs">
+          Eligibility:{" "}
+          <span className="font-bold ml-1">
             {eligibilityTargetText}
           </span>
-          {groupTierTargetText ? (
-            <span className="text-[11px] text-gray-600">
-              {groupTierTargetText}
-            </span>
-          ) : null}
         </div>
 
-        <div className="hidden sm:flex items-center gap-2 text-gray-600">
-          <Icons.Timer fontSize="small" />
-          <span className="text-sm font-semibold text-red-600">
-            {remainingText}
+        <div className="hidden md:flex text-xs">
+          {groupTierWidget.label}:{" "}
+          <span className="font-bold ml-1">
+            {groupTierWidget.value}
           </span>
         </div>
 
-        <div className="h-6 w-px bg-gray-200 hidden sm:block" />
-
-        <button className="relative size-10 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center text-gray-700">
-          <Icons.Notifications fontSize="small" />
-          <span className="absolute top-2 right-2 size-2 rounded-full bg-red-500 border-2 border-white" />
-        </button>
-
-        <div className="flex items-center gap-2 pl-2">
-          <div className="size-9 rounded-full bg-gray-200 flex items-center justify-center text-gray-700">
-            <Icons.Person fontSize="small" />
+        <div className="flex items-center gap-3">
+          <div className="hidden lg:block text-right">
+            <p className="text-sm font-bold text-slate-900">
+              {studentName}
+            </p>
+            <p className="text-[10px] text-slate-500">
+              {profileLoading
+                ? "Loading profile..."
+                : studentId
+                ? `Student ID: ${studentId}`
+                : "Student ID unavailable"}
+            </p>
           </div>
-          <div className="hidden md:block leading-tight">
-            <p className="text-sm font-bold text-gray-900">Student</p>
+
+          <div className="grid h-10 w-10 place-items-center rounded-full bg-slate-200 text-xs font-bold text-slate-700">
+            {initials}
           </div>
         </div>
       </div>

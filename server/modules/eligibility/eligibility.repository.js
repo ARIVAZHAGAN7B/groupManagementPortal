@@ -1,10 +1,12 @@
 const db = require("../../config/db");
 
 const getExecutor = (executor) => executor || db;
+const BASE_POINT_ACTIVITY_AT_EXPR =
+  "COALESCE(h.activity_at, TIMESTAMP(h.activity_date, '00:00:00'))";
 
 const getPhaseById = async (phaseId, executor) => {
   const [rows] = await getExecutor(executor).query(
-    `SELECT phase_id, start_date, end_date
+    `SELECT phase_id, start_date, end_date, start_time, end_time
      FROM phases
      WHERE phase_id = ?
      LIMIT 1`,
@@ -15,7 +17,7 @@ const getPhaseById = async (phaseId, executor) => {
 
 const getCurrentPhase = async (executor) => {
   const [rows] = await getExecutor(executor).query(
-    `SELECT phase_id, start_date, end_date
+    `SELECT phase_id, start_date, end_date, start_time, end_time
      FROM phases
      WHERE status = 'ACTIVE'
      ORDER BY start_date DESC
@@ -69,7 +71,7 @@ const getStudentPhasePoints = async (startDate, endDate, executor) => {
      FROM students s
      LEFT JOIN base_point_history h
        ON h.student_id = s.student_id
-      AND h.activity_date BETWEEN ? AND ?
+       AND ${BASE_POINT_ACTIVITY_AT_EXPR} BETWEEN ? AND ?
      GROUP BY s.student_id`,
     [startDate, endDate]
   );
@@ -84,7 +86,7 @@ const getStudentPhasePointsByStudent = async (studentId, startDate, endDate, exe
      FROM students s
      LEFT JOIN base_point_history h
        ON h.student_id = s.student_id
-      AND h.activity_date BETWEEN ? AND ?
+       AND ${BASE_POINT_ACTIVITY_AT_EXPR} BETWEEN ? AND ?
      WHERE s.student_id = ?
      GROUP BY s.student_id`,
     [startDate, endDate, studentId]
@@ -134,10 +136,10 @@ const getGroupPhasePoints = async (startDate, endDate, executor) => {
      FROM Sgroup g
      LEFT JOIN memberships m
        ON m.group_id = g.group_id
-      AND m.status = 'ACTIVE'
+       AND m.status = 'ACTIVE'
      LEFT JOIN base_point_history h
        ON h.student_id = m.student_id
-      AND h.activity_date BETWEEN ? AND ?
+       AND ${BASE_POINT_ACTIVITY_AT_EXPR} BETWEEN ? AND ?
      GROUP BY g.group_id, g.tier`,
     [startDate, endDate]
   );
@@ -160,7 +162,7 @@ const getGroupPhaseSnapshot = async (groupId, startDate, endDate, executor) => {
       AND m.status = 'ACTIVE'
      LEFT JOIN base_point_history h
        ON h.student_id = m.student_id
-      AND h.activity_date BETWEEN ? AND ?
+       AND ${BASE_POINT_ACTIVITY_AT_EXPR} BETWEEN ? AND ?
      WHERE g.group_id = ?
      GROUP BY g.group_id, g.group_code, g.group_name, g.tier, g.status
      LIMIT 1`,
@@ -222,9 +224,15 @@ const upsertGroupEligibility = async (rows, executor) => {
 const insertBasePointHistory = async (payload, executor) => {
   const [result] = await getExecutor(executor).query(
     `INSERT INTO base_point_history
-      (student_id, activity_date, points, reason, created_at)
-     VALUES (?, ?, ?, ?, NOW())`,
-    [payload.student_id, payload.activity_date, payload.points, payload.reason]
+      (student_id, activity_date, activity_at, points, reason, created_at)
+     VALUES (?, ?, ?, ?, ?, NOW())`,
+    [
+      payload.student_id,
+      payload.activity_date,
+      payload.activity_at,
+      payload.points,
+      payload.reason
+    ]
   );
   return result.insertId;
 };
@@ -254,10 +262,10 @@ const getStudentBasePoints = async (studentId, executor) => {
 const getStudentBasePointHistory = async (studentId, limit = 50, executor) => {
   const safeLimit = Math.max(1, Math.min(Number(limit) || 50, 200));
   const [rows] = await getExecutor(executor).query(
-    `SELECT history_id, student_id, activity_date, points, reason, created_at
+    `SELECT history_id, student_id, activity_date, activity_at, points, reason, created_at
      FROM base_point_history
      WHERE student_id = ?
-     ORDER BY activity_date DESC, history_id DESC
+     ORDER BY COALESCE(activity_at, TIMESTAMP(activity_date, '00:00:00')) DESC, history_id DESC
      LIMIT ?`,
     [studentId, safeLimit]
   );

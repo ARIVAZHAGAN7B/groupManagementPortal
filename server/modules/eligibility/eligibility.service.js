@@ -2,10 +2,96 @@ const db = require("../../config/db");
 const repo = require("./eligibility.repository");
 const { expandDepartmentCode } = require("../../utils/department.service");
 
-const toDateOnly = (value) => {
+const pad2 = (value) => String(value).padStart(2, "0");
+
+const parseDateValue = (value) => {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    return new Date(value.getTime());
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+    if (dateOnlyMatch) {
+      return new Date(
+        Number(dateOnlyMatch[1]),
+        Number(dateOnlyMatch[2]) - 1,
+        Number(dateOnlyMatch[3])
+      );
+    }
+  }
+
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString().split("T")[0];
+  return d;
+};
+
+const formatDateOnly = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+};
+
+const formatDateTime = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+  return `${formatDateOnly(date)} ${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(
+    date.getSeconds()
+  )}`;
+};
+
+const toDateOnly = (value) => {
+  const d = parseDateValue(value);
+  if (!d) return null;
+  return formatDateOnly(d);
+};
+
+const toDateTimeOnly = (value) => {
+  const d = parseDateValue(value);
+  if (!d) return null;
+  return formatDateTime(d);
+};
+
+const normalizeTimeValue = (value, fallback) => {
+  const source = value === undefined || value === null || value === "" ? fallback : value;
+  const match = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(String(source).trim());
+  if (!match) return fallback;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const seconds = match[3] === undefined ? 0 : Number(match[3]);
+  if (
+    !Number.isInteger(hours) ||
+    !Number.isInteger(minutes) ||
+    !Number.isInteger(seconds) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59 ||
+    seconds < 0 ||
+    seconds > 59
+  ) {
+    return fallback;
+  }
+
+  return `${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}`;
+};
+
+const getPhaseWindow = (phase) => {
+  const startDate = toDateOnly(phase?.start_date);
+  const endDate = toDateOnly(phase?.end_date);
+  if (!startDate || !endDate) return null;
+
+  const startTime = normalizeTimeValue(phase?.start_time, "00:00:00");
+  const endTime = normalizeTimeValue(phase?.end_time, "23:59:59");
+
+  return {
+    start_date: startDate,
+    end_date: endDate,
+    start_time: startTime,
+    end_time: endTime,
+    start_at: `${startDate} ${startTime}`,
+    end_at: `${endDate} ${endTime}`
+  };
 };
 
 const parseBooleanFilter = (value) => {
@@ -29,11 +115,15 @@ const withRanks = (rows = []) =>
   }));
 
 const recordBasePoints = async (payload) => {
-  const activityDate = payload.activity_date
-    ? toDateOnly(payload.activity_date)
-    : toDateOnly(new Date());
+  const legacyActivityDate = payload.activity_date ? toDateOnly(payload.activity_date) : null;
+  const activityAt = payload.activity_at
+    ? toDateTimeOnly(payload.activity_at)
+    : legacyActivityDate
+      ? `${legacyActivityDate} 00:00:00`
+      : toDateTimeOnly(new Date());
 
-  if (!activityDate) throw new Error("Invalid activity_date");
+  if (!activityAt) throw new Error("Invalid activity_at/activity_date");
+  const activityDate = activityAt.split(" ")[0];
   if (!Number.isInteger(payload.points)) throw new Error("points must be an integer");
   if (!payload.student_id) throw new Error("student_id is required");
   if (!payload.reason || String(payload.reason).trim().length < 3) {
@@ -53,6 +143,7 @@ const recordBasePoints = async (payload) => {
       {
         student_id: payload.student_id,
         activity_date: activityDate,
+        activity_at: activityAt,
         points: payload.points,
         reason: payload.reason.trim()
       },
@@ -81,18 +172,16 @@ const evaluatePhaseEligibility = async (phaseId) => {
   const phase = await repo.getPhaseById(phaseId);
   if (!phase) throw new Error("Phase not found");
 
-  const startDate = toDateOnly(phase.start_date);
-  const endDate = toDateOnly(phase.end_date);
-
-  if (!startDate || !endDate) {
+  const window = getPhaseWindow(phase);
+  if (!window) {
     throw new Error("Phase dates are invalid");
   }
 
   const [individualTarget, groupTargets, studentPoints, groupPoints] = await Promise.all([
     repo.getIndividualTarget(phaseId),
     repo.getGroupTargets(phaseId),
-    repo.getStudentPhasePoints(startDate, endDate),
-    repo.getGroupPhasePoints(startDate, endDate)
+    repo.getStudentPhasePoints(window.start_at, window.end_at),
+    repo.getGroupPhasePoints(window.start_at, window.end_at)
   ]);
 
   const groupTargetMap = new Map(
@@ -165,8 +254,12 @@ const evaluatePhaseEligibility = async (phaseId) => {
   return {
     phase_id: phaseId,
     evaluation_window: {
-      start_date: startDate,
-      end_date: endDate
+      start_date: window.start_date,
+      end_date: window.end_date,
+      start_time: window.start_time,
+      end_time: window.end_time,
+      start_at: window.start_at,
+      end_at: window.end_at
     },
     targets: {
       individual_target: individualTarget,
@@ -251,11 +344,10 @@ const getAdminStudentOverview = async () => {
   let phasePointMap = new Map();
 
   if (phase?.start_date && phase?.end_date) {
-    const startDate = toDateOnly(phase.start_date);
-    const endDate = toDateOnly(phase.end_date);
+    const window = getPhaseWindow(phase);
 
-    if (startDate && endDate) {
-      const phaseRows = await repo.getStudentPhasePoints(startDate, endDate);
+    if (window) {
+      const phaseRows = await repo.getStudentPhasePoints(window.start_at, window.end_at);
       phasePointMap = new Map(
         phaseRows.map((row) => [
           row.student_id,
@@ -309,10 +401,11 @@ const getGroupEligibilitySummary = async (phaseId, groupId) => {
 
   const startDate = toDateOnly(phase.start_date);
   const endDate = toDateOnly(phase.end_date);
-  if (!startDate || !endDate) throw new Error("Phase dates are invalid");
+  const window = getPhaseWindow(phase);
+  if (!startDate || !endDate || !window) throw new Error("Phase dates are invalid");
 
   const [snapshot, groupTargets] = await Promise.all([
-    repo.getGroupPhaseSnapshot(groupId, startDate, endDate),
+    repo.getGroupPhaseSnapshot(groupId, window.start_at, window.end_at),
     repo.getGroupTargets(phaseId)
   ]);
 
@@ -359,12 +452,11 @@ const getMyDashboardSummary = async (userId, fallbackName = null) => {
   let isEligible = null;
 
   if (phase?.phase_id && phase?.start_date && phase?.end_date) {
-    const startDate = toDateOnly(phase.start_date);
-    const endDate = toDateOnly(phase.end_date);
+    const window = getPhaseWindow(phase);
 
-    if (startDate && endDate) {
+    if (window) {
       const [phasePointsRow, individualTarget] = await Promise.all([
-        repo.getStudentPhasePointsByStudent(studentId, startDate, endDate),
+        repo.getStudentPhasePointsByStudent(studentId, window.start_at, window.end_at),
         repo.getIndividualTarget(phase.phase_id)
       ]);
 

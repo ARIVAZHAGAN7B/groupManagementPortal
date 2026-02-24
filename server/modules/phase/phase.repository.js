@@ -4,14 +4,28 @@ const getExecutor = (executor) => executor || db;
 
 exports.insertPhase = async (phase, executor) => {
   const sql = `
-    INSERT INTO phases (phase_id, start_date, end_date, change_day, status)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO phases (
+      phase_id,
+      start_date,
+      end_date,
+      total_working_days,
+      change_day_number,
+      change_day,
+      start_time,
+      end_time,
+      status
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
   await getExecutor(executor).execute(sql, [
     phase.phase_id,
     phase.start_date,
     phase.end_date,
+    phase.total_working_days,
+    phase.change_day_number,
     phase.change_day,
+    phase.start_time,
+    phase.end_time,
     phase.status
   ]);
 };
@@ -79,9 +93,10 @@ exports.getExpiredActivePhases = async (todayDate, executor) => {
   const [rows] = await exec.execute(
     `SELECT *
      FROM phases
-     WHERE status = 'ACTIVE' AND end_date < ?
+     WHERE status = 'ACTIVE'
+       AND TIMESTAMP(end_date, COALESCE(end_time, '23:59:59')) < ?
      ORDER BY end_date ASC, phase_id ASC`,
-    [todayDate]
+     [todayDate]
   );
   return rows;
 };

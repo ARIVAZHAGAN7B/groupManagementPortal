@@ -13,6 +13,7 @@ const eligibilityRoutes = require("./modules/eligibility/eligibility.routes");
 const teamRoutes = require("./modules/team/team.routes");
 const eventRoutes = require("./modules/event/event.routes");
 const eventJoinRequestRoutes = require("./modules/eventJoinRequest/eventJoinRequest.routes");
+const {getProfile} = require("./getProfiles");
 
 const app = express();
 
@@ -37,5 +38,6 @@ app.use("/api/eligibility", eligibilityRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/teams", teamRoutes);
 app.use("/api/event-join-requests", eventJoinRequestRoutes);
+app.use("/api/profile", authenticate, getProfile);
 
 module.exports = app;

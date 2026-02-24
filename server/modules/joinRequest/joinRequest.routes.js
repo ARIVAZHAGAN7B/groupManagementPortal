@@ -38,4 +38,16 @@ router.get(
   controller.getMyRequests
 );
 
+router.get(
+  "/student-id",
+  authenticate,
+  controller.getStudentIdByUserId
+);
+
+router.get(
+  "/admin-id",
+  authenticate,
+  controller.getAdminIdByUserId
+);
+
 module.exports = router;

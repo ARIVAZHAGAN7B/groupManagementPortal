@@ -1,24 +1,20 @@
-// src/layouts/AdminLayout.jsx
 import AdminHeader from "../ui/adminHeader";
 import SideBar from "../ui/sideBar";
 
-const SIDEBAR_W = 260;
+const SIDEBAR_W = 256;
 
 const AdminLayout = ({ children }) => {
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Full-width Header */}
-      <header className="w-full bg-white border-b sticky top-0 z-50">
-        <div className="px-6 h-16 flex items-center">
+    <div className="flex min-h-screen flex-col bg-slate-50">
+      <header className="sticky top-0 z-50 h-16 w-full border-b border-slate-200 bg-white">
+        <div className="flex h-full items-center px-4 lg:px-8">
           <AdminHeader />
         </div>
       </header>
 
-      {/* Body: Sidebar + Content */}
-      <div className="flex flex-1 min-h-0">
-        {/* Sidebar */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
         <aside
-          className="bg-gray-100 border-r shrink-0"
+          className="hidden shrink-0 flex-col border-r border-slate-200 bg-white lg:flex"
           style={{ width: SIDEBAR_W }}
         >
           <div className="h-full overflow-y-auto">
@@ -26,10 +22,9 @@ const AdminLayout = ({ children }) => {
           </div>
         </aside>
 
-        {/* Main Content */}
-        <main className="flex-1 min-w-0 overflow-y-auto p-6">
+        <main className="flex-1 min-w-0 overflow-y-auto bg-slate-50 p-4 lg:p-8">
           <div className="mx-auto w-full max-w-7xl">
-            <div className="rounded-2xl bg-white p-6 shadow-sm border border-gray-200">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:p-6">
               {children}
             </div>
           </div>

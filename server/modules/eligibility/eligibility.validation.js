@@ -5,7 +5,8 @@ const validateRecordBasePoints = (req, res, next) => {
     student_id: Joi.string().trim().required(),
     points: Joi.number().integer().required(),
     reason: Joi.string().trim().min(3).max(255).required(),
-    activity_date: Joi.date().iso().optional()
+    activity_date: Joi.date().iso().optional(),
+    activity_at: Joi.date().iso().optional()
   });
 
   const { error } = schema.validate(req.body);

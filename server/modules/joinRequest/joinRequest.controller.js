@@ -51,3 +51,23 @@ exports.getMyRequests = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+exports.getStudentIdByUserId = async (req, res) => {
+  try {
+    const studentUserId = req.user.userId;
+    const studentId = await service.getStudentIdByUserId(studentUserId);
+    res.json({ student_id: studentId });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};
+
+exports.getAdminIdByUserId = async (req, res) => {
+  try {
+    const adminUserId = req.user.userId;
+    const adminId = await service.getAdminIdByUserId(adminUserId);
+    res.json({ admin_id: adminId });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};

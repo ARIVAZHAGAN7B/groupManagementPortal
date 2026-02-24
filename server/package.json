@@ -87,6 +87,7 @@
     "named-placeholders": "^1.1.6",
     "negotiator": "^1.0.0",
     "node-addon-api": "^8.5.0",
+    "node-cron": "^3.0.3",
     "node-gyp-build": "^4.8.4",
     "nodemon": "^3.1.11",
     "normalize-path": "^3.0.0",
@@ -129,7 +130,6 @@
     "vary": "^1.1.2",
     "wrappy": "^1.0.2"
   },
-  "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon server.js"

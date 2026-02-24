@@ -5,29 +5,94 @@ const eligibilityService = require("../eligibility/eligibility.service");
 
 const REQUIRED_TIERS = ["D", "C", "B", "A"];
 
+const pad2 = (value) => String(value).padStart(2, "0");
+
+const parseDateValue = (value) => {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    return new Date(value.getTime());
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+    if (dateOnlyMatch) {
+      return new Date(
+        Number(dateOnlyMatch[1]),
+        Number(dateOnlyMatch[2]) - 1,
+        Number(dateOnlyMatch[3])
+      );
+    }
+  }
+
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+};
+
+const formatDateOnly = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+};
+
+const formatDateTime = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+  return `${formatDateOnly(date)} ${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(
+    date.getSeconds()
+  )}`;
+};
+
 const isWorkingDay = (date, holidays) => {
   const day = date.getDay();
-  const formatted = date.toISOString().split("T")[0];
+  const formatted = formatDateOnly(date);
   return day !== 0 && day !== 6 && !holidays.includes(formatted);
 };
 
 const toStartOfDay = (value) => {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
+  const d = parseDateValue(value);
+  if (!d) return null;
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 };
 
 const toDateOnly = (value) => {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString().split("T")[0];
+  const d = parseDateValue(value);
+  if (!d) return null;
+  return formatDateOnly(d);
+};
+
+const normalizeTimeValue = (value, fallback, fieldName) => {
+  const source = value === undefined || value === null || value === "" ? fallback : value;
+  const match = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(String(source).trim());
+  if (!match) {
+    throw new Error(`${fieldName} must be in HH:mm or HH:mm:ss format`);
+  }
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const seconds = match[3] === undefined ? 0 : Number(match[3]);
+
+  if (
+    !Number.isInteger(hours) ||
+    !Number.isInteger(minutes) ||
+    !Number.isInteger(seconds) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59 ||
+    seconds < 0 ||
+    seconds > 59
+  ) {
+    throw new Error(`${fieldName} must be a valid time`);
+  }
+
+  return `${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}`;
 };
 
 const finalizeExpiredActivePhases = async () => {
-  const today = toDateOnly(new Date());
-  if (!today) return;
+  const now = formatDateTime(new Date());
+  if (!now) return;
 
-  const expiredPhases = await repo.getExpiredActivePhases(today);
+  const expiredPhases = await repo.getExpiredActivePhases(now);
   if (!Array.isArray(expiredPhases) || expiredPhases.length === 0) return;
 
   for (const phase of expiredPhases) {
@@ -38,9 +103,7 @@ const finalizeExpiredActivePhases = async () => {
 
 const calculatePhaseDates = async (startDate, totalDays, changeDayNumber) => {
   const [holidayRows] = await db.query(`SELECT holiday_date FROM holidays`);
-  const holidays = holidayRows.map((h) =>
-    new Date(h.holiday_date).toISOString().split("T")[0]
-  );
+  const holidays = holidayRows.map((h) => toDateOnly(h.holiday_date)).filter(Boolean);
 
   let count = 0;
   let currentDate = new Date(startDate);
@@ -116,14 +179,15 @@ const createPhase = async (data) => {
   }
 
   const phase_id = uuidv4();
-  const startDate = new Date(data.start_date);
-
-  if (Number.isNaN(startDate.getTime())) {
+  const startDate = toStartOfDay(data.start_date);
+  if (!startDate) {
     throw new Error("Invalid start_date");
   }
 
   const totalWorkingDays = Number(data.total_working_days || 10);
   const changeDayNumber = Number(data.change_day_number || 5);
+  const startTime = normalizeTimeValue(data.start_time, "08:00:00", "start_time");
+  const endTime = normalizeTimeValue(data.end_time, "19:00:00", "end_time");
 
   if (!Number.isInteger(totalWorkingDays) || totalWorkingDays <= 0) {
     throw new Error("total_working_days must be a positive integer");
@@ -147,9 +211,13 @@ const createPhase = async (data) => {
 
   const phase = {
     phase_id,
-    start_date: startDate.toISOString().split("T")[0],
-    end_date: endDate.toISOString().split("T")[0],
-    change_day: changeDay.toISOString().split("T")[0],
+    start_date: formatDateOnly(startDate),
+    end_date: formatDateOnly(endDate),
+    total_working_days: totalWorkingDays,
+    change_day_number: changeDayNumber,
+    change_day: formatDateOnly(changeDay),
+    start_time: startTime,
+    end_time: endTime,
     status: "ACTIVE"
   };
 
@@ -226,9 +294,7 @@ const getCurrentPhase = async () => {
   if (!phase) return null;
 
   const [holidayRows] = await db.query(`SELECT holiday_date FROM holidays`);
-  const holidays = holidayRows.map((h) =>
-    new Date(h.holiday_date).toISOString().split("T")[0]
-  );
+  const holidays = holidayRows.map((h) => toDateOnly(h.holiday_date)).filter(Boolean);
 
   const today = toStartOfDay(new Date());
   const startDate = toStartOfDay(phase.start_date);
@@ -279,7 +345,7 @@ const isChangeDay = async (phase_id) => {
     throw new Error("Phase not found");
   }
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = toDateOnly(new Date());
 
   return {
     isChangeDay: today === phase.change_day,
@@ -291,6 +357,7 @@ module.exports = {
   createPhase,
   setPhaseTargets,
   getPhaseTargets,
+  finalizeExpiredActivePhases,
   getCurrentPhase,
   getPhaseById,
   getAllPhases,

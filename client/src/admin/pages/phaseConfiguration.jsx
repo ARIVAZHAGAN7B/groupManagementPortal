@@ -34,7 +34,9 @@ export default function PhaseConfiguration() {
   const [form, setForm] = useState({
     start_date: "",
     total_working_days: 10,
-    change_day_number: 5
+    change_day_number: 5,
+    start_time: "08:00",
+    end_time: "19:00"
   });
 
   const loadCurrentPhase = async () => {
@@ -125,6 +127,8 @@ export default function PhaseConfiguration() {
         start_date: form.start_date,
         total_working_days: Number(form.total_working_days),
         change_day_number: Number(form.change_day_number),
+        start_time: form.start_time,
+        end_time: form.end_time,
         targets: normalizedTargets,
         individual_target: parsedIndividualTarget
       };
@@ -236,7 +240,7 @@ export default function PhaseConfiguration() {
 
       <section className="p-4 rounded border space-y-3">
         <h2 className="font-semibold">Create New Phase</h2>
-        <form onSubmit={onCreatePhase} className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <form onSubmit={onCreatePhase} className="grid grid-cols-1 md:grid-cols-6 gap-3">
           <label className="text-sm">
             <div className="mb-1">Start Date</div>
             <input
@@ -265,6 +269,26 @@ export default function PhaseConfiguration() {
               min={1}
               value={form.change_day_number}
               onChange={(e) => setForm((p) => ({ ...p, change_day_number: e.target.value }))}
+              className="w-full border rounded px-3 py-2"
+            />
+          </label>
+
+          <label className="text-sm">
+            <div className="mb-1">Start Time</div>
+            <input
+              type="time"
+              value={form.start_time}
+              onChange={(e) => setForm((p) => ({ ...p, start_time: e.target.value }))}
+              className="w-full border rounded px-3 py-2"
+            />
+          </label>
+
+          <label className="text-sm">
+            <div className="mb-1">End Time</div>
+            <input
+              type="time"
+              value={form.end_time}
+              onChange={(e) => setForm((p) => ({ ...p, end_time: e.target.value }))}
               className="w-full border rounded px-3 py-2"
             />
           </label>

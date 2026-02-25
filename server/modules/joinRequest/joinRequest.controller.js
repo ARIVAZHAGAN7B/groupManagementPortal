@@ -1,4 +1,5 @@
 const service = require("./joinRequest.service");
+const auditService = require("../audit/audit.service");
 
 exports.applyJoinRequest = async (req, res) => {
   try {
@@ -7,6 +8,20 @@ exports.applyJoinRequest = async (req, res) => {
     const { group_id } = req.body;
 
     const result = await service.applyJoinRequest(studentId, group_id);
+
+    await auditService.logActionSafe({
+      req,
+      actorUser: req.user,
+      action: "JOIN_REQUEST_APPLIED",
+      entityType: "JOIN_REQUEST",
+      entityId: result?.request_id || `${studentId}:${group_id}`,
+      details: {
+        request_id: result?.request_id,
+        student_id: studentId,
+        group_id
+      }
+    });
+
     res.status(201).json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -24,6 +39,16 @@ exports.decideJoinRequest = async (req, res) => {
       decision_reason,
       req.user
     );
+
+    await auditService.logActionSafe({
+      req,
+      actorUser: req.user,
+      action: status === "APPROVED" ? "JOIN_REQUEST_APPROVED" : "JOIN_REQUEST_REJECTED",
+      entityType: "JOIN_REQUEST",
+      entityId: requestId,
+      reasonCode: decision_reason || null,
+      details: { status, decision_reason }
+    });
 
     res.json(result);
   } catch (err) {

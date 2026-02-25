@@ -26,6 +26,7 @@ export default function GroupMembersTable({
   onChanged,
   highlightStudentId = null,
   highlightMembershipId = null,
+  showMembershipId = true,
 }) {
   const [savingId, setSavingId] = useState(null);
 
@@ -46,7 +47,12 @@ export default function GroupMembersTable({
       <table className="min-w-[900px] w-full text-sm">
         <thead>
           <tr className="bg-gray-50 border-b border-gray-100">
-            {["Membership ID", "Student ID", "Name", "Email", "Role", "Join Date"].map((h) => (
+            {showMembershipId ? (
+              <th className="text-left px-4 py-2.5 text-[10.5px] font-semibold uppercase tracking-wider text-gray-400">
+                Membership ID
+              </th>
+            ) : null}
+            {["Student ID", "Name", "Email", "Role", "Join Date"].map((h) => (
               <th
                 key={h}
                 className="text-left px-4 py-2.5 text-[10.5px] font-semibold uppercase tracking-wider text-gray-400"
@@ -69,12 +75,14 @@ export default function GroupMembersTable({
                 key={m.membership_id}
                 className={
                   isHighlighted
-                    ? "bg-amber-50 hover:bg-amber-50"
+                    ? "bg-yellow-200 hover:bg-yellow-200"
                     : "hover:bg-gray-50 transition-colors"
                 }
-                title={isHighlighted ? "Highlighted from Membership Management" : undefined}
+                title={isHighlighted ? "Highlighted member" : undefined}
               >
-                <td className="px-4 py-3 text-xs text-gray-400 font-mono">{m.membership_id}</td>
+                {showMembershipId ? (
+                  <td className="px-4 py-3 text-xs text-gray-400 font-mono">{m.membership_id}</td>
+                ) : null}
                 <td className="px-4 py-3 text-xs text-gray-500 font-mono">{m.student_id}</td>
                 <td className="px-4 py-3 font-medium text-gray-800">{m.name}</td>
                 <td className="px-4 py-3 text-gray-500">{m.email}</td>
@@ -115,7 +123,7 @@ export default function GroupMembersTable({
 
           {members.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-400">
+              <td colSpan={showMembershipId ? 6 : 5} className="px-4 py-8 text-center text-sm text-gray-400">
                 No active members.
               </td>
             </tr>

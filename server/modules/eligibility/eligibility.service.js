@@ -253,6 +253,7 @@ const evaluatePhaseEligibility = async (phaseId) => {
 
   return {
     phase_id: phaseId,
+    phase_name: phase.phase_name || null,
     evaluation_window: {
       start_date: window.start_date,
       end_date: window.end_date,
@@ -425,6 +426,7 @@ const getGroupEligibilitySummary = async (phaseId, groupId) => {
 
   return {
     phase_id: phase.phase_id,
+    phase_name: phase.phase_name || null,
     group_id: snapshot.group_id,
     group_code: snapshot.group_code,
     group_name: snapshot.group_name,
@@ -448,6 +450,7 @@ const getMyDashboardSummary = async (userId, fallbackName = null) => {
   const phase = await repo.getCurrentPhase();
   let thisPhaseBasePoints = 0;
   let phaseId = null;
+  let phaseName = null;
   let targetPoints = null;
   let isEligible = null;
 
@@ -462,6 +465,7 @@ const getMyDashboardSummary = async (userId, fallbackName = null) => {
 
       thisPhaseBasePoints = Number(phasePointsRow?.this_phase_base_points) || 0;
       phaseId = phase.phase_id;
+      phaseName = phase.phase_name || null;
 
       if (individualTarget !== null && !Number.isNaN(Number(individualTarget))) {
         targetPoints = Number(individualTarget);
@@ -478,6 +482,7 @@ const getMyDashboardSummary = async (userId, fallbackName = null) => {
     total_points: totalBasePoints,
     this_phase_eligibility: {
       phase_id: phaseId,
+      phase_name: phaseName,
       earned_points: thisPhaseBasePoints,
       target_points: targetPoints,
       is_eligible: isEligible

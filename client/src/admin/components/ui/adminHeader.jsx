@@ -161,9 +161,12 @@ const AdminHeader = () => {
     const start = formatShortDate(phase.start_date);
     const end = formatShortDate(phase.end_date);
 
-    if (start && end) return `${start} - ${end} | 6:00 PM`;
+    if (start && end) {
+      const phasePrefix = phase?.phase_name ? `${phase.phase_name} | ` : "";
+      return `${phasePrefix}${start} - ${end} | 6:00 PM`;
+    }
 
-    return `ID ${String(phase.phase_id).slice(0, 8)}`;
+    return phase?.phase_name || `ID ${String(phase.phase_id).slice(0, 8)}`;
   }, [loading, phase]);
 
   const targetSummaryText = useMemo(() => {

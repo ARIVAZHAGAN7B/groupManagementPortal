@@ -245,7 +245,7 @@ const StudentHeader = () => {
               {profileLoading
                 ? "Loading profile..."
                 : studentId
-                ? `Student ID: ${studentId}`
+                ? `${studentId}`
                 : "Student ID unavailable"}
             </p>
           </div>

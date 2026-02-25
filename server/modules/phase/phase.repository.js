@@ -6,6 +6,7 @@ exports.insertPhase = async (phase, executor) => {
   const sql = `
     INSERT INTO phases (
       phase_id,
+      phase_name,
       start_date,
       end_date,
       total_working_days,
@@ -15,10 +16,11 @@ exports.insertPhase = async (phase, executor) => {
       end_time,
       status
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
   await getExecutor(executor).execute(sql, [
     phase.phase_id,
+    phase.phase_name,
     phase.start_date,
     phase.end_date,
     phase.total_working_days,

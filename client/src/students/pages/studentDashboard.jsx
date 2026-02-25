@@ -3,10 +3,12 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "../../utils/AuthContext";
 import { fetchMyDashboardSummary } from "../../service/eligibility.api";
+import { getProfile } from "../../service/joinRequests.api";
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
+  const [profile, setProfile] = useState(null);
   const [summary, setSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [summaryError, setSummaryError] = useState("");
@@ -28,6 +30,22 @@ const StudentDashboard = () => {
 
   useEffect(() => {
     loadSummary();
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadProfile = async () => {
+      const data = await getProfile();
+      if (!mounted) return;
+      setProfile(data || null);
+    };
+
+    loadProfile();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const handleLogout = async () => {
@@ -61,11 +79,8 @@ const StudentDashboard = () => {
           <div>
             <p className="text-sm text-gray-500">Welcome back</p>
             <h1 className="text-2xl font-bold text-gray-900">
-              {summary?.name || user?.name || "Student"}
+              {profile?.name || summary?.name || user?.name || "Student"}
             </h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Student ID: {summary?.student_id || "-"}
-            </p>
           </div>
 
           <div className="flex gap-2">
@@ -123,10 +138,12 @@ const StudentDashboard = () => {
             </div>
             <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
               <div className="text-xs uppercase tracking-wide font-semibold text-gray-500">
-                Phase ID
+                Phase
               </div>
               <div className="mt-2 text-sm font-semibold text-gray-900 break-all">
-                {summary?.this_phase_eligibility?.phase_id || "No active phase"}
+                {summary?.this_phase_eligibility?.phase_name ||
+                  summary?.this_phase_eligibility?.phase_id ||
+                  "No active phase"}
               </div>
             </div>
             <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">

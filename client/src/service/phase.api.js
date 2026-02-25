@@ -27,3 +27,8 @@ export async function setPhaseTargets(phaseId, targets, individualTarget) {
   });
   return data;
 }
+
+export async function checkPhaseChangeDay(phaseId) {
+  const { data } = await api.get(`/api/phases/${phaseId}/is-change-day`);
+  return data; // { isChangeDay, change_day }
+}

@@ -1,8 +1,14 @@
 const repo = require("./joinRequest.repository");
 const membershipRepo = require("../membership/membership.repository");
 const db = require("../../config/db");
+const systemConfigService = require("../systemConfig/systemConfig.service");
 
 const ADMIN_ROLES = ["ADMIN", "SYSTEM_ADMIN"];
+const resolveGroupStatusByCount = (count, policy) => {
+  const min = Number(policy.min_group_members) || 9;
+  const max = Number(policy.max_group_members) || 11;
+  return count >= min && count <= max ? "ACTIVE" : "INACTIVE";
+};
 
 const getStudentIdByUserIdFrom = async (queryable, userId) => {
   const [rows] = await queryable.query(
@@ -51,8 +57,20 @@ const resolveDecisionBy = async (queryable, actorUser, groupId) => {
 };
 
 exports.applyJoinRequest = async (studentId, groupId) => {
+  const policy = await systemConfigService.getOperationalPolicy();
   const active = await membershipRepo.findActiveMembershipByStudent(studentId);
   if (active.length > 0) throw new Error("Student already belongs to a group");
+
+  const group = await repo.findGroupById(groupId);
+  if (!group) throw new Error("Group not found");
+  if (String(group.status || "").toUpperCase() === "FROZEN") {
+    throw new Error("Cannot apply to a frozen group");
+  }
+
+  const count = await membershipRepo.countGroupMembers(groupId);
+  if (count >= Number(policy.max_group_members)) {
+    throw new Error("Group has no vacancies");
+  }
 
   const existing = await repo.findPendingRequest(studentId, groupId);
   if (existing) throw new Error("Join request already exists");
@@ -69,6 +87,7 @@ exports.getAdminIdByUserId = async (userId) => {
 };
 
 exports.decideJoinRequest = async (requestId, status, reason, actorUser) => {
+  const policy = await systemConfigService.getOperationalPolicy();
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
@@ -81,12 +100,33 @@ exports.decideJoinRequest = async (requestId, status, reason, actorUser) => {
     await repo.updateDecisionTx(conn, requestId, status, reason, decisionBy);
 
     if (status === "APPROVED") {
+      const [targetGroupRows] = await conn.query(
+        "SELECT group_id, status FROM Sgroup WHERE group_id=? LIMIT 1 FOR UPDATE",
+        [request.group_id]
+      );
+      const targetGroup = targetGroupRows[0];
+      if (!targetGroup) {
+        throw new Error("Group not found");
+      }
+      if (String(targetGroup.status || "").toUpperCase() === "FROZEN") {
+        throw new Error("Cannot approve request for a frozen group");
+      }
+
       const [activeRows] = await conn.query(
         "SELECT * FROM memberships WHERE student_id=? AND status='ACTIVE' LIMIT 1",
         [request.student_id]
       );
       if (activeRows.length > 0) {
         throw new Error("Student already belongs to a group");
+      }
+
+      const [[countBeforeRow]] = await conn.query(
+        "SELECT COUNT(*) AS count FROM memberships WHERE group_id=? AND status='ACTIVE' FOR UPDATE",
+        [request.group_id]
+      );
+      const countBefore = Number(countBeforeRow?.count) || 0;
+      if (countBefore >= Number(policy.max_group_members)) {
+        throw new Error("Group has no vacancies");
       }
 
       await conn.query(
@@ -98,7 +138,7 @@ exports.decideJoinRequest = async (requestId, status, reason, actorUser) => {
         "SELECT COUNT(*) AS count FROM memberships WHERE group_id=? AND status='ACTIVE'",
         [request.group_id]
       );
-      const gStatus = row.count >= 9 ? "ACTIVE" : "INACTIVE";
+      const gStatus = resolveGroupStatusByCount(Number(row.count) || 0, policy);
 
       await conn.query("UPDATE Sgroup SET status=? WHERE group_id=?", [
         gStatus,

@@ -1,6 +1,8 @@
 const app = require("./app");
 const db = require("./config/db"); // import your MySQL pool
 const { startPhaseFinalizationCron } = require("./jobs/phaseFinalization.cron");
+const systemConfigRepo = require("./modules/systemConfig/systemConfig.repository");
+const auditRepo = require("./modules/audit/audit.repository");
 require("dotenv").config();
 
 const PORT = process.env.PORT || 5000;
@@ -10,6 +12,9 @@ const startServer = async () => {
     // Test the DB connection
     const [rows] = await db.query("SELECT 1 + 1 AS result");
     console.log("DB connected, test query result:", rows[0].result);
+
+    await systemConfigRepo.ensureSchema();
+    await auditRepo.ensureSchema();
 
     startPhaseFinalizationCron();
 

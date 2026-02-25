@@ -3,6 +3,7 @@ import { fetchEvents } from "../../service/events.api";
 import {
   createEventTeam,
   fetchMyTeamMemberships,
+  fetchTeamMemberships,
   fetchTeamsByEvent
 } from "../../service/teams.api";
 import {
@@ -51,6 +52,11 @@ export default function TeamsPage() {
   const [query, setQuery] = useState("");
   const [busyTeamId, setBusyTeamId] = useState(null);
   const [teamForm, setTeamForm] = useState(EMPTY_TEAM_FORM);
+  const [viewTeam, setViewTeam] = useState(null);
+  const [viewMembers, setViewMembers] = useState([]);
+  const [viewMembersLoading, setViewMembersLoading] = useState(false);
+  const [viewMembersError, setViewMembersError] = useState("");
+  const [viewBusyTeamId, setViewBusyTeamId] = useState(null);
 
   const loadBase = async () => {
     setLoading(true);
@@ -207,6 +213,35 @@ export default function TeamsPage() {
       setError(err?.response?.data?.message || "Failed to send join request");
     } finally {
       setBusyTeamId(null);
+    }
+  };
+
+  const closeViewMembers = () => {
+    setViewTeam(null);
+    setViewMembers([]);
+    setViewMembersError("");
+    setViewMembersLoading(false);
+    setViewBusyTeamId(null);
+  };
+
+  const onViewMembers = async (team) => {
+    if (!team?.team_id) return;
+
+    setViewTeam(team);
+    setViewMembers([]);
+    setViewMembersError("");
+    setViewMembersLoading(true);
+    setViewBusyTeamId(Number(team.team_id));
+
+    try {
+      const rows = await fetchTeamMemberships(team.team_id, { status: "ACTIVE" });
+      setViewMembers(Array.isArray(rows) ? rows : []);
+    } catch (err) {
+      setViewMembersError(err?.response?.data?.message || "Failed to load team members");
+      setViewMembers([]);
+    } finally {
+      setViewMembersLoading(false);
+      setViewBusyTeamId(null);
     }
   };
 
@@ -422,27 +457,38 @@ export default function TeamsPage() {
                       </div>
                     </td>
                     <td className="p-3 border-b">
-                      <button
-                        type="button"
-                        onClick={() => onRequestJoin(team)}
-                        disabled={actionDisabled}
-                        className="px-3 py-1 rounded border disabled:opacity-60"
-                        title={
-                          myActiveMembershipInSelectedEvent
-                            ? "You already belong to a team in this event"
-                            : isJoined
-                              ? "Already an active member"
-                              : hasPending
-                                ? "Request already pending"
-                                : !selectedEventActive
-                                  ? "Event is not active"
-                                  : !isActiveTeam
-                                    ? "Team is not active"
-                                    : "Send join request"
-                        }
-                      >
-                        {isBusy ? "Sending..." : actionLabel}
-                      </button>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onViewMembers(team)}
+                          disabled={viewBusyTeamId === teamId}
+                          className="px-3 py-1 rounded border bg-white disabled:opacity-60"
+                          title="View active team members"
+                        >
+                          {viewBusyTeamId === teamId ? "Loading..." : "View"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onRequestJoin(team)}
+                          disabled={actionDisabled}
+                          className="px-3 py-1 rounded border disabled:opacity-60"
+                          title={
+                            myActiveMembershipInSelectedEvent
+                              ? "You already belong to a team in this event"
+                              : isJoined
+                                ? "Already an active member"
+                                : hasPending
+                                  ? "Request already pending"
+                                  : !selectedEventActive
+                                    ? "Event is not active"
+                                    : !isActiveTeam
+                                      ? "Team is not active"
+                                      : "Send join request"
+                          }
+                        >
+                          {isBusy ? "Sending..." : actionLabel}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -459,6 +505,87 @@ export default function TeamsPage() {
           </table>
         </div>
       )}
+
+      {viewTeam ? (
+        <div
+          className="fixed inset-0 z-50 bg-black/30 p-4 flex items-center justify-center"
+          onClick={closeViewMembers}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="team-members-preview-title"
+        >
+          <div
+            className="w-full max-w-4xl max-h-[85vh] overflow-hidden rounded-xl border bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-4 py-3 border-b flex items-start justify-between gap-3">
+              <div>
+                <h2 id="team-members-preview-title" className="text-base font-semibold">
+                  Team Members
+                </h2>
+                <p className="text-sm text-gray-600">
+                  {viewTeam.team_name || "-"} ({viewTeam.team_code || "-"}) | Team ID:{" "}
+                  {viewTeam.team_id}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeViewMembers}
+                className="px-3 py-1.5 rounded border text-sm"
+              >
+                Close
+              </button>
+            </div>
+
+            {viewMembersError ? (
+              <div className="m-4 p-3 rounded border border-red-300 bg-red-50 text-red-700">
+                {viewMembersError}
+              </div>
+            ) : null}
+
+            {viewMembersLoading ? (
+              <div className="p-4">Loading team members...</div>
+            ) : (
+              <div className="overflow-auto">
+                <table className="min-w-[860px] w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left p-3 border-b">Membership ID</th>
+                      <th className="text-left p-3 border-b">Student ID</th>
+                      <th className="text-left p-3 border-b">Name</th>
+                      <th className="text-left p-3 border-b">Email</th>
+                      <th className="text-left p-3 border-b">Role</th>
+                      <th className="text-left p-3 border-b">Status</th>
+                      <th className="text-left p-3 border-b">Joined</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {viewMembers.map((row) => (
+                      <tr key={row.team_membership_id} className="hover:bg-gray-50">
+                        <td className="p-3 border-b">{row.team_membership_id || "-"}</td>
+                        <td className="p-3 border-b">{row.student_id || "-"}</td>
+                        <td className="p-3 border-b">{row.student_name || "-"}</td>
+                        <td className="p-3 border-b">{row.student_email || "-"}</td>
+                        <td className="p-3 border-b">{row.role || "-"}</td>
+                        <td className="p-3 border-b">{row.status || "-"}</td>
+                        <td className="p-3 border-b">{formatDateTime(row.join_date)}</td>
+                      </tr>
+                    ))}
+
+                    {viewMembers.length === 0 ? (
+                      <tr>
+                        <td className="p-3 text-gray-500" colSpan={7}>
+                          No active members found for this team.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

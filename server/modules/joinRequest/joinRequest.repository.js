@@ -29,6 +29,16 @@ exports.findById = async (requestId) => {
   return rows[0];
 };
 
+exports.findGroupById = async (groupId) => {
+  const [rows] = await db.query(
+    `SELECT group_id, status
+     FROM Sgroup
+     WHERE group_id=?`,
+    [groupId]
+  );
+  return rows[0];
+};
+
 // Update decision
 exports.updateDecision = async (id, status, reason, decisionBy) => {
   await db.query(

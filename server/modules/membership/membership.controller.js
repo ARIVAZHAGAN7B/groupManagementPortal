@@ -1,5 +1,6 @@
 const service = require("./membership.service");
 const joinService = require("../joinRequest/joinRequest.service");
+const auditService = require("../audit/audit.service");
 const joinGroup = async (req, res) => {
   try {
     const studentId = req.user.userId;
@@ -8,6 +9,20 @@ const joinGroup = async (req, res) => {
     const { role } = req.body;
 
     const result = await service.joinGroupService(student_id, groupId, role);
+
+    await auditService.logActionSafe({
+      req,
+      actorUser: req.user,
+      action: "MEMBERSHIP_JOINED",
+      entityType: "MEMBERSHIP",
+      entityId: `${student_id}:${groupId}`,
+      details: {
+        student_id,
+        group_id: Number(groupId),
+        role: role || "MEMBER",
+        result
+      }
+    });
 
     res.json({
       message: "Joined group successfully",
@@ -27,6 +42,19 @@ const leaveGroup = async (req, res) => {
     if (!groupId) return res.status(400).json({ message: "groupId is required" });
 
     const result = await service.leaveGroupService(student_id, groupId);
+
+    await auditService.logActionSafe({
+      req,
+      actorUser: req.user,
+      action: "MEMBERSHIP_LEFT",
+      entityType: "MEMBERSHIP",
+      entityId: `${student_id}:${groupId}`,
+      details: {
+        student_id,
+        group_id: Number(groupId),
+        result
+      }
+    });
 
     res.json({ message: "Left group successfully", data: result });
   } catch (err) {
@@ -51,6 +79,16 @@ const updateRole = async (req, res) => {
     const { role } = req.body;
 
     const result = await service.updateRoleService(membershipId, role, req.user);
+
+    await auditService.logActionSafe({
+      req,
+      actorUser: req.user,
+      action: "MEMBERSHIP_ROLE_UPDATED",
+      entityType: "MEMBERSHIP",
+      entityId: membershipId,
+      details: { role }
+    });
+
     res.json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -84,6 +122,16 @@ const adminLeaveMembership = async (req, res) => {
   try {
     const { membershipId } = req.params;
     const result = await service.adminLeaveMembershipService(membershipId);
+
+    await auditService.logActionSafe({
+      req,
+      actorUser: req.user,
+      action: "MEMBERSHIP_REMOVED",
+      entityType: "MEMBERSHIP",
+      entityId: membershipId,
+      details: result
+    });
+
     res.json({
       message: "Membership marked as left",
       data: result

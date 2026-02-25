@@ -29,6 +29,8 @@ const formatEligible = (value) => {
   return value ? "Yes" : "No";
 };
 
+const getPhaseLabel = (phase) => phase?.phase_name || phase?.phase_id || "-";
+
 export default function EligibilityManagement() {
   const [activeTab, setActiveTab] = useState("individual");
   const [phases, setPhases] = useState([]);
@@ -161,7 +163,7 @@ export default function EligibilityManagement() {
             {phases.length === 0 ? <option value="">No phases available</option> : null}
             {phases.map((phase) => (
               <option key={phase.phase_id} value={phase.phase_id}>
-                {phase.phase_id} | {formatDate(phase.start_date)} - {formatDate(phase.end_date)} |{" "}
+                {getPhaseLabel(phase)} | {formatDate(phase.start_date)} - {formatDate(phase.end_date)} |{" "}
                 {phase.status}
               </option>
             ))}
@@ -172,7 +174,7 @@ export default function EligibilityManagement() {
           {selectedPhase ? (
             <div className="rounded border bg-gray-50 px-3 py-2">
               <span className="font-semibold text-gray-800 mr-2">Selected Phase:</span>
-              {selectedPhase.phase_id} ({formatDate(selectedPhase.start_date)} -{" "}
+              {getPhaseLabel(selectedPhase)} ({formatDate(selectedPhase.start_date)} -{" "}
               {formatDate(selectedPhase.end_date)}) | Status: {selectedPhase.status}
             </div>
           ) : null}
@@ -231,7 +233,7 @@ export default function EligibilityManagement() {
                 <th className="text-left p-3 border-b">Student</th>
                 <th className="text-left p-3 border-b">Department</th>
                 <th className="text-left p-3 border-b">Year</th>
-                <th className="text-left p-3 border-b">Phase ID</th>
+                <th className="text-left p-3 border-b">Phase</th>
                 <th className="text-left p-3 border-b">Earned</th>
                 <th className="text-left p-3 border-b">Eligible</th>
                 <th className="text-left p-3 border-b">Reason</th>
@@ -247,7 +249,7 @@ export default function EligibilityManagement() {
                   </td>
                   <td className="p-3 border-b">{row.department || "-"}</td>
                   <td className="p-3 border-b">{row.year ?? "-"}</td>
-                  <td className="p-3 border-b">{row.phase_id || "-"}</td>
+                  <td className="p-3 border-b">{getPhaseLabel(row)}</td>
                   <td className="p-3 border-b font-semibold text-blue-700">
                     {Number(row.this_phase_base_points || 0).toLocaleString()}
                   </td>
@@ -273,7 +275,7 @@ export default function EligibilityManagement() {
               <tr>
                 <th className="text-left p-3 border-b">Group</th>
                 <th className="text-left p-3 border-b">Tier</th>
-                <th className="text-left p-3 border-b">Phase ID</th>
+                <th className="text-left p-3 border-b">Phase</th>
                 <th className="text-left p-3 border-b">Earned</th>
                 <th className="text-left p-3 border-b">Eligible</th>
                 <th className="text-left p-3 border-b">Reason</th>
@@ -290,7 +292,7 @@ export default function EligibilityManagement() {
                     </div>
                   </td>
                   <td className="p-3 border-b">{row.tier || "-"}</td>
-                  <td className="p-3 border-b">{row.phase_id || "-"}</td>
+                  <td className="p-3 border-b">{getPhaseLabel(row)}</td>
                   <td className="p-3 border-b font-semibold text-blue-700">
                     {Number(row.this_phase_group_points || 0).toLocaleString()}
                   </td>

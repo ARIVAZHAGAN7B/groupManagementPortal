@@ -6,7 +6,7 @@ const BASE_POINT_ACTIVITY_AT_EXPR =
 
 const getPhaseById = async (phaseId, executor) => {
   const [rows] = await getExecutor(executor).query(
-    `SELECT phase_id, start_date, end_date, start_time, end_time
+    `SELECT phase_id, phase_name, start_date, end_date, start_time, end_time
      FROM phases
      WHERE phase_id = ?
      LIMIT 1`,
@@ -17,7 +17,7 @@ const getPhaseById = async (phaseId, executor) => {
 
 const getCurrentPhase = async (executor) => {
   const [rows] = await getExecutor(executor).query(
-    `SELECT phase_id, start_date, end_date, start_time, end_time
+    `SELECT phase_id, phase_name, start_date, end_date, start_time, end_time
      FROM phases
      WHERE status = 'ACTIVE'
      ORDER BY start_date DESC
@@ -291,6 +291,7 @@ const getIndividualEligibility = async (phaseId, filters = {}, executor) => {
        ie.eligibility_id,
        ie.student_id,
        ie.phase_id,
+       p.phase_name,
        ie.this_phase_base_points,
        ie.is_eligible,
        ie.reason_code,
@@ -300,6 +301,7 @@ const getIndividualEligibility = async (phaseId, filters = {}, executor) => {
        s.year
      FROM individual_eligibility ie
      LEFT JOIN students s ON s.student_id = ie.student_id
+     LEFT JOIN phases p ON p.phase_id = ie.phase_id
      WHERE ${clauses.join(" AND ")}
      ORDER BY ie.this_phase_base_points DESC, ie.student_id ASC`,
     values
@@ -326,6 +328,7 @@ const getGroupEligibility = async (phaseId, filters = {}, executor) => {
        ge.eligibility_id,
        ge.group_id,
        ge.phase_id,
+       p.phase_name,
        ge.this_phase_group_points,
        ge.is_eligible,
        ge.reason_code,
@@ -335,6 +338,7 @@ const getGroupEligibility = async (phaseId, filters = {}, executor) => {
        g.tier
      FROM group_eligibility ge
      LEFT JOIN Sgroup g ON g.group_id = ge.group_id
+     LEFT JOIN phases p ON p.phase_id = ge.phase_id
      WHERE ${clauses.join(" AND ")}
      ORDER BY ge.this_phase_group_points DESC, ge.group_id ASC`,
     values
@@ -364,6 +368,7 @@ const getMyIndividualEligibilityHistory = async (studentId, executor) => {
        ie.eligibility_id,
        ie.student_id,
        ie.phase_id,
+       p.phase_name,
        ie.this_phase_base_points,
        ie.is_eligible,
        ie.reason_code,

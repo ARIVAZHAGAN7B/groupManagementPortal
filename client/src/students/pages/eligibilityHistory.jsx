@@ -82,7 +82,7 @@ export default function EligibilityHistoryPage() {
           <table className="min-w-[1000px] w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
-                <th className="text-left p-3 border-b">Phase ID</th>
+                <th className="text-left p-3 border-b">Phase</th>
                 <th className="text-left p-3 border-b">Phase Dates</th>
                 <th className="text-left p-3 border-b">Earned</th>
                 <th className="text-left p-3 border-b">Target</th>
@@ -95,7 +95,7 @@ export default function EligibilityHistoryPage() {
               {displayRows.map((row) => (
                 <tr key={row.eligibility_id || `${row.phase_id}-${row.student_id}`} className="hover:bg-gray-50">
                   <td className="p-3 border-b">
-                    <div className="font-medium">{row.phase_id || "-"}</div>
+                    <div className="font-medium">{row.phase_name || row.phase_id || "-"}</div>
                     <div className="text-xs text-gray-500">{row.phase_status || "-"}</div>
                   </td>
                   <td className="p-3 border-b">

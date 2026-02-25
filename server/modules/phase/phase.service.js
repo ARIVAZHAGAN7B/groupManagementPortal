@@ -173,11 +173,20 @@ const normalizeIndividualTarget = (value) => {
   return target;
 };
 
+const normalizePhaseName = (value) => {
+  const phaseName = String(value ?? "").trim();
+  if (!phaseName) {
+    throw new Error("phase_name is required");
+  }
+  return phaseName;
+};
+
 const createPhase = async (data) => {
   if (!data?.start_date) {
     throw new Error("start_date is required");
   }
 
+  const phase_name = normalizePhaseName(data.phase_name);
   const phase_id = uuidv4();
   const startDate = toStartOfDay(data.start_date);
   if (!startDate) {
@@ -211,6 +220,7 @@ const createPhase = async (data) => {
 
   const phase = {
     phase_id,
+    phase_name,
     start_date: formatDateOnly(startDate),
     end_date: formatDateOnly(endDate),
     total_working_days: totalWorkingDays,

@@ -3,6 +3,7 @@ const DEPARTMENT_CODE_MAP = Object.freeze({
   it: "IT",
   al: "AIML",
   ad: "AIDS",
+  ai:"AIDS",
   ee: "EEE",
   ec: "ECE",
   fd: "FD",

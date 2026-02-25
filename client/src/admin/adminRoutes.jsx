@@ -5,6 +5,7 @@ import AuditLogs from "./pages/AuditLogs";
 import CreateGroup from "./pages/CreateGroup";
 import EventManagement from "./pages/EventManagement";
 import GroupManagement from "./pages/groupManagement";
+import ChangeDayManagement from "./pages/changeDayManagement";
 import IncubationConfiguration from "./pages/IncubationConfiguration";
 import MembershipManagement from "./pages/membershipManagement";
 import PhaseConfiguration from "./pages/phaseConfiguration";
@@ -30,8 +31,9 @@ const AdminRoutes = () => {
       <Route path="/groups/new" element={<CreateGroupPage />} />
       <Route path="/groups/:id" element={<GroupDetailsPage />} />
       <Route path="/groups/:id/edit" element={<EditGroupPage />} />
-         <Route path="/event-management" element={<EventManagement />} />
+      <Route path="/event-management" element={<EventManagement />} />
       <Route path="/group-management" element={<GroupManagement />} />
+      <Route path="/change-day-management" element={<ChangeDayManagement />} />
       <Route path="/incubation-configuration" element={<IncubationConfiguration />} />
       <Route path="/membership-management" element={<MembershipManagement />} />
       <Route path="/phase-configuration" element={<PhaseConfiguration />} />

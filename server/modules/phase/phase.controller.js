@@ -1,8 +1,19 @@
 const phaseService = require("./phase.service");
+const auditService = require("../audit/audit.service");
 
 const createPhase = async (req, res) => {
   try {
     const phase = await phaseService.createPhase(req.body);
+
+    await auditService.logActionSafe({
+      req,
+      actorUser: req.user,
+      action: "PHASE_CREATED",
+      entityType: "PHASE",
+      entityId: phase?.phase_id,
+      details: phase
+    });
+
     res.status(201).json({ message: "Phase created", phase });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -15,6 +26,19 @@ const setPhaseTargets = async (req, res) => {
     const { targets, individual_target } = req.body;
 
     await phaseService.setPhaseTargets(phase_id, targets, individual_target);
+
+    await auditService.logActionSafe({
+      req,
+      actorUser: req.user,
+      action: "PHASE_TARGETS_UPDATED",
+      entityType: "PHASE",
+      entityId: phase_id,
+      details: {
+        targets,
+        individual_target
+      }
+    });
+
     res.json({ message: "Targets configured successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });

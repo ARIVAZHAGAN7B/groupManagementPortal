@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { fetchGroupById } from "../../service/groups.api";
 import { fetchGroupMembers, joinGroup } from "../../service/membership.api";
-import {applyJoinRequest} from "../../service/joinRequests.api";
+import { applyJoinRequest, getStudentIdByUserId } from "../../service/joinRequests.api";
 import { fetchCurrentPhase } from "../../service/phase.api";
 import { fetchGroupEligibilitySummary } from "../../service/eligibility.api";
 import GroupMembersTable from "../../admin/components/membership/GroupMembersTable";
@@ -20,6 +20,7 @@ const GroupDetails = () => {
   const [eligibility, setEligibility] = useState(null);
   const [eligibilityLoading, setEligibilityLoading] = useState(false);
   const [eligibilityErr, setEligibilityErr] = useState("");
+  const [currentStudentId, setCurrentStudentId] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -50,6 +51,22 @@ const GroupDetails = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  useEffect(() => {
+    let mounted = true;
+
+    const loadCurrentStudentId = async () => {
+      const studentId = await getStudentIdByUserId();
+      if (!mounted) return;
+      setCurrentStudentId(studentId ? String(studentId) : null);
+    };
+
+    loadCurrentStudentId();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const loadEligibility = async () => {
     setEligibilityLoading(true);
     setEligibilityErr("");
@@ -58,6 +75,7 @@ const GroupDetails = () => {
       if (!phase?.phase_id) {
         setEligibility({
           phase_id: null,
+          phase_name: null,
           earned_points: 0,
           target_points: null,
           is_eligible: null
@@ -187,7 +205,10 @@ const GroupDetails = () => {
           {activeTab === "members" ? (
             <div className="space-y-2">
               <h2 className="text-lg font-semibold">Members</h2>
-              <GroupMembersTable members={members} />
+              <GroupMembersTable
+                members={members}
+                highlightStudentId={currentStudentId}
+              />
             </div>
           ) : (
             <div className="space-y-3">
@@ -216,7 +237,7 @@ const GroupDetails = () => {
                   <table className="min-w-[640px] w-full text-sm">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="text-left p-3 border-b">Phase ID</th>
+                        <th className="text-left p-3 border-b">Phase</th>
                         <th className="text-left p-3 border-b">Earned</th>
                         <th className="text-left p-3 border-b">Target</th>
                         <th className="text-left p-3 border-b">Eligible</th>
@@ -225,7 +246,7 @@ const GroupDetails = () => {
                     <tbody>
                       <tr>
                         <td className="p-3 border-b break-all">
-                          {eligibility?.phase_id || "No active phase"}
+                          {eligibility?.phase_name || eligibility?.phase_id || "No active phase"}
                         </td>
                         <td className="p-3 border-b">{eligibility?.earned_points ?? 0}</td>
                         <td className="p-3 border-b">{eligibility?.target_points ?? "Not set"}</td>

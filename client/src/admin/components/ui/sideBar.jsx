@@ -16,6 +16,7 @@ const menuItems = [
   { name: "Event Join Requests", path: "/event-join-requests", icon: Icons.EventManagement },
   { name: "Event Management", path: "/event-management", icon: Icons.EventManagement },
   { name: "Phase Configuration", path: "/phase-configuration", icon: Icons.PhaseConfiguration },
+  { name: "Change Day", path: "/change-day-management", icon: Icons.PhaseConfiguration },
   { name: "Eligibility", path: "/eligibility", icon: Icons.Leaderboard },
   { name: "Incubation Configuration", path: "/incubation-configuration", icon: Icons.IncubationConfiguration },
 ];

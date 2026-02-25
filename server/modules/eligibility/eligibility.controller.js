@@ -1,8 +1,24 @@
 const eligibilityService = require("./eligibility.service");
+const auditService = require("../audit/audit.service");
 
 const recordBasePoints = async (req, res) => {
   try {
     const result = await eligibilityService.recordBasePoints(req.body);
+
+    await auditService.logActionSafe({
+      req,
+      actorUser: req.user,
+      action: "BASE_POINTS_RECORDED",
+      entityType: "ELIGIBILITY",
+      entityId: result?.history_id || req.body?.student_id,
+      details: {
+        student_id: req.body?.student_id,
+        points: req.body?.points,
+        reason: req.body?.reason,
+        result
+      }
+    });
+
     res.status(201).json({
       message: "Base points recorded successfully",
       data: result
@@ -28,6 +44,16 @@ const getStudentBasePoints = async (req, res) => {
 const evaluatePhaseEligibility = async (req, res) => {
   try {
     const result = await eligibilityService.evaluatePhaseEligibility(req.params.phase_id);
+
+    await auditService.logActionSafe({
+      req,
+      actorUser: req.user,
+      action: "PHASE_ELIGIBILITY_EVALUATED",
+      entityType: "PHASE",
+      entityId: req.params.phase_id,
+      details: result
+    });
+
     res.json({
       message: "Eligibility evaluated successfully",
       data: result

@@ -32,6 +32,7 @@ export default function PhaseConfiguration() {
   const [success, setSuccess] = useState("");
 
   const [form, setForm] = useState({
+    phase_name: "",
     start_date: "",
     total_working_days: 10,
     change_day_number: 5,
@@ -80,6 +81,7 @@ export default function PhaseConfiguration() {
   }, []);
 
   const canCreate = useMemo(() => {
+    const hasPhaseName = String(form.phase_name || "").trim().length > 0;
     const hasValidDateInputs =
       form.start_date &&
       Number(form.total_working_days) > 1 &&
@@ -95,7 +97,7 @@ export default function PhaseConfiguration() {
     const hasValidIndividual =
       Number.isFinite(parsedIndividual) && parsedIndividual >= 0;
 
-    return hasValidDateInputs && hasValidTargets && hasValidIndividual;
+    return hasPhaseName && hasValidDateInputs && hasValidTargets && hasValidIndividual;
   }, [form, targets, individualTarget]);
 
   const onCreatePhase = async (e) => {
@@ -124,6 +126,7 @@ export default function PhaseConfiguration() {
       }
 
       const payload = {
+        phase_name: String(form.phase_name || "").trim(),
         start_date: form.start_date,
         total_working_days: Number(form.total_working_days),
         change_day_number: Number(form.change_day_number),
@@ -217,8 +220,8 @@ export default function PhaseConfiguration() {
         {phase ? (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
             <div className="p-3 rounded bg-gray-50 border">
-              <div className="text-gray-500">Phase ID</div>
-              <div className="font-medium break-all">{phase.phase_id}</div>
+              <div className="text-gray-500">Phase</div>
+              <div className="font-medium break-all">{phase.phase_name || phase.phase_id || "-"}</div>
             </div>
             <div className="p-3 rounded bg-gray-50 border">
               <div className="text-gray-500">Start Date</div>
@@ -240,7 +243,18 @@ export default function PhaseConfiguration() {
 
       <section className="p-4 rounded border space-y-3">
         <h2 className="font-semibold">Create New Phase</h2>
-        <form onSubmit={onCreatePhase} className="grid grid-cols-1 md:grid-cols-6 gap-3">
+        <form onSubmit={onCreatePhase} className="grid grid-cols-1 md:grid-cols-7 gap-3">
+          <label className="text-sm">
+            <div className="mb-1">Phase Name</div>
+            <input
+              type="text"
+              value={form.phase_name}
+              onChange={(e) => setForm((p) => ({ ...p, phase_name: e.target.value }))}
+              className="w-full border rounded px-3 py-2"
+              placeholder="e.g. Phase 1"
+            />
+          </label>
+
           <label className="text-sm">
             <div className="mb-1">Start Date</div>
             <input

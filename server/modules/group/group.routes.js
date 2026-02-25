@@ -5,26 +5,33 @@ const controller = require("./group.controller");
 const { authenticate } = require("../../middlewares/auth.middleware");
 const { authorize } = require("../../middlewares/role.middleware");
 
-/* ADMIN only */
+/* ADMIN always, STUDENT conditionally via policy check in controller */
 router.post(
   "/",
   authenticate,
-  authorize("ADMIN","SYSTEM_ADMIN"),
+  authorize("ADMIN","SYSTEM_ADMIN","STUDENT","CAPTAIN"),
   controller.createGroup
+);
+
+router.post(
+  "/switch",
+  authenticate,
+  authorize("STUDENT","CAPTAIN"),
+  controller.switchGroup
 );
 
 /* ADMIN + STUDENT */
 router.get(
   "/",
   authenticate,
-  authorize("ADMIN","SYSTEM_ADMIN","STUDENT"),
+  authorize("ADMIN","SYSTEM_ADMIN","STUDENT","CAPTAIN"),
   controller.getGroups
 );
 
 router.get(
   "/:id",
   authenticate,
-  authorize("ADMIN","SYSTEM_ADMIN","STUDENT"),
+  authorize("ADMIN","SYSTEM_ADMIN","STUDENT","CAPTAIN"),
   controller.getGroup
 );
 

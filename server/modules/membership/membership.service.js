@@ -1,34 +1,90 @@
 const repo = require("./membership.repository");
 const db = require("../../config/db");
+const phaseRepo = require("../phase/phase.repository");
+const systemConfigService = require("../systemConfig/systemConfig.service");
+
+const toDateOnly = (value) => {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString().split("T")[0];
+};
+
+const resolveGroupStatusByCount = (count, policy) => {
+  const min = Number(policy.min_group_members) || 9;
+  const max = Number(policy.max_group_members) || 11;
+  return count >= min && count <= max ? "ACTIVE" : "INACTIVE";
+};
+
+const ensureChangeDayLeaveAllowed = async (policy, options = {}) => {
+  if (options.bypassChangeDay) return;
+  if (!policy.enforce_change_day_for_leave) return;
+
+  const phase = await phaseRepo.getCurrentPhase();
+  if (!phase) {
+    throw new Error("No active phase found. Leave is allowed only on Change Day.");
+  }
+
+  const today = toDateOnly(new Date());
+  const changeDay = toDateOnly(phase.change_day);
+
+  if (!today || !changeDay || today !== changeDay) {
+    throw new Error("Leave is allowed only on Change Day");
+  }
+};
 
 const joinGroupService = async (student_id, groupId, role) => {
+  const policy = await systemConfigService.getOperationalPolicy();
   const existing = await repo.findActiveMembershipByStudent(student_id);
 
   if (existing.length > 0) {
     throw new Error("Student already belongs to a group");
   }
 
+  const [groupRows] = await db.query(
+    "SELECT group_id, status FROM Sgroup WHERE group_id=? LIMIT 1",
+    [groupId]
+  );
+  const group = groupRows[0];
+  if (!group) {
+    throw new Error("Group not found");
+  }
+  if (String(group.status || "").toUpperCase() === "FROZEN") {
+    throw new Error("Cannot join a frozen group");
+  }
+
+  const currentCount = await repo.countGroupMembers(groupId);
+  if (currentCount >= Number(policy.max_group_members)) {
+    throw new Error("Group is full");
+  }
+
   await repo.createMembership(student_id, groupId, role);
 
   const count = await repo.countGroupMembers(groupId);
 
-  const status = count >= 9 ? "ACTIVE" : "INACTIVE";
+  const status = resolveGroupStatusByCount(count, policy);
   await repo.updateGroupStatus(groupId, status);
 
   return { memberCount: count, status };
 };
 
-const leaveGroupService = async (studentId, groupId) => {
+const leaveGroupService = async (studentId, groupId, options = {}) => {
+  const policy = await systemConfigService.getOperationalPolicy();
+  await ensureChangeDayLeaveAllowed(policy, options);
+
   const membership = await repo.findActiveMembershipByStudentAndGroup(studentId, groupId);
   if (!membership) throw new Error("Active membership not found");
 
   await repo.leaveMembershipByStudentAndGroup(studentId, groupId);
 
   const count = await repo.countGroupMembers(groupId);
-  const status = count >= 9 ? "ACTIVE" : "INACTIVE";
+  const status = resolveGroupStatusByCount(count, policy);
   await repo.updateGroupStatus(groupId, status);
 
-  return { memberCount: count, status };
+  return {
+    memberCount: count,
+    status,
+    leave_deadline_days: 1
+  };
 };
 
 
@@ -132,7 +188,9 @@ const adminLeaveMembershipService = async (membershipId) => {
   }
 
   // Reuse the same leave flow as student self-leave so both paths stay consistent.
-  const leaveResult = await leaveGroupService(membership.student_id, membership.group_id);
+  const leaveResult = await leaveGroupService(membership.student_id, membership.group_id, {
+    bypassChangeDay: true
+  });
 
   return {
     membership_id: membershipId,

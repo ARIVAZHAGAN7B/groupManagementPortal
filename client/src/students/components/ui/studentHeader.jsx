@@ -8,6 +8,13 @@ import { getProfile } from "../../../service/joinRequests.api";
 
 const PHASE_END_HOUR = 18;
 
+const formatShortDate = (value) => {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString();
+};
+
 const toPhaseEndDateTime = (value) => {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
@@ -155,6 +162,13 @@ const StudentHeader = () => {
     return "Ongoing";
   }, [loading, phase]);
 
+  const changeDateText = useMemo(() => {
+    if (loading) return "Loading...";
+    if (!phase?.change_day) return "Unavailable";
+
+    return formatShortDate(phase.change_day) || "Unavailable";
+  }, [loading, phase]);
+
   const eligibilityTargetText = useMemo(() => {
     if (loading) return "Loading...";
     if (!phase?.phase_id) return "No phase";
@@ -220,6 +234,13 @@ const StudentHeader = () => {
 
         <div className="hidden sm:flex text-xs font-bold text-[#3211d4]">
           {remainingText}
+        </div>
+
+        <div className="hidden lg:flex text-xs">
+          Change Date:{" "}
+          <span className="font-bold ml-1">
+            {changeDateText}
+          </span>
         </div>
 
         <div className="hidden md:flex text-xs">

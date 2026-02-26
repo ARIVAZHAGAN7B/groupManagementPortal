@@ -169,6 +169,13 @@ const AdminHeader = () => {
     return phase?.phase_name || `ID ${String(phase.phase_id).slice(0, 8)}`;
   }, [loading, phase]);
 
+  const changeDateText = useMemo(() => {
+    if (loading) return "Loading...";
+    if (!phase?.change_day) return "Unavailable";
+
+    return formatShortDate(phase.change_day) || "Unavailable";
+  }, [loading, phase]);
+
   const targetSummaryText = useMemo(() => {
     if (loading) return "Loading targets...";
     if (!phase?.phase_id) return "No phase target";
@@ -251,6 +258,13 @@ const AdminHeader = () => {
           Current Phase:{" "}
           <span className="font-bold ml-1">
             {phaseSummaryText}
+          </span>
+        </div>
+
+        <div className="hidden xl:flex text-xs">
+          Change Date:{" "}
+          <span className="font-bold ml-1">
+            {changeDateText}
           </span>
         </div>
 

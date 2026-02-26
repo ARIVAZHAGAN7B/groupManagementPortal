@@ -362,6 +362,14 @@ const getStudentById = async (studentId, executor) => {
   return rows[0] || null;
 };
 
+const getGroupById = async (groupId, executor) => {
+  const [rows] = await getExecutor(executor).query(
+    `SELECT group_id FROM Sgroup WHERE group_id = ? LIMIT 1`,
+    [groupId]
+  );
+  return rows[0] || null;
+};
+
 const getMyIndividualEligibilityHistory = async (studentId, executor) => {
   const [rows] = await getExecutor(executor).query(
     `SELECT
@@ -510,6 +518,7 @@ module.exports = {
   getGroupEligibility,
   getStudentByUserId,
   getStudentById,
+  getGroupById,
   getMyIndividualEligibilityHistory,
   getIndividualLeaderboard,
   getLeaderLeaderboard,

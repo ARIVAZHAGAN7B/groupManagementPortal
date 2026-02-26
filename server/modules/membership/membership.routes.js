@@ -60,7 +60,7 @@ router.put(
 router.delete(
   "/:membershipId",
   authenticate,
-  authorize("ADMIN", "SYSTEM_ADMIN"),
+  authorize("ADMIN", "SYSTEM_ADMIN", "CAPTAIN"),
   controller.adminLeaveMembership
 );
 

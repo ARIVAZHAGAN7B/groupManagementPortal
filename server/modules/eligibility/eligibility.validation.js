@@ -43,8 +43,58 @@ const validateStudentIdParam = (req, res, next) => {
   next();
 };
 
+const validateOverrideIndividualEligibility = (req, res, next) => {
+  const schema = Joi.object({
+    phase_id: Joi.string().trim().required(),
+    student_id: Joi.string().trim().required()
+  });
+
+  const bodySchema = Joi.object({
+    is_eligible: Joi.boolean().required(),
+    reason_code: Joi.string().trim().min(3).max(50).required()
+  });
+
+  const { error } = schema.validate(req.params);
+  if (error) {
+    return res.status(400).json({ message: error.details[0].message });
+  }
+
+  const bodyResult = bodySchema.validate(req.body);
+  if (bodyResult.error) {
+    return res.status(400).json({ message: bodyResult.error.details[0].message });
+  }
+
+  next();
+};
+
+const validateOverrideGroupEligibility = (req, res, next) => {
+  const schema = Joi.object({
+    phase_id: Joi.string().trim().required(),
+    group_id: Joi.number().integer().required()
+  });
+
+  const bodySchema = Joi.object({
+    is_eligible: Joi.boolean().required(),
+    reason_code: Joi.string().trim().min(3).max(50).required()
+  });
+
+  const { error } = schema.validate(req.params);
+  if (error) {
+    return res.status(400).json({ message: error.details[0].message });
+  }
+
+  const bodyResult = bodySchema.validate(req.body);
+  if (bodyResult.error) {
+    return res.status(400).json({ message: bodyResult.error.details[0].message });
+  }
+
+  next();
+};
+
 module.exports = {
   validateRecordBasePoints,
   validateEvaluatePhase,
-  validateStudentIdParam
+  validateStudentIdParam,
+  validateOverrideIndividualEligibility,
+  validateOverrideGroupEligibility
 };

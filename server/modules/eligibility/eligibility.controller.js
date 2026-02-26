@@ -87,6 +87,60 @@ const getGroupEligibility = async (req, res) => {
   }
 };
 
+const overrideIndividualEligibility = async (req, res) => {
+  try {
+    const result = await eligibilityService.overrideIndividualEligibility(
+      req.params.phase_id,
+      req.params.student_id,
+      req.body || {}
+    );
+
+    await auditService.logActionSafe({
+      req,
+      actorUser: req.user,
+      action: "INDIVIDUAL_ELIGIBILITY_OVERRIDDEN",
+      entityType: "ELIGIBILITY",
+      entityId: `${req.params.phase_id}:${req.params.student_id}`,
+      reasonCode: req.body?.reason_code || null,
+      details: result
+    });
+
+    res.json({
+      message: "Individual eligibility overridden",
+      data: result
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+const overrideGroupEligibility = async (req, res) => {
+  try {
+    const result = await eligibilityService.overrideGroupEligibility(
+      req.params.phase_id,
+      req.params.group_id,
+      req.body || {}
+    );
+
+    await auditService.logActionSafe({
+      req,
+      actorUser: req.user,
+      action: "GROUP_ELIGIBILITY_OVERRIDDEN",
+      entityType: "ELIGIBILITY",
+      entityId: `${req.params.phase_id}:${req.params.group_id}`,
+      reasonCode: req.body?.reason_code || null,
+      details: result
+    });
+
+    res.json({
+      message: "Group eligibility overridden",
+      data: result
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
 const getMyIndividualEligibility = async (req, res) => {
   try {
     const row = await eligibilityService.getMyIndividualEligibility(
@@ -158,6 +212,8 @@ module.exports = {
   evaluatePhaseEligibility,
   getIndividualEligibility,
   getGroupEligibility,
+  overrideIndividualEligibility,
+  overrideGroupEligibility,
   getMyIndividualEligibility,
   getMyIndividualEligibilityHistory,
   getAdminStudentOverview,

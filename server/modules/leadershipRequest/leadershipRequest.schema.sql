@@ -1,0 +1,87 @@
+-- USE test;
+
+-- -- Manual schema for leadership role requests (DB-managed, not executed by backend startup).
+-- -- IMPORTANT:
+-- -- 1) Match data types exactly with parent tables before adding FKs.
+-- -- 2) In this project, students.student_id is often VARCHAR(36). If your table currently uses INT,
+-- --    change leadership_role_requests.student_id first to match students.student_id.
+-- -- 3) decision_by_admin_id is the admin foreign-key column (not "admin_id" directly).
+
+-- -- Example CREATE TABLE (adjust types if your DB differs)
+-- CREATE TABLE IF NOT EXISTS leadership_role_requests (
+--   leadership_request_id BIGINT NOT NULL AUTO_INCREMENT,
+--   membership_id INT NOT NULL,
+--   student_id VARCHAR(36) NOT NULL,
+--   group_id INT NOT NULL,
+--   requested_role ENUM('CAPTAIN','VICE_CAPTAIN','STRATEGIST','MANAGER') NOT NULL,
+--   status ENUM('PENDING','APPROVED','REJECTED') NOT NULL DEFAULT 'PENDING',
+--   request_reason VARCHAR(255) NULL,
+--   request_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+--   decision_by_admin_id varchar(20) NULL,
+--   decision_reason VARCHAR(255) NULL,
+--   decision_date DATETIME NULL DEFAULT NULL,
+--   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+--   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+--   PRIMARY KEY (leadership_request_id),
+--   KEY idx_lrr_group_status (group_id, status),
+--   KEY idx_lrr_student_status (student_id, status),
+--   KEY idx_lrr_membership_status (membership_id, status),
+--   CONSTRAINT fk_lrr_membership
+--     FOREIGN KEY (membership_id)
+--     REFERENCES memberships(membership_id)
+--     ON UPDATE CASCADE
+--     ON DELETE RESTRICT,
+--   CONSTRAINT fk_lrr_student
+--     FOREIGN KEY (student_id)
+--     REFERENCES students(student_id)
+--     ON UPDATE CASCADE
+--     ON DELETE RESTRICT,
+--   CONSTRAINT fk_lrr_group
+--     FOREIGN KEY (group_id)
+--     REFERENCES Sgroup(group_id)
+--     ON UPDATE CASCADE
+--     ON DELETE RESTRICT,
+--   CONSTRAINT fk_lrr_decision_admin
+--     FOREIGN KEY (decision_by_admin_id)
+--     REFERENCES admins(admin_id)
+--     ON UPDATE CASCADE
+--     ON DELETE SET NULL
+-- ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- -- If table already exists, use ALTER TABLE (run only once after cleaning orphan rows)
+-- -- Orphan checks:
+-- -- SELECT l.*
+-- -- FROM leadership_role_requests l
+-- -- LEFT JOIN students s ON s.student_id = l.student_id
+-- -- WHERE s.student_id IS NULL;
+-- --
+-- -- SELECT l.*
+-- -- FROM leadership_role_requests l
+-- -- LEFT JOIN Sgroup g ON g.group_id = l.group_id
+-- -- WHERE g.group_id IS NULL;
+-- --
+-- -- SELECT l.*
+-- -- FROM leadership_role_requests l
+-- -- LEFT JOIN admins a ON a.admin_id = l.decision_by_admin_id
+-- -- WHERE l.decision_by_admin_id IS NOT NULL AND a.admin_id IS NULL;
+-- --
+-- -- SELECT l.*
+-- -- FROM leadership_role_requests l
+-- -- LEFT JOIN memberships m ON m.membership_id = l.membership_id
+-- -- WHERE m.membership_id IS NULL;
+-- --
+-- -- Add constraints:
+-- -- ALTER TABLE leadership_role_requests
+-- --   ADD CONSTRAINT fk_lrr_membership
+-- --     FOREIGN KEY (membership_id) REFERENCES memberships(membership_id)
+-- --     ON UPDATE CASCADE ON DELETE RESTRICT,
+-- --   ADD CONSTRAINT fk_lrr_student
+-- --     FOREIGN KEY (student_id) REFERENCES students(student_id)
+-- --     ON UPDATE CASCADE ON DELETE RESTRICT,
+-- --   ADD CONSTRAINT fk_lrr_group
+-- --     FOREIGN KEY (group_id) REFERENCES Sgroup(group_id)
+-- --     ON UPDATE CASCADE ON DELETE RESTRICT,
+-- --   ADD CONSTRAINT fk_lrr_decision_admin
+-- --     FOREIGN KEY (decision_by_admin_id) REFERENCES admins(admin_id)
+-- --     ON UPDATE CASCADE ON DELETE SET NULL;
+

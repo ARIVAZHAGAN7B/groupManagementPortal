@@ -4,6 +4,7 @@ import Icons from "../../../assets/Icons";
 import { useAuth } from "../../../utils/AuthContext";
 import { fetchCurrentPhase, fetchPhaseTargets } from "../../../service/phase.api";
 import { getProfile } from "../../../service/joinRequests.api";
+import { fetchAdminLeadershipNotifications } from "../../../service/leadershipRequests.api";
 
 const TARGET_TIER_ORDER = ["D", "C", "B", "A"];
 const PHASE_END_HOUR = 18;
@@ -55,6 +56,7 @@ const AdminHeader = () => {
   const [phase, setPhase] = useState(null);
   const [phaseTargets, setPhaseTargets] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [leadershipNotifications, setLeadershipNotifications] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -132,6 +134,34 @@ const AdminHeader = () => {
       mounted = false;
     };
   }, [user]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadLeadershipNotifications = async () => {
+      if (!["ADMIN", "SYSTEM_ADMIN"].includes(String(user?.role || "").toUpperCase())) {
+        if (mounted) setLeadershipNotifications(null);
+        return;
+      }
+
+      try {
+        const data = await fetchAdminLeadershipNotifications();
+        if (!mounted) return;
+        setLeadershipNotifications(data || null);
+      } catch {
+        if (!mounted) return;
+        setLeadershipNotifications(null);
+      }
+    };
+
+    loadLeadershipNotifications();
+    const intervalId = setInterval(loadLeadershipNotifications, 30000);
+
+    return () => {
+      mounted = false;
+      clearInterval(intervalId);
+    };
+  }, [user?.role]);
 
   // =========================
   // Phase Derived
@@ -220,6 +250,11 @@ const AdminHeader = () => {
     : `${roleLabel} ID unavailable`;
 
   const initials = getInitials(userName);
+  const leadershipAttentionCount = Number(leadershipNotifications?.total_attention_count) || 0;
+  const groupsWithoutLeadershipCount =
+    Number(leadershipNotifications?.groups_without_leadership_count) || 0;
+  const pendingLeadershipRequestCount =
+    Number(leadershipNotifications?.pending_request_count) || 0;
 
   // =========================
   // UI
@@ -274,6 +309,18 @@ const AdminHeader = () => {
             {targetSummaryText}
           </span>
         </div>
+
+        {leadershipAttentionCount > 0 && (
+          <div
+            className="hidden lg:flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-[11px] font-semibold text-red-700"
+            title={`Groups without leaders: ${groupsWithoutLeadershipCount}. Pending leadership requests: ${pendingLeadershipRequestCount}.`}
+          >
+            <span>Leadership Alerts</span>
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-[10px] font-bold text-white">
+              {leadershipAttentionCount}
+            </span>
+          </div>
+        )}
 
         <div className="flex items-center gap-3">
           <div className="hidden lg:block text-right">

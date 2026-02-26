@@ -1,7 +1,15 @@
 const groupRepo = require("./group.repository");
 const systemConfigService = require("../systemConfig/systemConfig.service");
+const phaseRepo = require("../phase/phase.repository");
+const eligibilityRepo = require("../eligibility/eligibility.repository");
 
-const addDiscoveryFields = (group, policy) => {
+const toEligibilityStatus = (value) => {
+  if (value === true || value === 1) return "ELIGIBLE";
+  if (value === false || value === 0) return "NOT_ELIGIBLE";
+  return "NOT_EVALUATED";
+};
+
+const addDiscoveryFields = (group, policy, options = {}) => {
   if (!group) return group;
 
   const activeMemberCount =
@@ -21,7 +29,9 @@ const addDiscoveryFields = (group, policy) => {
     ...group,
     active_member_count: activeMemberCount,
     vacancies,
-    accepting_applications: acceptingApplications
+    accepting_applications: acceptingApplications,
+    current_phase_id: options.currentPhaseId || null,
+    current_phase_eligibility_status: options.eligibilityStatus || "NOT_EVALUATED"
   };
 };
 
@@ -38,19 +48,55 @@ exports.createGroup = async (groupData) => {
 };
 
 exports.getGroups = async () => {
-  const [groups, policy] = await Promise.all([
+  const [groups, policy, currentPhase] = await Promise.all([
     groupRepo.getAllGroups(),
-    systemConfigService.getOperationalPolicy()
+    systemConfigService.getOperationalPolicy(),
+    phaseRepo.getCurrentPhase().catch(() => null)
   ]);
-  return (groups || []).map((group) => addDiscoveryFields(group, policy));
+
+  let eligibilityByGroupId = new Map();
+  if (currentPhase?.phase_id) {
+    const rows = await eligibilityRepo.getGroupEligibility(currentPhase.phase_id, {}).catch(
+      () => []
+    );
+    eligibilityByGroupId = new Map(
+      (Array.isArray(rows) ? rows : []).map((row) => [
+        String(row.group_id),
+        toEligibilityStatus(row.is_eligible)
+      ])
+    );
+  }
+
+  return (groups || []).map((group) =>
+    addDiscoveryFields(group, policy, {
+      currentPhaseId: currentPhase?.phase_id || null,
+      eligibilityStatus:
+        eligibilityByGroupId.get(String(group.group_id)) || "NOT_EVALUATED"
+    })
+  );
 };
 
 exports.getGroup = async (id) => {
-  const [group, policy] = await Promise.all([
+  const [group, policy, currentPhase] = await Promise.all([
     groupRepo.getGroupById(id),
-    systemConfigService.getOperationalPolicy()
+    systemConfigService.getOperationalPolicy(),
+    phaseRepo.getCurrentPhase().catch(() => null)
   ]);
-  return addDiscoveryFields(group, policy);
+
+  let eligibilityStatus = "NOT_EVALUATED";
+  if (currentPhase?.phase_id && group?.group_id !== undefined && group?.group_id !== null) {
+    const rows = await eligibilityRepo
+      .getGroupEligibility(currentPhase.phase_id, { group_id: Number(group.group_id) })
+      .catch(() => []);
+    if (Array.isArray(rows) && rows.length > 0) {
+      eligibilityStatus = toEligibilityStatus(rows[0].is_eligible);
+    }
+  }
+
+  return addDiscoveryFields(group, policy, {
+    currentPhaseId: currentPhase?.phase_id || null,
+    eligibilityStatus
+  });
 };
 
 exports.updateGroup = async (id, data) => {

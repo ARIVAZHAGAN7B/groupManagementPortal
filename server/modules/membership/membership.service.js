@@ -201,6 +201,60 @@ const adminLeaveMembershipService = async (membershipId) => {
   };
 };
 
+const removeMembershipService = async (membershipId, actorUser) => {
+  const membership = await repo.getMembershipById(membershipId);
+  if (!membership) throw new Error("Membership not found");
+
+  if (membership.status !== "ACTIVE") {
+    throw new Error("Membership is already left");
+  }
+
+  let bypassChangeDay = false;
+
+  if (!actorUser?.role || !actorUser?.userId) {
+    throw new Error("Unauthorized");
+  }
+
+  if (ADMIN_ROLES.includes(String(actorUser.role).toUpperCase())) {
+    bypassChangeDay = true;
+  } else {
+    if (String(actorUser.role).toUpperCase() !== "CAPTAIN") {
+      throw new Error("Only admin or group captain can remove memberships");
+    }
+
+    const conn = await db.getConnection();
+    try {
+      await ensureActorCanUpdateRole(conn, actorUser, membership.group_id);
+
+      const [studentRows] = await conn.query(
+        "SELECT student_id FROM students WHERE user_id=? LIMIT 1",
+        [actorUser.userId]
+      );
+
+      if (studentRows.length === 0) throw new Error("Student not found");
+
+      const actorStudentId = studentRows[0].student_id;
+      if (String(actorStudentId) === String(membership.student_id)) {
+        throw new Error("Use Leave Group to leave your own membership");
+      }
+    } finally {
+      conn.release();
+    }
+  }
+
+  const leaveResult = await leaveGroupService(membership.student_id, membership.group_id, {
+    bypassChangeDay
+  });
+
+  return {
+    membership_id: membershipId,
+    student_id: membership.student_id,
+    group_id: membership.group_id,
+    membership_status: "LEFT",
+    group_status: leaveResult.status
+  };
+};
+
 module.exports = {
   joinGroupService,
   leaveGroupService,
@@ -208,5 +262,6 @@ module.exports = {
   updateRoleService,
   getMyGroupService,
   getAllMembershipsService,
-  adminLeaveMembershipService
+  adminLeaveMembershipService,
+  removeMembershipService
 };

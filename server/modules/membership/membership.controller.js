@@ -121,7 +121,7 @@ const getAllMemberships = async (_req, res) => {
 const adminLeaveMembership = async (req, res) => {
   try {
     const { membershipId } = req.params;
-    const result = await service.adminLeaveMembershipService(membershipId);
+    const result = await service.removeMembershipService(membershipId, req.user);
 
     await auditService.logActionSafe({
       req,

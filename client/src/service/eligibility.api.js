@@ -31,6 +31,22 @@ export async function fetchAdminGroupEligibility(phaseId, params = {}) {
   return Array.isArray(data) ? data : [];
 }
 
+export async function overrideIndividualEligibility(phaseId, studentId, payload) {
+  const { data } = await api.put(
+    `/api/eligibility/phases/${phaseId}/individual/${studentId}/override`,
+    payload
+  );
+  return data;
+}
+
+export async function overrideGroupEligibility(phaseId, groupId, payload) {
+  const { data } = await api.put(
+    `/api/eligibility/phases/${phaseId}/group/${groupId}/override`,
+    payload
+  );
+  return data;
+}
+
 export async function fetchStudentLeaderboards() {
   const { data } = await api.get("/api/eligibility/leaderboards");
   return data; // { limit, individual, leaders, groups }

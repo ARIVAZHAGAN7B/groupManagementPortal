@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   fetchAdminGroupEligibility,
-  fetchAdminIndividualEligibility
+  fetchAdminIndividualEligibility,
+  overrideGroupEligibility,
+  overrideIndividualEligibility
 } from "../../service/eligibility.api";
 import { fetchAllPhases } from "../../service/phase.api";
 
@@ -40,6 +42,7 @@ export default function EligibilityManagement() {
   const [loadingPhases, setLoadingPhases] = useState(true);
   const [loadingRows, setLoadingRows] = useState(false);
   const [error, setError] = useState("");
+  const [overrideBusyKey, setOverrideBusyKey] = useState("");
 
   const selectedPhase = useMemo(
     () => phases.find((phase) => String(phase.phase_id) === String(selectedPhaseId)) || null,
@@ -121,6 +124,55 @@ export default function EligibilityManagement() {
     () => visibleRows.filter((row) => row?.is_eligible === true || row?.is_eligible === 1).length,
     [visibleRows]
   );
+
+  const onOverride = async (type, row, isEligible) => {
+    if (!selectedPhaseId) return;
+
+    const defaultReason = isEligible
+      ? type === "individual"
+        ? "ADMIN_OVERRIDE_ELIGIBLE"
+        : "ADMIN_OVERRIDE_GROUP_ELIGIBLE"
+      : type === "individual"
+        ? "ADMIN_OVERRIDE_NOT_ELIGIBLE"
+        : "ADMIN_OVERRIDE_GROUP_NOT_ELIGIBLE";
+
+    const input = window.prompt(
+      "Enter override reason code (3-50 chars).",
+      defaultReason
+    );
+    if (input === null) return;
+
+    const reason_code = String(input || "").trim();
+    if (reason_code.length < 3) {
+      setError("Override reason code must be at least 3 characters.");
+      return;
+    }
+
+    const targetId = type === "individual" ? row.student_id : row.group_id;
+    const busyKey = `${type}:${selectedPhaseId}:${targetId}`;
+
+    setOverrideBusyKey(busyKey);
+    setError("");
+    try {
+      if (type === "individual") {
+        await overrideIndividualEligibility(selectedPhaseId, row.student_id, {
+          is_eligible: isEligible,
+          reason_code
+        });
+      } else {
+        await overrideGroupEligibility(selectedPhaseId, row.group_id, {
+          is_eligible: isEligible,
+          reason_code
+        });
+      }
+
+      await loadEligibility(selectedPhaseId);
+    } catch (err) {
+      setError(err?.response?.data?.message || "Failed to override eligibility");
+    } finally {
+      setOverrideBusyKey("");
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -238,6 +290,7 @@ export default function EligibilityManagement() {
                 <th className="text-left p-3 border-b">Eligible</th>
                 <th className="text-left p-3 border-b">Reason</th>
                 <th className="text-left p-3 border-b">Evaluated At</th>
+                <th className="text-left p-3 border-b">Override</th>
               </tr>
             </thead>
             <tbody>
@@ -256,11 +309,31 @@ export default function EligibilityManagement() {
                   <td className="p-3 border-b">{formatEligible(row.is_eligible)}</td>
                   <td className="p-3 border-b">{row.reason_code || "-"}</td>
                   <td className="p-3 border-b">{formatDateTime(row.evaluated_at)}</td>
+                  <td className="p-3 border-b">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onOverride("individual", row, true)}
+                        disabled={overrideBusyKey === `individual:${selectedPhaseId}:${row.student_id}`}
+                        className="px-2 py-1 rounded border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold disabled:opacity-60"
+                      >
+                        Mark Yes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onOverride("individual", row, false)}
+                        disabled={overrideBusyKey === `individual:${selectedPhaseId}:${row.student_id}`}
+                        className="px-2 py-1 rounded border border-red-200 bg-red-50 text-red-700 text-xs font-semibold disabled:opacity-60"
+                      >
+                        Mark No
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {individualRows.length === 0 ? (
                 <tr>
-                  <td className="p-3 text-gray-500" colSpan={8}>
+                  <td className="p-3 text-gray-500" colSpan={9}>
                     No individual eligibility data found for this phase. Run phase evaluation first.
                   </td>
                 </tr>
@@ -280,6 +353,7 @@ export default function EligibilityManagement() {
                 <th className="text-left p-3 border-b">Eligible</th>
                 <th className="text-left p-3 border-b">Reason</th>
                 <th className="text-left p-3 border-b">Evaluated At</th>
+                <th className="text-left p-3 border-b">Override</th>
               </tr>
             </thead>
             <tbody>
@@ -299,11 +373,31 @@ export default function EligibilityManagement() {
                   <td className="p-3 border-b">{formatEligible(row.is_eligible)}</td>
                   <td className="p-3 border-b">{row.reason_code || "-"}</td>
                   <td className="p-3 border-b">{formatDateTime(row.evaluated_at)}</td>
+                  <td className="p-3 border-b">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onOverride("group", row, true)}
+                        disabled={overrideBusyKey === `group:${selectedPhaseId}:${row.group_id}`}
+                        className="px-2 py-1 rounded border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold disabled:opacity-60"
+                      >
+                        Mark Yes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onOverride("group", row, false)}
+                        disabled={overrideBusyKey === `group:${selectedPhaseId}:${row.group_id}`}
+                        className="px-2 py-1 rounded border border-red-200 bg-red-50 text-red-700 text-xs font-semibold disabled:opacity-60"
+                      >
+                        Mark No
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {groupRows.length === 0 ? (
                 <tr>
-                  <td className="p-3 text-gray-500" colSpan={7}>
+                  <td className="p-3 text-gray-500" colSpan={8}>
                     No group eligibility data found for this phase. Run phase evaluation first.
                   </td>
                 </tr>

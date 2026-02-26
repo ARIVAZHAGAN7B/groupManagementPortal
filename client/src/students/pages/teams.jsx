@@ -22,7 +22,7 @@ const formatDateTime = (value) => {
   if (!value) return "-";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleString();
+  return d.toISOString().split("T")[0];
 };
 
 const statusColor = (status) => {
@@ -405,7 +405,7 @@ export default function TeamsPage() {
           <table className="min-w-[1350px] w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
-                <th className="text-left p-3 border-b">Team ID</th>
+                {/* <th className="text-left p-3 border-b">Team ID</th> */}
                 <th className="text-left p-3 border-b">Code</th>
                 <th className="text-left p-3 border-b">Name</th>
                 <th className="text-left p-3 border-b">Status</th>
@@ -439,7 +439,7 @@ export default function TeamsPage() {
 
                 return (
                   <tr key={team.team_id} className="hover:bg-gray-50">
-                    <td className="p-3 border-b">{team.team_id}</td>
+                    {/* <td className="p-3 border-b">{team.team_id}</td> */}
                     <td className="p-3 border-b font-semibold">{team.team_code || "-"}</td>
                     <td className="p-3 border-b">{team.team_name || "-"}</td>
                     <td className="p-3 border-b">{team.status || "-"}</td>

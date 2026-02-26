@@ -15,10 +15,11 @@ export async function getPendingRequestsByGroup(groupId) {
   return data;
 }
 
-export async function decideJoinRequest(requestId, status, decision_reason) {
+export async function decideJoinRequest(requestId, status, decision_reason, approved_role) {
   const { data } = await api.put(`/api/join-requests/${requestId}/decision`, {
     status,
     decision_reason,
+    ...(approved_role ? { approved_role } : {})
   });
   return data;
 }

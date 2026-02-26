@@ -14,6 +14,7 @@ import BasePointsManagement from "./pages/basePointsManagement";
 import TeamManagement from "./pages/TeamManagement";
 import EligibilityManagement from "./pages/eligibilityManagement";
 import EventJoinRequestManagement from "./pages/eventJoinRequestManagement";
+import LeadershipRequestManagement from "./pages/leadershipRequestManagement";
 import AdminLayout from "./components/layout/adminLayout";
 import GroupManagementPage from "./pages/groups/GroupManagementPage";
 import CreateGroupPage from "./pages/groups/CreateGroupPage";
@@ -42,6 +43,7 @@ const AdminRoutes = () => {
       <Route path="/base-points" element={<BasePointsManagement />} />
       <Route path="/team-management" element={<TeamManagement />} />
       <Route path="/event-join-requests" element={<EventJoinRequestManagement />} />
+      <Route path="/leadership-management" element={<LeadershipRequestManagement />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AdminLayout>

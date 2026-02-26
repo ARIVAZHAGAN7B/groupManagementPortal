@@ -5,7 +5,7 @@ const formatDateTime = (value) => {
   if (!value) return "-";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleString();
+  return d.toISOString().split("T")[0];
 };
 
 export default function MyTeamsPage() {
@@ -95,7 +95,7 @@ export default function MyTeamsPage() {
           <table className="min-w-[1100px] w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
-                <th className="text-left p-3 border-b">Membership ID</th>
+                {/* <th className="text-left p-3 border-b">Membership ID</th> */}
                 <th className="text-left p-3 border-b">Event</th>
                 <th className="text-left p-3 border-b">Team</th>
                 <th className="text-left p-3 border-b">Type</th>
@@ -110,14 +110,14 @@ export default function MyTeamsPage() {
             <tbody>
               {rows.map((row) => (
                 <tr key={row.team_membership_id} className="hover:bg-gray-50">
-                  <td className="p-3 border-b">{row.team_membership_id}</td>
+                  {/* <td className="p-3 border-b">{row.team_membership_id}</td> */}
                   <td className="p-3 border-b">
                     {row.event_id ? (
                       <div>
                         <div className="font-medium">{row.event_name || "-"}</div>
-                        <div className="text-xs text-gray-500">
+                        {/* <div className="text-xs text-gray-500">
                           {row.event_code || "-"} | ID: {row.event_id}
-                        </div>
+                        </div> */}
                       </div>
                     ) : (
                       <span className="text-gray-500">No event</span>
@@ -125,9 +125,9 @@ export default function MyTeamsPage() {
                   </td>
                   <td className="p-3 border-b">
                     <div className="font-medium">{row.team_name || "-"}</div>
-                    <div className="text-xs text-gray-500">
+                    {/* <div className="text-xs text-gray-500">
                       {row.team_code || "-"} | ID: {row.team_id}
-                    </div>
+                    </div> */}
                   </td>
                   <td className="p-3 border-b">{row.team_type || "-"}</td>
                   <td className="p-3 border-b">{row.team_status || "-"}</td>

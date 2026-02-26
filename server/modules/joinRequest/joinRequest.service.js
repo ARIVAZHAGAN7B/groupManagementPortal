@@ -4,6 +4,8 @@ const db = require("../../config/db");
 const systemConfigService = require("../systemConfig/systemConfig.service");
 
 const ADMIN_ROLES = ["ADMIN", "SYSTEM_ADMIN"];
+const VALID_MEMBERSHIP_ROLES = ["CAPTAIN", "VICE_CAPTAIN", "STRATEGIST", "MANAGER", "MEMBER"];
+const LEADERSHIP_ROLES = ["CAPTAIN", "VICE_CAPTAIN", "STRATEGIST", "MANAGER"];
 const resolveGroupStatusByCount = (count, policy) => {
   const min = Number(policy.min_group_members) || 9;
   const max = Number(policy.max_group_members) || 11;
@@ -56,6 +58,46 @@ const resolveDecisionBy = async (queryable, actorUser, groupId) => {
   return null;
 };
 
+const normalizeApprovedRole = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const role = String(value).trim().toUpperCase();
+  if (!VALID_MEMBERSHIP_ROLES.includes(role)) {
+    throw new Error("Invalid approved_role");
+  }
+  return role;
+};
+
+const getLeadershipSnapshotTx = async (conn, groupId) => {
+  const [rows] = await conn.query(
+    `SELECT
+       SUM(CASE WHEN status='ACTIVE' AND role='CAPTAIN' THEN 1 ELSE 0 END) AS captain_count,
+       SUM(CASE WHEN status='ACTIVE' AND role='VICE_CAPTAIN' THEN 1 ELSE 0 END) AS vice_captain_count,
+       SUM(CASE WHEN status='ACTIVE' AND role='STRATEGIST' THEN 1 ELSE 0 END) AS strategist_count,
+       SUM(CASE WHEN status='ACTIVE' AND role='MANAGER' THEN 1 ELSE 0 END) AS manager_count
+     FROM memberships
+     WHERE group_id=?
+     FOR UPDATE`,
+    [groupId]
+  );
+
+  const row = rows[0] || {};
+  const snapshot = {
+    captain_count: Number(row.captain_count) || 0,
+    vice_captain_count: Number(row.vice_captain_count) || 0,
+    strategist_count: Number(row.strategist_count) || 0,
+    manager_count: Number(row.manager_count) || 0
+  };
+
+  return {
+    ...snapshot,
+    all_leadership_roles_empty:
+      snapshot.captain_count === 0 &&
+      snapshot.vice_captain_count === 0 &&
+      snapshot.strategist_count === 0 &&
+      snapshot.manager_count === 0
+  };
+};
+
 exports.applyJoinRequest = async (studentId, groupId) => {
   const policy = await systemConfigService.getOperationalPolicy();
   const active = await membershipRepo.findActiveMembershipByStudent(studentId);
@@ -86,11 +128,20 @@ exports.getAdminIdByUserId = async (userId) => {
   return getAdminIdByUserIdFrom(db, userId);
 };
 
-exports.decideJoinRequest = async (requestId, status, reason, actorUser) => {
+exports.decideJoinRequest = async (requestId, status, reason, actorUser, options = {}) => {
   const policy = await systemConfigService.getOperationalPolicy();
+  const actorRole = String(actorUser?.role || "").toUpperCase();
+  const actorIsAdmin = ADMIN_ROLES.includes(actorRole);
+  const approvedRole = normalizeApprovedRole(options?.approved_role);
+
+  if (approvedRole && status !== "APPROVED") {
+    throw new Error("approved_role can be used only when status is APPROVED");
+  }
+
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
+    let approvalMeta = null;
 
     const request = await repo.findByIdTx(conn, requestId);
     if (!request) throw new Error("Request not found");
@@ -100,6 +151,12 @@ exports.decideJoinRequest = async (requestId, status, reason, actorUser) => {
     await repo.updateDecisionTx(conn, requestId, status, reason, decisionBy);
 
     if (status === "APPROVED") {
+      const membershipRole = approvedRole || "MEMBER";
+
+      if (LEADERSHIP_ROLES.includes(membershipRole) && !actorIsAdmin) {
+        throw new Error("Only admin can approve join requests with leadership roles");
+      }
+
       const [targetGroupRows] = await conn.query(
         "SELECT group_id, status FROM Sgroup WHERE group_id=? LIMIT 1 FOR UPDATE",
         [request.group_id]
@@ -129,9 +186,35 @@ exports.decideJoinRequest = async (requestId, status, reason, actorUser) => {
         throw new Error("Group has no vacancies");
       }
 
+      let leadershipSnapshot = {
+        all_leadership_roles_empty: false
+      };
+
+      if (LEADERSHIP_ROLES.includes(membershipRole)) {
+        leadershipSnapshot = await getLeadershipSnapshotTx(conn, request.group_id);
+        const [sameRoleRows] = await conn.query(
+          `SELECT membership_id
+           FROM memberships
+           WHERE group_id=? AND status='ACTIVE' AND role=?
+           LIMIT 1
+           FOR UPDATE`,
+          [request.group_id, membershipRole]
+        );
+        if (sameRoleRows.length > 0) {
+          throw new Error(`Group already has an active ${membershipRole}`);
+        }
+      }
+
+      approvalMeta = {
+        approved_role: membershipRole,
+        all_leadership_roles_empty_before_approval: Boolean(
+          leadershipSnapshot.all_leadership_roles_empty
+        )
+      };
+
       await conn.query(
         "INSERT INTO memberships (student_id, group_id, role, status, join_date) VALUES (?,?,?,?, NOW())",
-        [request.student_id, request.group_id, "MEMBER", "ACTIVE"]
+        [request.student_id, request.group_id, membershipRole, "ACTIVE"]
       );
 
       const [[row]] = await conn.query(
@@ -147,7 +230,12 @@ exports.decideJoinRequest = async (requestId, status, reason, actorUser) => {
     }
 
     await conn.commit();
-    return { message: `Request ${status} successfully` };
+    return {
+      message: `Request ${status} successfully`,
+      approved_role: status === "APPROVED" ? approvedRole || "MEMBER" : null,
+      all_leadership_roles_empty_before_approval:
+        status === "APPROVED" ? Boolean(approvalMeta?.all_leadership_roles_empty_before_approval) : null
+    };
   } catch (e) {
     await conn.rollback();
     throw e;

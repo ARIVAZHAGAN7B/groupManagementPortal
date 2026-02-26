@@ -16,6 +16,12 @@ const STATUS_STYLES = {
   FROZEN: "bg-blue-50 text-blue-700 border-blue-200"
 };
 
+const ELIGIBILITY_STYLES = {
+  ELIGIBLE: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  NOT_ELIGIBLE: "bg-red-50 text-red-700 border-red-200",
+  NOT_EVALUATED: "bg-gray-100 text-gray-600 border-gray-200"
+};
+
 const formatPoints = (value) => Number(value || 0).toLocaleString();
 const hasRank = (value) =>
   value !== null && value !== undefined && Number.isFinite(Number(value)) && Number(value) > 0;
@@ -91,6 +97,7 @@ const toGroupRankMap = (groups = []) => {
 };
 
 const rankCell = (value) => (hasRank(value) ? ` ${Number(value)}` : "Not ranked");
+const yesNoText = (value) => (value === true ? "Yes" : value === false ? "No" : "-");
 
 export default function AllGroups() {
   const nav = useNavigate();
@@ -104,6 +111,8 @@ export default function AllGroups() {
   const [q, setQ] = useState("");
   const [tierFilter, setTierFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [vacancyFilter, setVacancyFilter] = useState("ALL");
+  const [acceptingFilter, setAcceptingFilter] = useState("ALL");
 
   const load = async () => {
     setLoading(true);
@@ -189,13 +198,31 @@ export default function AllGroups() {
           return false;
         }
 
+        const vacancies =
+          g?.vacancies === null || g?.vacancies === undefined ? null : Number(g.vacancies);
+        if (vacancyFilter === "HAS_VACANCY" && !(Number.isFinite(vacancies) && vacancies > 0)) {
+          return false;
+        }
+        if (vacancyFilter === "FULL" && !(Number.isFinite(vacancies) && vacancies === 0)) {
+          return false;
+        }
+
+        const accepting = g?.accepting_applications === true;
+        if (acceptingFilter === "YES" && !accepting) {
+          return false;
+        }
+        if (acceptingFilter === "NO" && accepting) {
+          return false;
+        }
+
         if (!search) return true;
 
         const haystack = [
           g.group_name,
           g.tier,
           g.status,
-          g.captain_name
+          g.captain_name,
+          g.current_phase_eligibility_status
         ]
           .map((value) => String(value || "").toLowerCase())
           .join(" ");
@@ -214,15 +241,16 @@ export default function AllGroups() {
 
         return String(a.group_name || "").localeCompare(String(b.group_name || ""));
       });
-  }, [mergedGroups, q, tierFilter, statusFilter]);
+  }, [mergedGroups, q, tierFilter, statusFilter, vacancyFilter, acceptingFilter]);
 
   const stats = useMemo(() => {
     const total = mergedGroups.length;
     const active = mergedGroups.filter((g) => String(g.status || "").toUpperCase() === "ACTIVE").length;
     const rankedGroups = mergedGroups.filter((g) => hasRank(g.group_rank)).length;
     const rankedCaptains = mergedGroups.filter((g) => hasRank(g.captain_rank)).length;
+    const accepting = mergedGroups.filter((g) => g.accepting_applications === true).length;
 
-    return { total, active, rankedGroups, rankedCaptains };
+    return { total, active, rankedGroups, rankedCaptains, accepting };
   }, [mergedGroups]);
 
   if (loading && groups.length === 0 && !err) {
@@ -255,16 +283,17 @@ export default function AllGroups() {
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="mt-5 grid grid-cols-2 lg:grid-cols-5 gap-3">
           <StatCard label="Total Groups" value={stats.total} />
           <StatCard label="Active Groups" value={stats.active} tone="text-emerald-700" />
           <StatCard label="Group Rankings" value={stats.rankedGroups} tone="text-blue-700" />
           <StatCard label="Captain Rankings" value={stats.rankedCaptains} tone="text-purple-700" />
+          <StatCard label="Accepting Apps" value={stats.accepting} tone="text-amber-700" />
         </div>
       </div>
 
       <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
           <div>
             <label className="block text-sm font-medium mb-1">Search</label>
             <input
@@ -306,6 +335,32 @@ export default function AllGroups() {
               ))}
             </select>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Vacancy</label>
+            <select
+              value={vacancyFilter}
+              onChange={(e) => setVacancyFilter(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 bg-white"
+            >
+              <option value="ALL">All</option>
+              <option value="HAS_VACANCY">Has Vacancy</option>
+              <option value="FULL">Full</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Accepting Apps</label>
+            <select
+              value={acceptingFilter}
+              onChange={(e) => setAcceptingFilter(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 bg-white"
+            >
+              <option value="ALL">All</option>
+              <option value="YES">Yes</option>
+              <option value="NO">No</option>
+            </select>
+          </div>
         </div>
 
         <div className="mt-3 text-xs text-gray-500">
@@ -325,12 +380,15 @@ export default function AllGroups() {
       ) : null}
 
       <div className="overflow-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <table className="min-w-[1200px] w-full text-sm">
+        <table className="min-w-[1500px] w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
               <th className="text-left p-3 border-b">Group Name</th>
               <th className="text-left p-3 border-b">Tier</th>
               <th className="text-left p-3 border-b">Status</th>
+              <th className="text-left p-3 border-b">Eligibility</th>
+              <th className="text-left p-3 border-b">Vacancies</th>
+              <th className="text-left p-3 border-b">Accepting</th>
               <th className="text-left p-3 border-b">Captain</th>
               <th className="text-left p-3 border-b">Captain Rank</th>
               <th className="text-left p-3 border-b">Group Rank</th>
@@ -353,6 +411,16 @@ export default function AllGroups() {
                 <td className="p-3 border-b">
                   <Badge value={g.status || "-"} stylesMap={STATUS_STYLES} />
                 </td>
+                <td className="p-3 border-b">
+                  <Badge
+                    value={g.current_phase_eligibility_status || "NOT_EVALUATED"}
+                    stylesMap={ELIGIBILITY_STYLES}
+                  />
+                </td>
+                <td className="p-3 border-b">
+                  {g.vacancies === null || g.vacancies === undefined ? "-" : Number(g.vacancies)}
+                </td>
+                <td className="p-3 border-b">{yesNoText(g.accepting_applications)}</td>
                 <td className="p-3 border-b">
                   <div className="font-medium text-gray-800">{g.captain_name || "Not ranked"}</div>
                   <div className="text-xs text-gray-500">
@@ -390,7 +458,7 @@ export default function AllGroups() {
 
             {filtered.length === 0 ? (
               <tr>
-                <td className="p-4 text-gray-500" colSpan={8}>
+                <td className="p-4 text-gray-500" colSpan={11}>
                   No groups found for the current filters.
                 </td>
                 <td className="sticky right-0 border-b bg-white shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.08)]" />

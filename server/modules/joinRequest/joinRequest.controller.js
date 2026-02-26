@@ -31,13 +31,14 @@ exports.applyJoinRequest = async (req, res) => {
 exports.decideJoinRequest = async (req, res) => {
   try {
     const { requestId } = req.params;
-    const { status, decision_reason } = req.body;
+    const { status, decision_reason, approved_role } = req.body;
 
     const result = await service.decideJoinRequest(
       requestId,
       status,
       decision_reason,
-      req.user
+      req.user,
+      { approved_role }
     );
 
     await auditService.logActionSafe({
@@ -47,7 +48,7 @@ exports.decideJoinRequest = async (req, res) => {
       entityType: "JOIN_REQUEST",
       entityId: requestId,
       reasonCode: decision_reason || null,
-      details: { status, decision_reason }
+      details: { status, decision_reason, approved_role: approved_role || null }
     });
 
     res.json(result);

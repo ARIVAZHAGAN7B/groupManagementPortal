@@ -14,6 +14,7 @@ const menuItems = [
   { name: "Base Points", path: "/base-points", icon: Icons.Leaderboard },
   { name: "Team Management", path: "/team-management", icon: Icons.TeamManagement },
   { name: "Event Join Requests", path: "/event-join-requests", icon: Icons.EventManagement },
+  { name: "Leadership Management", path: "/leadership-management", icon: Icons.Notifications },
   { name: "Event Management", path: "/event-management", icon: Icons.EventManagement },
   { name: "Phase Configuration", path: "/phase-configuration", icon: Icons.PhaseConfiguration },
   { name: "Change Day", path: "/change-day-management", icon: Icons.PhaseConfiguration },

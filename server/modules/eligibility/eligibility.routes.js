@@ -59,6 +59,20 @@ router.post(
   controller.evaluatePhaseEligibility
 );
 
+router.put(
+  "/phases/:phase_id/individual/:student_id/override",
+  authorize("ADMIN", "SYSTEM_ADMIN"),
+  validation.validateOverrideIndividualEligibility,
+  controller.overrideIndividualEligibility
+);
+
+router.put(
+  "/phases/:phase_id/group/:group_id/override",
+  authorize("ADMIN", "SYSTEM_ADMIN"),
+  validation.validateOverrideGroupEligibility,
+  controller.overrideGroupEligibility
+);
+
 router.get(
   "/phases/:phase_id/individual",
   authorize("ADMIN", "SYSTEM_ADMIN", "CAPTAIN"),

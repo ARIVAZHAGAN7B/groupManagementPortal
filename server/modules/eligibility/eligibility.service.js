@@ -105,6 +105,21 @@ const parseBooleanFilter = (value) => {
   throw new Error("is_eligible must be true/false");
 };
 
+const normalizeReasonCode = (value, fallbackPrefix = "ADMIN_OVERRIDE") => {
+  const raw = String(value ?? "").trim();
+  if (raw.length < 3) {
+    throw new Error("reason_code must be at least 3 characters");
+  }
+
+  const normalized = raw
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 50);
+
+  return normalized || fallbackPrefix;
+};
+
 const LEADERBOARD_LIMIT = 30;
 const LEADER_ROLES = ["CAPTAIN", "VICE_CAPTAIN", "STRATEGIST", "MANAGER"];
 
@@ -301,6 +316,87 @@ const getMyIndividualEligibility = async (phaseId, userId) => {
   return rows[0] || null;
 };
 
+const overrideIndividualEligibility = async (phaseId, studentId, payload = {}) => {
+  const phase = await repo.getPhaseById(phaseId);
+  if (!phase) throw new Error("Phase not found");
+
+  const student = await repo.getStudentById(studentId);
+  if (!student) throw new Error("Student not found");
+
+  if (typeof payload.is_eligible !== "boolean") {
+    throw new Error("is_eligible must be true/false");
+  }
+
+  const existing = await repo.getIndividualEligibility(phaseId, { student_id: studentId });
+  const current = Array.isArray(existing) ? existing[0] : null;
+  const points = Number(current?.this_phase_base_points) || 0;
+  const reasonCode = normalizeReasonCode(
+    payload.reason_code,
+    payload.is_eligible ? "ADMIN_OVERRIDE_ELIGIBLE" : "ADMIN_OVERRIDE_NOT_ELIGIBLE"
+  );
+
+  await repo.upsertIndividualEligibility([
+    {
+      student_id: studentId,
+      phase_id: phaseId,
+      this_phase_base_points: points,
+      is_eligible: payload.is_eligible,
+      reason_code: reasonCode
+    }
+  ]);
+
+  return {
+    phase_id: phaseId,
+    student_id: studentId,
+    this_phase_base_points: points,
+    is_eligible: payload.is_eligible,
+    reason_code: reasonCode,
+    override_applied: true
+  };
+};
+
+const overrideGroupEligibility = async (phaseId, groupId, payload = {}) => {
+  const phase = await repo.getPhaseById(phaseId);
+  if (!phase) throw new Error("Phase not found");
+
+  const numericGroupId = Number(groupId);
+  if (!Number.isInteger(numericGroupId)) throw new Error("group_id must be an integer");
+
+  const group = await repo.getGroupById(numericGroupId);
+  if (!group) throw new Error("Group not found");
+
+  if (typeof payload.is_eligible !== "boolean") {
+    throw new Error("is_eligible must be true/false");
+  }
+
+  const existing = await repo.getGroupEligibility(phaseId, { group_id: numericGroupId });
+  const current = Array.isArray(existing) ? existing[0] : null;
+  const points = Number(current?.this_phase_group_points) || 0;
+  const reasonCode = normalizeReasonCode(
+    payload.reason_code,
+    payload.is_eligible ? "ADMIN_OVERRIDE_GROUP_ELIGIBLE" : "ADMIN_OVERRIDE_GROUP_NOT_ELIGIBLE"
+  );
+
+  await repo.upsertGroupEligibility([
+    {
+      group_id: numericGroupId,
+      phase_id: phaseId,
+      this_phase_group_points: points,
+      is_eligible: payload.is_eligible,
+      reason_code: reasonCode
+    }
+  ]);
+
+  return {
+    phase_id: phaseId,
+    group_id: numericGroupId,
+    this_phase_group_points: points,
+    is_eligible: payload.is_eligible,
+    reason_code: reasonCode,
+    override_applied: true
+  };
+};
+
 const getMyIndividualEligibilityHistory = async (userId) => {
   const student = await repo.getStudentByUserId(userId);
   if (!student) throw new Error("Student not found");
@@ -495,6 +591,8 @@ module.exports = {
   evaluatePhaseEligibility,
   getIndividualEligibility,
   getGroupEligibility,
+  overrideIndividualEligibility,
+  overrideGroupEligibility,
   getMyIndividualEligibility,
   getMyIndividualEligibilityHistory,
   getStudentBasePoints,

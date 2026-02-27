@@ -3,6 +3,8 @@ const repo = require("./eventJoinRequest.repository");
 const teamRepo = require("../team/team.repository");
 
 const ADMIN_ROLES = ["ADMIN", "SYSTEM_ADMIN"];
+const EVENT_MEMBERSHIP_ROLES = ["CAPTAIN", "VICE_CAPTAIN", "MEMBER"];
+const EVENT_LEADERSHIP_ROLES = ["CAPTAIN", "VICE_CAPTAIN"];
 
 const getStudentIdByUserIdFrom = async (queryable, userId) => {
   const [rows] = await queryable.query(
@@ -48,6 +50,35 @@ const resolveDecisionActor = async (queryable, actorUser, teamId) => {
     decision_by_user_id: String(actorUser.userId),
     decision_by_role: "CAPTAIN"
   };
+};
+
+const normalizeApprovedRole = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const role = String(value).trim().toUpperCase();
+  if (!EVENT_MEMBERSHIP_ROLES.includes(role)) {
+    throw new Error("approved_role must be one of CAPTAIN, VICE_CAPTAIN, MEMBER");
+  }
+  return role;
+};
+
+const ensureLeadershipRoleAvailability = async (queryable, teamId, role) => {
+  const normalizedRole = String(role || "").trim().toUpperCase();
+  if (!EVENT_LEADERSHIP_ROLES.includes(normalizedRole)) return;
+
+  const [rows] = await queryable.query(
+    `SELECT team_membership_id
+     FROM team_membership
+     WHERE team_id = ?
+       AND status = 'ACTIVE'
+       AND UPPER(role) = ?
+     LIMIT 1
+     FOR UPDATE`,
+    [teamId, normalizedRole]
+  );
+
+  if (rows.length > 0) {
+    throw new Error(`Event group already has an active ${normalizedRole}`);
+  }
 };
 
 const ensureTeamCanAcceptRequests = async (executor, teamId) => {
@@ -98,7 +129,17 @@ const applyEventJoinRequest = async (studentId, teamId) => {
 
 const getStudentIdByUserId = async (userId) => getStudentIdByUserIdFrom(db, userId);
 
-const decideEventJoinRequest = async (requestId, status, reason, actorUser) => {
+const decideEventJoinRequest = async (requestId, status, reason, actorUser, options = {}) => {
+  const normalizedStatus = String(status || "").trim().toUpperCase();
+  if (!["APPROVED", "REJECTED"].includes(normalizedStatus)) {
+    throw new Error("Invalid status");
+  }
+
+  const approvedRole = normalizeApprovedRole(options?.approved_role);
+  if (approvedRole && normalizedStatus !== "APPROVED") {
+    throw new Error("approved_role can only be used when status is APPROVED");
+  }
+
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
@@ -107,8 +148,10 @@ const decideEventJoinRequest = async (requestId, status, reason, actorUser) => {
     if (!request) throw new Error("Request not found");
     if (request.status !== "PENDING") throw new Error("Request already processed");
 
+    const membershipRole = approvedRole || "MEMBER";
+
     let targetTeam;
-    if (status === "APPROVED") {
+    if (normalizedStatus === "APPROVED") {
       targetTeam = await ensureTeamCanAcceptRequests(conn, request.team_id);
     } else {
       targetTeam = await ensureTeamExists(conn, request.team_id);
@@ -119,13 +162,13 @@ const decideEventJoinRequest = async (requestId, status, reason, actorUser) => {
     await repo.updateDecisionTx(
       conn,
       requestId,
-      status,
+      normalizedStatus,
       reason,
       actor.decision_by_user_id,
       actor.decision_by_role
     );
 
-    if (status === "APPROVED") {
+    if (normalizedStatus === "APPROVED") {
       const existingActive = await teamRepo.findActiveTeamMembershipByTeamAndStudent(
         request.team_id,
         request.student_id,
@@ -146,11 +189,22 @@ const decideEventJoinRequest = async (requestId, status, reason, actorUser) => {
         }
       }
 
+      if (EVENT_LEADERSHIP_ROLES.includes(membershipRole)) {
+        const actorRole = String(actor.decision_by_role || "").toUpperCase();
+        const actorIsAdmin = ADMIN_ROLES.includes(actorRole);
+
+        if (membershipRole === "CAPTAIN" && !actorIsAdmin) {
+          throw new Error("Only admin can approve requests with CAPTAIN role");
+        }
+
+        await ensureLeadershipRoleAvailability(conn, request.team_id, membershipRole);
+      }
+
       await teamRepo.createTeamMembership(
         {
           team_id: request.team_id,
           student_id: request.student_id,
-          role: "MEMBER",
+          role: membershipRole,
           assigned_by: String(actorUser.userId),
           notes: `Approved via event join request #${request.event_request_id}`
         },
@@ -159,7 +213,10 @@ const decideEventJoinRequest = async (requestId, status, reason, actorUser) => {
     }
 
     await conn.commit();
-    return { message: `Request ${status} successfully` };
+    return {
+      message: `Request ${normalizedStatus} successfully`,
+      approved_role: normalizedStatus === "APPROVED" ? membershipRole : null
+    };
   } catch (error) {
     await conn.rollback();
     throw error;

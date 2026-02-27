@@ -76,6 +76,16 @@ const getAllTeams = async (filters = {}, executor) => {
     }
   }
 
+  if (filters.team_type) {
+    clauses.push("t.team_type = ?");
+    values.push(String(filters.team_type).toUpperCase());
+  }
+
+  if (filters.exclude_team_type) {
+    clauses.push("t.team_type <> ?");
+    values.push(String(filters.exclude_team_type).toUpperCase());
+  }
+
   const [rows] = await getExecutor(executor).query(
     `${TEAM_SELECT_WITH_COUNTS}
      WHERE ${clauses.join(" AND ")}
@@ -85,12 +95,25 @@ const getAllTeams = async (filters = {}, executor) => {
   return rows;
 };
 
-const getTeamsByEventId = async (eventId, executor) => {
+const getTeamsByEventId = async (eventId, filters = {}, executor) => {
+  const clauses = ["t.event_id = ?"];
+  const values = [eventId];
+
+  if (filters.team_type) {
+    clauses.push("t.team_type = ?");
+    values.push(String(filters.team_type).toUpperCase());
+  }
+
+  if (filters.exclude_team_type) {
+    clauses.push("t.team_type <> ?");
+    values.push(String(filters.exclude_team_type).toUpperCase());
+  }
+
   const [rows] = await getExecutor(executor).query(
     `${TEAM_SELECT_WITH_COUNTS}
-     WHERE t.event_id = ?
+     WHERE ${clauses.join(" AND ")}
      ${TEAM_ORDER_BY}`,
-    [eventId]
+    values
   );
   return rows;
 };
@@ -264,6 +287,30 @@ const findActiveTeamMembershipByStudentAndEvent = async (studentId, eventId, exe
   return rows[0] || null;
 };
 
+const findActiveTeamMembershipByTeamAndRole = async (
+  teamId,
+  role,
+  excludeMembershipId = null,
+  executor
+) => {
+  const clauses = ["team_id = ?", "status = 'ACTIVE'", "UPPER(role) = ?"];
+  const values = [teamId, String(role || "").trim().toUpperCase()];
+
+  if (excludeMembershipId !== null && excludeMembershipId !== undefined) {
+    clauses.push("team_membership_id <> ?");
+    values.push(Number(excludeMembershipId));
+  }
+
+  const [rows] = await getExecutor(executor).query(
+    `SELECT team_membership_id, team_id, student_id, role, status
+     FROM team_membership
+     WHERE ${clauses.join(" AND ")}
+     LIMIT 1`,
+    values
+  );
+  return rows[0] || null;
+};
+
 const getTeamMembershipsByTeamId = async (teamId, filters = {}, executor) => {
   const clauses = ["tm.team_id = ?"];
   const values = [teamId];
@@ -341,6 +388,16 @@ const getAllTeamMemberships = async (filters = {}, executor) => {
   if (filters.event_id !== undefined) {
     clauses.push("t.event_id = ?");
     values.push(filters.event_id);
+  }
+
+  if (filters.team_type) {
+    clauses.push("t.team_type = ?");
+    values.push(String(filters.team_type).toUpperCase());
+  }
+
+  if (filters.exclude_team_type) {
+    clauses.push("t.team_type <> ?");
+    values.push(String(filters.exclude_team_type).toUpperCase());
   }
 
   const [rows] = await getExecutor(executor).query(
@@ -422,6 +479,7 @@ module.exports = {
   getTeamMembershipById,
   findActiveTeamMembershipByTeamAndStudent,
   findActiveTeamMembershipByStudentAndEvent,
+  findActiveTeamMembershipByTeamAndRole,
   getTeamMembershipsByTeamId,
   getAllTeamMemberships,
   updateTeamMembership,

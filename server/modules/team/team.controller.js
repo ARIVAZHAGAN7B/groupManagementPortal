@@ -23,7 +23,7 @@ const getTeams = async (req, res) => {
 
 const getTeamsByEvent = async (req, res) => {
   try {
-    const rows = await teamService.getTeamsByEvent(req.params.eventId);
+    const rows = await teamService.getTeamsByEvent(req.params.eventId, req.query || {});
     res.json(Array.isArray(rows) ? rows : []);
   } catch (error) {
     const status = error.message === "Event not found" ? 404 : 400;
@@ -97,7 +97,7 @@ const createTeamInEventByStudent = async (req, res) => {
       req.user?.userId
     );
     res.status(201).json({
-      message: "Event team created successfully",
+      message: "Event group created successfully",
       data: result
     });
   } catch (error) {

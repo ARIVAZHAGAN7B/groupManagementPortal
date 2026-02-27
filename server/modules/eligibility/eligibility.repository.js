@@ -409,8 +409,16 @@ const getMyIndividualEligibilityHistory = async (studentId, executor) => {
   return rows;
 };
 
-const getIndividualLeaderboard = async (limit = 30, executor) => {
+const getIndividualLeaderboard = async (limit = 30, filters = {}, executor) => {
   const safeLimit = Math.max(1, Math.min(Number(limit) || 30, 100));
+  const clauses = [];
+  const values = [];
+
+  if (filters?.tier) {
+    clauses.push("g.tier = ?");
+    values.push(String(filters.tier).toUpperCase());
+  }
+
   const [rows] = await getExecutor(executor).query(
     `SELECT
        s.student_id,
@@ -430,14 +438,57 @@ const getIndividualLeaderboard = async (limit = 30, executor) => {
        ON m.student_id = s.student_id
       AND m.status = 'ACTIVE'
      LEFT JOIN Sgroup g ON g.group_id = m.group_id
+     ${clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""}
      ORDER BY COALESCE(bp.total_base_points, 0) DESC, s.student_id ASC
      LIMIT ?`,
-    [safeLimit]
+    [...values, safeLimit]
   );
   return rows;
 };
 
-const getLeaderLeaderboard = async (roles = [], limit = 30, executor) => {
+const getIndividualLeaderboardByPhase = async (startAt, endAt, limit = 30, filters = {}, executor) => {
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 30, 100));
+  const clauses = [];
+  const values = [startAt, endAt];
+
+  if (filters?.tier) {
+    clauses.push("g.tier = ?");
+    values.push(String(filters.tier).toUpperCase());
+  }
+
+  const [rows] = await getExecutor(executor).query(
+    `SELECT
+       s.student_id,
+       s.name,
+       s.email,
+       s.department,
+       s.year,
+       COALESCE(SUM(h.points), 0) AS total_base_points,
+       m.group_id,
+       m.role AS membership_role,
+       g.group_code,
+       g.group_name,
+       g.tier AS group_tier
+     FROM students s
+     LEFT JOIN memberships m
+       ON m.student_id = s.student_id
+      AND m.status = 'ACTIVE'
+     LEFT JOIN Sgroup g ON g.group_id = m.group_id
+     LEFT JOIN base_point_history h
+       ON h.student_id = s.student_id
+      AND ${BASE_POINT_ACTIVITY_AT_EXPR} BETWEEN ? AND ?
+     ${clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""}
+     GROUP BY
+       s.student_id, s.name, s.email, s.department, s.year,
+       m.group_id, m.role, g.group_code, g.group_name, g.tier
+     ORDER BY COALESCE(SUM(h.points), 0) DESC, s.student_id ASC
+     LIMIT ?`,
+    [...values, safeLimit]
+  );
+  return rows;
+};
+
+const getLeaderLeaderboard = async (roles = [], limit = 30, filters = {}, executor) => {
   const exec = getExecutor(executor);
   const safeLimit = Math.max(1, Math.min(Number(limit) || 30, 100));
   const normalizedRoles = Array.isArray(roles)
@@ -447,6 +498,13 @@ const getLeaderLeaderboard = async (roles = [], limit = 30, executor) => {
   if (normalizedRoles.length === 0) return [];
 
   const placeholders = normalizedRoles.map(() => "?").join(", ");
+  const values = [...normalizedRoles];
+  let tierClause = "";
+  if (filters?.tier) {
+    tierClause = " AND g.tier = ?";
+    values.push(String(filters.tier).toUpperCase());
+  }
+
   const [rows] = await exec.query(
     `SELECT
        s.student_id,
@@ -467,15 +525,85 @@ const getLeaderLeaderboard = async (roles = [], limit = 30, executor) => {
      LEFT JOIN Sgroup g ON g.group_id = m.group_id
      WHERE m.status = 'ACTIVE'
        AND m.role IN (${placeholders})
+       ${tierClause}
      ORDER BY COALESCE(bp.total_base_points, 0) DESC, s.student_id ASC
      LIMIT ?`,
-    [...normalizedRoles, safeLimit]
+    [...values, safeLimit]
   );
   return rows;
 };
 
-const getGroupLeaderboard = async (limit = 30, executor) => {
+const getLeaderLeaderboardByPhase = async (
+  roles = [],
+  startAt,
+  endAt,
+  limit = 30,
+  filters = {},
+  executor
+) => {
+  const exec = getExecutor(executor);
   const safeLimit = Math.max(1, Math.min(Number(limit) || 30, 100));
+  const normalizedRoles = Array.isArray(roles)
+    ? roles.map((role) => String(role || "").trim().toUpperCase()).filter(Boolean)
+    : [];
+
+  if (normalizedRoles.length === 0) return [];
+
+  const placeholders = normalizedRoles.map(() => "?").join(", ");
+  let tierClause = "";
+  if (filters?.tier) {
+    tierClause = " AND g.tier = ?";
+  }
+
+  const [rows] = await exec.query(
+    `SELECT
+       s.student_id,
+       s.name,
+       s.email,
+       s.department,
+       s.year,
+       COALESCE(SUM(h.points), 0) AS total_base_points,
+       m.membership_id,
+       m.group_id,
+       m.role AS membership_role,
+       g.group_code,
+       g.group_name,
+       g.tier AS group_tier
+     FROM memberships m
+     INNER JOIN students s ON s.student_id = m.student_id
+     LEFT JOIN Sgroup g ON g.group_id = m.group_id
+     LEFT JOIN base_point_history h
+       ON h.student_id = s.student_id
+      AND ${BASE_POINT_ACTIVITY_AT_EXPR} BETWEEN ? AND ?
+     WHERE m.status = 'ACTIVE'
+       AND m.role IN (${placeholders})
+       ${tierClause}
+     GROUP BY
+       s.student_id, s.name, s.email, s.department, s.year,
+       m.membership_id, m.group_id, m.role, g.group_code, g.group_name, g.tier
+     ORDER BY COALESCE(SUM(h.points), 0) DESC, s.student_id ASC
+     LIMIT ?`,
+    [
+      startAt,
+      endAt,
+      ...normalizedRoles,
+      ...(filters?.tier ? [String(filters.tier).toUpperCase()] : []),
+      safeLimit
+    ]
+  );
+  return rows;
+};
+
+const getGroupLeaderboard = async (limit = 30, filters = {}, executor) => {
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 30, 100));
+  const clauses = [];
+  const values = [];
+
+  if (filters?.tier) {
+    clauses.push("g.tier = ?");
+    values.push(String(filters.tier).toUpperCase());
+  }
+
   const [rows] = await getExecutor(executor).query(
     `SELECT
        g.group_id,
@@ -490,10 +618,46 @@ const getGroupLeaderboard = async (limit = 30, executor) => {
        ON m.group_id = g.group_id
       AND m.status = 'ACTIVE'
      LEFT JOIN base_points bp ON bp.student_id = m.student_id
+     ${clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""}
      GROUP BY g.group_id, g.group_code, g.group_name, g.tier, g.status
      ORDER BY total_base_points DESC, active_member_count DESC, g.group_id ASC
      LIMIT ?`,
-    [safeLimit]
+    [...values, safeLimit]
+  );
+  return rows;
+};
+
+const getGroupLeaderboardByPhase = async (startAt, endAt, limit = 30, filters = {}, executor) => {
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 30, 100));
+  const clauses = [];
+  const values = [startAt, endAt];
+
+  if (filters?.tier) {
+    clauses.push("g.tier = ?");
+    values.push(String(filters.tier).toUpperCase());
+  }
+
+  const [rows] = await getExecutor(executor).query(
+    `SELECT
+       g.group_id,
+       g.group_code,
+       g.group_name,
+       g.tier,
+       g.status AS group_status,
+       COUNT(m.membership_id) AS active_member_count,
+       COALESCE(SUM(COALESCE(h.points, 0)), 0) AS total_base_points
+     FROM Sgroup g
+     INNER JOIN memberships m
+       ON m.group_id = g.group_id
+      AND m.status = 'ACTIVE'
+     LEFT JOIN base_point_history h
+       ON h.student_id = m.student_id
+      AND ${BASE_POINT_ACTIVITY_AT_EXPR} BETWEEN ? AND ?
+     ${clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""}
+     GROUP BY g.group_id, g.group_code, g.group_name, g.tier, g.status
+     ORDER BY total_base_points DESC, active_member_count DESC, g.group_id ASC
+     LIMIT ?`,
+    [...values, safeLimit]
   );
   return rows;
 };
@@ -521,6 +685,9 @@ module.exports = {
   getGroupById,
   getMyIndividualEligibilityHistory,
   getIndividualLeaderboard,
+  getIndividualLeaderboardByPhase,
   getLeaderLeaderboard,
+  getLeaderLeaderboardByPhase,
   getGroupLeaderboard
+  ,getGroupLeaderboardByPhase
 };

@@ -47,8 +47,8 @@ export async function overrideGroupEligibility(phaseId, groupId, payload) {
   return data;
 }
 
-export async function fetchStudentLeaderboards() {
-  const { data } = await api.get("/api/eligibility/leaderboards");
+export async function fetchStudentLeaderboards(params = {}) {
+  const { data } = await api.get("/api/eligibility/leaderboards", { params });
   return data; // { limit, individual, leaders, groups }
 }
 

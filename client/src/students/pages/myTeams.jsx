@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchMyTeamMemberships } from "../../service/teams.api";
+import { fetchMyEventGroupMemberships } from "../../service/teams.api";
 
 const formatDateTime = (value) => {
   if (!value) return "-";
@@ -18,11 +18,11 @@ export default function MyTeamsPage() {
     setLoading(true);
     setError("");
     try {
-      const data = await fetchMyTeamMemberships({ status: "ACTIVE" });
+      const data = await fetchMyEventGroupMemberships({ status: "ACTIVE" });
       setStudentId(data?.student_id || null);
       setRows(Array.isArray(data?.memberships) ? data.memberships : []);
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to load my teams");
+      setError(err?.response?.data?.message || "Failed to load my event groups");
       setStudentId(null);
       setRows([]);
     } finally {
@@ -34,9 +34,9 @@ export default function MyTeamsPage() {
     load();
   }, []);
 
-  const typeCounts = useMemo(() => {
+  const roleCounts = useMemo(() => {
     return rows.reduce((acc, row) => {
-      const key = String(row.team_type || "TEAM").toUpperCase();
+      const key = String(row.role || "MEMBER").toUpperCase();
       acc[key] = (acc[key] || 0) + 1;
       return acc;
     }, {});
@@ -46,9 +46,9 @@ export default function MyTeamsPage() {
     <div className="space-y-4">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">My Teams</h1>
+          <h1 className="text-xl font-semibold">My Event Groups</h1>
           <p className="text-sm text-gray-600">
-            Active team memberships linked to your student account.
+            Active event group memberships linked to your student account.
           </p>
           {studentId ? (
             <p className="text-xs text-gray-500 mt-1">Student ID: {studentId}</p>
@@ -67,20 +67,20 @@ export default function MyTeamsPage() {
           <div className="text-lg font-semibold">{rows.length}</div>
         </div>
         <div className="p-3 rounded border bg-gray-50">
-          <div className="text-xs uppercase tracking-wide font-semibold text-gray-500">TEAM</div>
-          <div className="text-lg font-semibold">{typeCounts.TEAM || 0}</div>
-        </div>
-        <div className="p-3 rounded border bg-gray-50">
-          <div className="text-xs uppercase tracking-wide font-semibold text-gray-500">HUB</div>
-          <div className="text-lg font-semibold">{typeCounts.HUB || 0}</div>
+          <div className="text-xs uppercase tracking-wide font-semibold text-gray-500">CAPTAIN</div>
+          <div className="text-lg font-semibold">{roleCounts.CAPTAIN || 0}</div>
         </div>
         <div className="p-3 rounded border bg-gray-50">
           <div className="text-xs uppercase tracking-wide font-semibold text-gray-500">
-            SECTION / EVENT
+            VICE_CAPTAIN
           </div>
-          <div className="text-lg font-semibold">
-            {(typeCounts.SECTION || 0) + (typeCounts.EVENT || 0)}
+          <div className="text-lg font-semibold">{roleCounts.VICE_CAPTAIN || 0}</div>
+        </div>
+        <div className="p-3 rounded border bg-gray-50">
+          <div className="text-xs uppercase tracking-wide font-semibold text-gray-500">
+            MEMBER
           </div>
+          <div className="text-lg font-semibold">{roleCounts.MEMBER || 0}</div>
         </div>
       </div>
 
@@ -89,7 +89,7 @@ export default function MyTeamsPage() {
       ) : null}
 
       {loading ? (
-        <div className="p-3 border rounded">Loading my teams...</div>
+        <div className="p-3 border rounded">Loading my event groups...</div>
       ) : (
         <div className="overflow-auto border rounded">
           <table className="min-w-[1100px] w-full text-sm">
@@ -97,9 +97,9 @@ export default function MyTeamsPage() {
               <tr>
                 {/* <th className="text-left p-3 border-b">Membership ID</th> */}
                 <th className="text-left p-3 border-b">Event</th>
-                <th className="text-left p-3 border-b">Team</th>
+                <th className="text-left p-3 border-b">Event Group</th>
                 <th className="text-left p-3 border-b">Type</th>
-                <th className="text-left p-3 border-b">Team Status</th>
+                <th className="text-left p-3 border-b">Event Group Status</th>
                 <th className="text-left p-3 border-b">Event Status</th>
                 <th className="text-left p-3 border-b">My Role</th>
                 <th className="text-left p-3 border-b">Membership Status</th>
@@ -142,7 +142,7 @@ export default function MyTeamsPage() {
               {rows.length === 0 ? (
                 <tr>
                   <td className="p-3 text-gray-500" colSpan={10}>
-                    No active team memberships found.
+                    No active event group memberships found.
                   </td>
                 </tr>
               ) : null}

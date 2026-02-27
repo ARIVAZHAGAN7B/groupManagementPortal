@@ -274,7 +274,7 @@ const AdminHeader = () => {
 
         <div className="hidden sm:block">
           <h1 className="text-lg font-bold text-slate-900">
-            UniPortal
+            GM Portal
           </h1>
           <p className="text-[10px] font-semibold uppercase text-slate-500">
             Admin Console

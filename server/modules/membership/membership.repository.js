@@ -1,4 +1,5 @@
 const db = require("../../config/db");
+const getExecutor = (executor) => executor || db;
 
 const findActiveMembershipByStudent = async (studentId) => {
   const [rows] = await db.query(
@@ -115,6 +116,20 @@ const getActiveMembershipWithGroupByStudent = async (studentId) => {
   return rows[0];
 };
 
+const findLatestLeftMembershipByStudent = async (studentId, executor) => {
+  const [rows] = await getExecutor(executor).query(
+    `SELECT membership_id, student_id, group_id, role, status, join_date, leave_date
+     FROM memberships
+     WHERE student_id=?
+       AND status='LEFT'
+       AND leave_date IS NOT NULL
+     ORDER BY leave_date DESC, membership_id DESC
+     LIMIT 1`,
+    [studentId]
+  );
+  return rows[0] || null;
+};
+
 const getAllMemberships = async () => {
   const [rows] = await db.query(
     `SELECT
@@ -154,6 +169,7 @@ module.exports = {
   leaveMembershipByStudentAndGroup,
   updateRole,
   getMembershipById,
+  findLatestLeftMembershipByStudent,
   findActiveCaptainInGroup,
   getActiveMembershipWithGroupByStudent,
   getAllMemberships

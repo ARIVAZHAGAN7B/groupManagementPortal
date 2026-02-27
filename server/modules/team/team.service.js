@@ -5,6 +5,8 @@ const eventRepo = require("../event/event.repository");
 const TEAM_TYPES = ["TEAM", "HUB", "SECTION", "EVENT"];
 const TEAM_STATUSES = ["ACTIVE", "INACTIVE", "FROZEN", "ARCHIVED"];
 const TEAM_MEMBERSHIP_STATUSES = ["ACTIVE", "LEFT"];
+const EVENT_GROUP_MEMBERSHIP_ROLES = ["CAPTAIN", "VICE_CAPTAIN", "MEMBER"];
+const EVENT_GROUP_LEADERSHIP_ROLES = ["CAPTAIN", "VICE_CAPTAIN"];
 
 const normalizeText = (value) => String(value || "").trim();
 const normalizeCode = (value) => normalizeText(value).toUpperCase();
@@ -26,6 +28,15 @@ const normalizeTeamType = (value) => {
   const normalized = normalizeText(value).toUpperCase() || "TEAM";
   if (!TEAM_TYPES.includes(normalized)) {
     throw new Error(`team_type must be one of: ${TEAM_TYPES.join(", ")}`);
+  }
+  return normalized;
+};
+
+const normalizeOptionalTeamType = (value, fieldName = "team_type") => {
+  if (value === undefined || value === null || value === "") return undefined;
+  const normalized = normalizeText(value).toUpperCase();
+  if (!TEAM_TYPES.includes(normalized)) {
+    throw new Error(`${fieldName} must be one of: ${TEAM_TYPES.join(", ")}`);
   }
   return normalized;
 };
@@ -93,6 +104,45 @@ const mapMembershipRow = (row) => ({
   event_id:
     row.event_id === null || row.event_id === undefined ? null : Number(row.event_id)
 });
+
+const isEventGroupTeam = (team) => {
+  if (!team) return false;
+  const type = String(team.team_type || "").toUpperCase();
+  return type === "EVENT" || (team.event_id !== null && team.event_id !== undefined);
+};
+
+const normalizeMembershipRoleForTeam = (team, value) => {
+  const role = normalizeRole(value);
+  if (!isEventGroupTeam(team)) return role;
+
+  if (!EVENT_GROUP_MEMBERSHIP_ROLES.includes(role)) {
+    throw new Error(
+      `role must be one of: ${EVENT_GROUP_MEMBERSHIP_ROLES.join(", ")} for event groups`
+    );
+  }
+
+  return role;
+};
+
+const ensureLeadershipRoleAvailability = async (
+  teamId,
+  role,
+  excludeMembershipId = null,
+  executor
+) => {
+  const normalizedRole = String(role || "").toUpperCase();
+  if (!EVENT_GROUP_LEADERSHIP_ROLES.includes(normalizedRole)) return;
+
+  const existing = await repo.findActiveTeamMembershipByTeamAndRole(
+    teamId,
+    normalizedRole,
+    excludeMembershipId,
+    executor
+  );
+  if (existing) {
+    throw new Error(`Event group already has an active ${normalizedRole}`);
+  }
+};
 
 const ensureUniqueTeamCode = async (teamCode, excludeTeamId = null) => {
   const existing = await repo.getTeamByCode(teamCode);
@@ -219,14 +269,22 @@ const getTeams = async (query = {}) => {
   if (query?.event_id !== undefined) {
     filters.event_id = normalizeEventId(query.event_id);
   }
+  filters.team_type = normalizeOptionalTeamType(query?.team_type, "team_type");
+  filters.exclude_team_type = normalizeOptionalTeamType(
+    query?.exclude_team_type,
+    "exclude_team_type"
+  );
 
   const rows = await repo.getAllTeams(filters);
   return (rows || []).map(mapTeamRow);
 };
 
-const getTeamsByEvent = async (eventId) => {
+const getTeamsByEvent = async (eventId, query = {}) => {
   await ensureEventExists(Number(eventId));
-  const rows = await repo.getTeamsByEventId(Number(eventId));
+  const normalizedType = normalizeOptionalTeamType(query?.team_type, "team_type");
+  const rows = await repo.getTeamsByEventId(Number(eventId), {
+    team_type: normalizedType || "EVENT"
+  });
   return (rows || []).map(mapTeamRow);
 };
 
@@ -292,7 +350,12 @@ const getAllTeamMemberships = async (query = {}) => {
     status,
     event_id: query.event_id ? Number(query.event_id) : undefined,
     team_id: query.team_id ? Number(query.team_id) : undefined,
-    student_id: query.student_id ? String(query.student_id).trim() : undefined
+    student_id: query.student_id ? String(query.student_id).trim() : undefined,
+    team_type: normalizeOptionalTeamType(query?.team_type, "team_type"),
+    exclude_team_type: normalizeOptionalTeamType(
+      query?.exclude_team_type,
+      "exclude_team_type"
+    )
   });
 
   return (rows || []).map(mapMembershipRow);
@@ -316,6 +379,8 @@ const addTeamMember = async (teamId, payload = {}, actorUserId = null) => {
   const student = await repo.getStudentById(studentId);
   if (!student) throw new Error("Student not found");
 
+  const role = normalizeMembershipRoleForTeam(team, payload.role);
+
   const existingActive = await repo.findActiveTeamMembershipByTeamAndStudent(teamId, studentId);
   if (existingActive) {
     throw new Error("Student is already an active member of this team");
@@ -325,10 +390,12 @@ const addTeamMember = async (teamId, payload = {}, actorUserId = null) => {
     await ensureNoActiveEventTeamMembership(studentId, team.event_id);
   }
 
+  await ensureLeadershipRoleAvailability(teamId, role, null);
+
   const result = await repo.createTeamMembership({
     team_id: Number(teamId),
     student_id: studentId,
-    role: normalizeRole(payload.role),
+    role,
     assigned_by: actorUserId || null,
     notes: normalizeNotes(payload.notes)
   });
@@ -361,9 +428,23 @@ const updateTeamMember = async (membershipId, payload = {}) => {
     throw new Error("Only ACTIVE team membership can be updated");
   }
 
-  const role = payload.role !== undefined ? normalizeRole(payload.role) : membership.role;
+  const teamContext = {
+    team_id: Number(membership.team_id),
+    team_type: membership.team_type,
+    event_id: membership.event_id
+  };
+  const role =
+    payload.role !== undefined
+      ? normalizeMembershipRoleForTeam(teamContext, payload.role)
+      : String(membership.role || "MEMBER").trim().toUpperCase();
   const notes =
     payload.notes !== undefined ? normalizeNotes(payload.notes) : membership.notes || null;
+
+  await ensureLeadershipRoleAvailability(
+    Number(membership.team_id),
+    role,
+    Number(membershipId)
+  );
 
   await repo.updateTeamMembership(membershipId, { role, notes });
   const row = await repo.getTeamMembershipById(membershipId);
@@ -393,6 +474,11 @@ const getMyTeamMemberships = async (userId, query = {}) => {
   const rows = await repo.getAllTeamMemberships({
     status,
     event_id: query.event_id ? Number(query.event_id) : undefined,
+    team_type: normalizeOptionalTeamType(query?.team_type, "team_type"),
+    exclude_team_type: normalizeOptionalTeamType(
+      query?.exclude_team_type,
+      "exclude_team_type"
+    ),
     student_id: student.student_id
   });
 
@@ -406,6 +492,8 @@ module.exports = {
   TEAM_TYPES,
   TEAM_STATUSES,
   TEAM_MEMBERSHIP_STATUSES,
+  EVENT_GROUP_MEMBERSHIP_ROLES,
+  EVENT_GROUP_LEADERSHIP_ROLES,
   createTeam,
   createTeamInEventByStudent,
   getTeams,

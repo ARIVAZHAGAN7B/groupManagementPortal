@@ -100,10 +100,26 @@ const getMyGroup = async (req, res) => {
     const studentId = req.user.userId;
     const student_id = await joinService.getStudentIdByUserId(studentId);
     const group = await service.getMyGroupService(student_id);
+    const rejoinDeadlineInfo = group
+      ? null
+      : await service.getRejoinDeadlineInfo(student_id);
     if (!group) {
-      return res.status(200).json({ group: null });
+      return res.status(200).json({
+        group: null,
+        rejoin_deadline: rejoinDeadlineInfo
+          ? {
+              ...rejoinDeadlineInfo,
+              left_at: rejoinDeadlineInfo.left_at
+                ? new Date(rejoinDeadlineInfo.left_at).toISOString()
+                : null,
+              rejoin_deadline_at: rejoinDeadlineInfo.rejoin_deadline_at
+                ? new Date(rejoinDeadlineInfo.rejoin_deadline_at).toISOString()
+                : null
+            }
+          : null
+      });
     }
-    return res.json({ group });
+    return res.json({ group, rejoin_deadline: null });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

@@ -17,6 +17,8 @@ const auditRoutes = require("./modules/audit/audit.routes");
 const systemConfigRoutes = require("./modules/systemConfig/systemConfig.routes");
 const leadershipRequestRoutes = require("./modules/leadershipRequest/leadershipRequest.routes");
 const groupTierRequestRoutes = require("./modules/groupTierRequest/groupTierRequest.routes");
+const teamChangeTierRoutes = require("./modules/teamChangeTier/teamChangeTier.routes");
+const teamTargetRoutes = require("./modules/teamTarget/teamTarget.routes");
 const {getProfile} = require("./getProfiles");
 
 const app = express();
@@ -41,11 +43,15 @@ app.use("/api/phases", phaseRoutes);
 app.use("/api/eligibility", eligibilityRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/teams", teamRoutes);
+app.use("/api/event-groups", teamRoutes);
 app.use("/api/event-join-requests", eventJoinRequestRoutes);
+app.use("/api/event-group-join-requests", eventJoinRequestRoutes);
 app.use("/api/audit-logs", auditRoutes);
 app.use("/api/system-config", systemConfigRoutes);
 app.use("/api/leadership-requests", leadershipRequestRoutes);
 app.use("/api/group-tier-requests", groupTierRequestRoutes);
+app.use("/api/team-change-tier", teamChangeTierRoutes);
+app.use("/api/team-targets", teamTargetRoutes);
 app.use("/api/profile", authenticate, getProfile);
 
 module.exports = app;

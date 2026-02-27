@@ -13,7 +13,8 @@ const validateApplyRequest = (req, res, next) => {
 const validateDecision = (req, res, next) => {
   const schema = Joi.object({
     status: Joi.string().valid("APPROVED", "REJECTED").required(),
-    decision_reason: Joi.string().allow("").max(255).required()
+    decision_reason: Joi.string().allow("").max(255).required(),
+    approved_role: Joi.string().valid("CAPTAIN", "VICE_CAPTAIN", "MEMBER").optional()
   });
 
   const { error } = schema.validate(req.body);

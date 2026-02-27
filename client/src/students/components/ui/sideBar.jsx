@@ -10,8 +10,9 @@ const menuItems = [
   { name: "My Group", path: "/my-group", icon: Icons.AuditLogs },
   { name: "All Groups", path: "/groups", icon: Icons.CreateGroup },
   { name: "Teams", path: "/teams", icon: Icons.TeamManagement },
-  { name: "My Teams", path: "/my-teams", icon: Icons.TeamManagement },
-  { name: "Team Requests", path: "/team-requests", icon: Icons.EventManagement, badge: "3" },
+  { name: "Event Groups", path: "/event-groups", icon: Icons.EventManagement },
+  { name: "My Event Groups", path: "/my-event-groups", icon: Icons.EventManagement },
+  { name: "Event Group Requests", path: "/event-group-requests", icon: Icons.EventManagement },
   { name: "Leaderboard", path: "/leaderboard", icon: Icons.Leaderboard },
   { name: "Eligibility", path: "/eligibility", icon: Icons.PhaseConfiguration },
 ];

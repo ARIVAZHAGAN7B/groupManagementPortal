@@ -1,5 +1,6 @@
 const repo = require("./joinRequest.repository");
 const membershipRepo = require("../membership/membership.repository");
+const membershipService = require("../membership/membership.service");
 const db = require("../../config/db");
 const systemConfigService = require("../systemConfig/systemConfig.service");
 
@@ -177,6 +178,14 @@ exports.decideJoinRequest = async (requestId, status, reason, actorUser, options
         throw new Error("Student already belongs to a group");
       }
 
+      const rejoinDeadlineInfo = await membershipService.ensureRejoinDeadlineCompliance(
+        request.student_id,
+        {
+          executor: conn,
+          allowExpired: actorIsAdmin
+        }
+      );
+
       const [[countBeforeRow]] = await conn.query(
         "SELECT COUNT(*) AS count FROM memberships WHERE group_id=? AND status='ACTIVE' FOR UPDATE",
         [request.group_id]
@@ -209,7 +218,8 @@ exports.decideJoinRequest = async (requestId, status, reason, actorUser, options
         approved_role: membershipRole,
         all_leadership_roles_empty_before_approval: Boolean(
           leadershipSnapshot.all_leadership_roles_empty
-        )
+        ),
+        rejoin_deadline_override_used: Boolean(actorIsAdmin && rejoinDeadlineInfo?.is_expired)
       };
 
       await conn.query(
@@ -234,7 +244,9 @@ exports.decideJoinRequest = async (requestId, status, reason, actorUser, options
       message: `Request ${status} successfully`,
       approved_role: status === "APPROVED" ? approvedRole || "MEMBER" : null,
       all_leadership_roles_empty_before_approval:
-        status === "APPROVED" ? Boolean(approvalMeta?.all_leadership_roles_empty_before_approval) : null
+        status === "APPROVED" ? Boolean(approvalMeta?.all_leadership_roles_empty_before_approval) : null,
+      rejoin_deadline_override_used:
+        status === "APPROVED" ? Boolean(approvalMeta?.rejoin_deadline_override_used) : null
     };
   } catch (e) {
     await conn.rollback();

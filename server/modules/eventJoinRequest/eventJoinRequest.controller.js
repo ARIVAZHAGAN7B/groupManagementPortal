@@ -14,12 +14,13 @@ const applyEventJoinRequest = async (req, res) => {
 const decideEventJoinRequest = async (req, res) => {
   try {
     const { requestId } = req.params;
-    const { status, decision_reason } = req.body;
+    const { status, decision_reason, approved_role } = req.body;
     const result = await service.decideEventJoinRequest(
       requestId,
       status,
       decision_reason,
-      req.user
+      req.user,
+      { approved_role }
     );
     res.json(result);
   } catch (error) {

@@ -1,29 +1,31 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchEvents } from "../../service/events.api";
-import { fetchTeamsByEvent } from "../../service/teams.api";
+import { fetchEventGroupsByEvent } from "../../service/teams.api";
 import {
   decideEventJoinRequest,
-  getPendingEventJoinRequestsByTeam,
+  getPendingEventJoinRequestsByTeam
 } from "../../service/eventJoinRequests.api";
 
 const formatDate = (value) => {
-  if (!value) return "—";
+  if (!value) return "-";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return String(value);
   return d.toLocaleDateString();
 };
 
 const EVENT_STATUS_STYLES = {
-  ACTIVE:   "bg-emerald-50 text-emerald-700 border-emerald-200",
+  ACTIVE: "bg-emerald-50 text-emerald-700 border-emerald-200",
   INACTIVE: "bg-gray-100 text-gray-500 border-gray-200",
-  ARCHIVED: "bg-amber-50 text-amber-700 border-amber-200",
+  ARCHIVED: "bg-amber-50 text-amber-700 border-amber-200"
 };
 
 const Badge = ({ value, map }) => {
-  if (!value) return <span className="text-gray-300 text-xs">—</span>;
+  if (!value) return <span className="text-gray-300 text-xs">-</span>;
   const cls = map[String(value).toUpperCase()] ?? "bg-gray-100 text-gray-600 border-gray-200";
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[11px] font-semibold ${cls}`}>
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[11px] font-semibold ${cls}`}
+    >
       {value}
     </span>
   );
@@ -31,12 +33,15 @@ const Badge = ({ value, map }) => {
 
 const StatCard = ({ label, value, accent }) => (
   <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-    <p className="text-[10.5px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{label}</p>
+    <p className="text-[10.5px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
+      {label}
+    </p>
     <p className={`text-xl font-bold ${accent ?? "text-gray-800"}`}>{value}</p>
   </div>
 );
 
-const selectCls = "w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 transition disabled:opacity-50 disabled:cursor-not-allowed";
+const selectCls =
+  "w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 transition disabled:opacity-50 disabled:cursor-not-allowed";
 const labelCls = "block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1";
 
 export default function EventJoinRequestManagement() {
@@ -50,6 +55,7 @@ export default function EventJoinRequestManagement() {
   const [loadingRows, setLoadingRows] = useState(false);
   const [error, setError] = useState("");
   const [decisionBusyId, setDecisionBusyId] = useState(null);
+  const [approvalRoleByRequestId, setApprovalRoleByRequestId] = useState({});
 
   const activeTeams = useMemo(
     () => teams.filter((t) => String(t?.status || "").toUpperCase() === "ACTIVE"),
@@ -69,8 +75,8 @@ export default function EventJoinRequestManagement() {
         return preferred
           ? String(preferred.event_id)
           : normalized[0]
-          ? String(normalized[0].event_id)
-          : "";
+            ? String(normalized[0].event_id)
+            : "";
       });
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to load events");
@@ -91,10 +97,11 @@ export default function EventJoinRequestManagement() {
       setPendingRows([]);
       return;
     }
+
     setLoadingTeams(true);
     setError("");
     try {
-      const rows = await fetchTeamsByEvent(eventId);
+      const rows = await fetchEventGroupsByEvent(eventId);
       const normalized = Array.isArray(rows) ? rows : [];
       setTeams(normalized);
       setSelectedTeamId((prev) => {
@@ -103,11 +110,11 @@ export default function EventJoinRequestManagement() {
         return preferred
           ? String(preferred.team_id)
           : normalized[0]
-          ? String(normalized[0].team_id)
-          : "";
+            ? String(normalized[0].team_id)
+            : "";
       });
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to load teams for event");
+      setError(err?.response?.data?.message || "Failed to load event groups for event");
       setTeams([]);
       setSelectedTeamId("");
       setPendingRows([]);
@@ -117,12 +124,25 @@ export default function EventJoinRequestManagement() {
   };
 
   const loadPending = async (teamId) => {
-    if (!teamId) { setPendingRows([]); return; }
+    if (!teamId) {
+      setPendingRows([]);
+      return;
+    }
+
     setLoadingRows(true);
     setError("");
     try {
       const rows = await getPendingEventJoinRequestsByTeam(teamId);
       setPendingRows(Array.isArray(rows) ? rows : []);
+      setApprovalRoleByRequestId((prev) => {
+        const next = { ...prev };
+        for (const row of Array.isArray(rows) ? rows : []) {
+          const requestId = row?.event_request_id;
+          if (!requestId) continue;
+          if (!next[requestId]) next[requestId] = "MEMBER";
+        }
+        return next;
+      });
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to load pending requests");
       setPendingRows([]);
@@ -131,24 +151,42 @@ export default function EventJoinRequestManagement() {
     }
   };
 
-  useEffect(() => { loadEventsAndSelect(); }, []);
-  useEffect(() => { if (selectedEventId) loadTeamsForEvent(selectedEventId); }, [selectedEventId]);
-  useEffect(() => { if (selectedTeamId) loadPending(selectedTeamId); }, [selectedTeamId]);
+  useEffect(() => {
+    loadEventsAndSelect();
+  }, []);
+
+  useEffect(() => {
+    if (selectedEventId) loadTeamsForEvent(selectedEventId);
+  }, [selectedEventId]);
+
+  useEffect(() => {
+    if (selectedTeamId) loadPending(selectedTeamId);
+  }, [selectedTeamId]);
 
   const onDecision = async (row, status) => {
     const requestId = row?.event_request_id;
     if (!requestId) return;
+
     setDecisionBusyId(requestId);
     setError("");
     try {
       const reason = status === "APPROVED" ? "Approved by admin" : "Rejected by admin";
-      await decideEventJoinRequest(requestId, status, reason);
+      const approvedRole =
+        status === "APPROVED" ? approvalRoleByRequestId[requestId] || "MEMBER" : undefined;
+      await decideEventJoinRequest(requestId, status, reason, approvedRole);
       await loadPending(selectedTeamId);
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to update request");
     } finally {
       setDecisionBusyId(null);
     }
+  };
+
+  const onChangeApprovalRole = (requestId, role) => {
+    setApprovalRoleByRequestId((prev) => ({
+      ...prev,
+      [requestId]: role
+    }));
   };
 
   const selectedTeam = useMemo(
@@ -163,13 +201,11 @@ export default function EventJoinRequestManagement() {
 
   return (
     <div className="p-6 space-y-5 max-w-screen-xl">
-
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-base font-bold text-gray-900">Event Join Requests</h1>
+          <h1 className="text-base font-bold text-gray-900">Event Group Join Requests</h1>
           <p className="text-xs text-gray-400 mt-0.5">
-            Review and approve or reject student requests to join teams and events.
+            Review and approve or reject student requests to join event groups.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -178,29 +214,28 @@ export default function EventJoinRequestManagement() {
             disabled={loadingEvents}
             className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
           >
-            {loadingEvents ? "…" : "Refresh Events"}
+            {loadingEvents ? "..." : "Refresh Events"}
           </button>
           <button
             onClick={() => loadTeamsForEvent(selectedEventId)}
             disabled={!selectedEventId || loadingTeams}
             className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
           >
-            {loadingTeams ? "…" : "Refresh Teams"}
+            {loadingTeams ? "..." : "Refresh Event Groups"}
           </button>
           <button
             onClick={() => loadPending(selectedTeamId)}
             disabled={!selectedTeamId || loadingRows}
             className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
           >
-            {loadingRows ? "…" : "Refresh Requests"}
+            {loadingRows ? "..." : "Refresh Requests"}
           </button>
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <StatCard label="Events" value={events.length} />
-        <StatCard label="Active Teams in Event" value={activeTeams.length} accent="text-blue-600" />
+        <StatCard label="Active Event Groups" value={activeTeams.length} accent="text-blue-600" />
         <StatCard
           label="Pending Requests"
           value={pendingRows.length}
@@ -208,7 +243,6 @@ export default function EventJoinRequestManagement() {
         />
       </div>
 
-      {/* Selectors + Context */}
       <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
@@ -227,25 +261,25 @@ export default function EventJoinRequestManagement() {
               ))}
             </select>
           </div>
+
           <div>
-            <label className={labelCls}>Team</label>
+            <label className={labelCls}>Event Group</label>
             <select
               value={selectedTeamId}
               onChange={(e) => setSelectedTeamId(e.target.value)}
               className={selectCls}
               disabled={loadingTeams || teams.length === 0}
             >
-              {teams.length === 0 && <option value="">No teams available</option>}
+              {teams.length === 0 && <option value="">No event groups available</option>}
               {teams.map((team) => (
                 <option key={team.team_id} value={team.team_id}>
-                  {team.team_name} ({team.team_code}) · {team.team_type}
+                  {team.team_name} ({team.team_code})
                 </option>
               ))}
             </select>
           </div>
         </div>
 
-        {/* Context pills */}
         {(selectedEvent || selectedTeam) && (
           <div className="flex flex-wrap gap-2 pt-1">
             {selectedEvent && (
@@ -255,54 +289,73 @@ export default function EventJoinRequestManagement() {
                 <Badge value={selectedEvent.status} map={EVENT_STATUS_STYLES} />
               </div>
             )}
+
             {selectedTeam && (
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs">
-                <span className="text-gray-400">Team</span>
+                <span className="text-gray-400">Event Group</span>
                 <span className="font-semibold text-gray-700">{selectedTeam.team_name}</span>
-                <span className="text-gray-400">·</span>
-                <span className="text-gray-500">{Number(selectedTeam.active_member_count || 0)} active members</span>
+                <span className="text-gray-400">|</span>
+                <span className="text-gray-500">
+                  {Number(selectedTeam.active_member_count || 0)} active members
+                </span>
               </div>
             )}
           </div>
         )}
       </div>
 
-      {/* Error */}
       {error && (
         <div className="px-4 py-2.5 rounded-lg border border-red-200 bg-red-50 text-sm text-red-700">
           {error}
         </div>
       )}
 
-      {/* Table */}
       {loadingRows ? (
-        <div className="py-10 text-center text-sm text-gray-400">Loading pending requests…</div>
+        <div className="py-10 text-center text-sm text-gray-400">Loading pending requests...</div>
       ) : (
         <div className="overflow-auto rounded-xl border border-gray-100">
-          <table className="min-w-[780px] w-full text-sm">
+          <table className="min-w-[920px] w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                {["Student", "Email", "Department", "Year", "Request Date", "Actions"].map((h) => (
-                  <th
-                    key={h}
-                    className="text-left px-4 py-2.5 text-[10.5px] font-semibold uppercase tracking-wider text-gray-400 whitespace-nowrap"
-                  >
-                    {h}
-                  </th>
-                ))}
+                {["Student", "Email", "Department", "Year", "Request Date", "Approve As", "Actions"].map(
+                  (h) => (
+                    <th
+                      key={h}
+                      className="text-left px-4 py-2.5 text-[10.5px] font-semibold uppercase tracking-wider text-gray-400 whitespace-nowrap"
+                    >
+                      {h}
+                    </th>
+                  )
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {pendingRows.map((row) => (
                 <tr key={row.event_request_id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3">
-                    <div className="font-medium text-gray-800">{row.student_name || "—"}</div>
-                    <div className="text-[11px] text-gray-400 font-mono mt-0.5">{row.student_id || "—"}</div>
+                    <div className="font-medium text-gray-800">{row.student_name || "-"}</div>
+                    <div className="text-[11px] text-gray-400 font-mono mt-0.5">
+                      {row.student_id || "-"}
+                    </div>
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{row.student_email || "—"}</td>
-                  <td className="px-4 py-3 text-xs text-gray-600">{row.department || "—"}</td>
-                  <td className="px-4 py-3 text-xs text-gray-600">{row.year ?? "—"}</td>
-                  <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{formatDate(row.request_date)}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500">{row.student_email || "-"}</td>
+                  <td className="px-4 py-3 text-xs text-gray-600">{row.department || "-"}</td>
+                  <td className="px-4 py-3 text-xs text-gray-600">{row.year ?? "-"}</td>
+                  <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
+                    {formatDate(row.request_date)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <select
+                      value={approvalRoleByRequestId[row.event_request_id] || "MEMBER"}
+                      onChange={(e) => onChangeApprovalRole(row.event_request_id, e.target.value)}
+                      disabled={decisionBusyId === row.event_request_id}
+                      className="border border-gray-200 rounded-md px-2 py-1 text-xs bg-white"
+                    >
+                      <option value="MEMBER">MEMBER</option>
+                      <option value="VICE_CAPTAIN">VICE_CAPTAIN</option>
+                      <option value="CAPTAIN">CAPTAIN</option>
+                    </select>
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
                       <button
@@ -311,7 +364,7 @@ export default function EventJoinRequestManagement() {
                         disabled={decisionBusyId === row.event_request_id}
                         className="px-3 py-1 rounded-md bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50 transition-colors"
                       >
-                        {decisionBusyId === row.event_request_id ? "…" : "Approve"}
+                        {decisionBusyId === row.event_request_id ? "..." : "Approve"}
                       </button>
                       <button
                         type="button"
@@ -319,7 +372,7 @@ export default function EventJoinRequestManagement() {
                         disabled={decisionBusyId === row.event_request_id}
                         className="px-3 py-1 rounded-md border border-gray-200 bg-white text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
                       >
-                        {decisionBusyId === row.event_request_id ? "…" : "Reject"}
+                        {decisionBusyId === row.event_request_id ? "..." : "Reject"}
                       </button>
                     </div>
                   </td>
@@ -328,8 +381,8 @@ export default function EventJoinRequestManagement() {
 
               {pendingRows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-gray-400">
-                    No pending requests for the selected team.
+                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-gray-400">
+                    No pending requests for the selected event group.
                   </td>
                 </tr>
               )}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchMyTeamMemberships } from "../../service/teams.api";
+import { fetchMyEventGroupMemberships } from "../../service/teams.api";
 import {
   decideEventJoinRequest,
   getMyEventJoinRequests,
@@ -32,6 +32,7 @@ export default function TeamRequestsPage() {
   const [error, setError] = useState("");
   const [pendingError, setPendingError] = useState("");
   const [decisionBusyId, setDecisionBusyId] = useState(null);
+  const [approvalRoleByRequestId, setApprovalRoleByRequestId] = useState({});
 
   const loadBase = async () => {
     setLoading(true);
@@ -39,7 +40,7 @@ export default function TeamRequestsPage() {
     try {
       const [requests, myTeamsRes] = await Promise.all([
         getMyEventJoinRequests(),
-        fetchMyTeamMemberships({ status: "ACTIVE" })
+        fetchMyEventGroupMemberships({ status: "ACTIVE" })
       ]);
 
       setMyRequests(Array.isArray(requests) ? requests : []);
@@ -53,7 +54,7 @@ export default function TeamRequestsPage() {
         return captains[0] ? String(captains[0].team_id) : "";
       });
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to load team requests");
+      setError(err?.response?.data?.message || "Failed to load event group requests");
       setMyRequests([]);
       setCaptainTeams([]);
       setSelectedTeamId("");
@@ -73,6 +74,15 @@ export default function TeamRequestsPage() {
     try {
       const rows = await getPendingEventJoinRequestsByTeam(teamId);
       setPendingRows(Array.isArray(rows) ? rows : []);
+      setApprovalRoleByRequestId((prev) => {
+        const next = { ...prev };
+        for (const row of Array.isArray(rows) ? rows : []) {
+          const requestId = row?.event_request_id;
+          if (!requestId) continue;
+          if (!next[requestId]) next[requestId] = "MEMBER";
+        }
+        return next;
+      });
     } catch (err) {
       setPendingError(err?.response?.data?.message || "Failed to load pending requests");
       setPendingRows([]);
@@ -97,15 +107,24 @@ export default function TeamRequestsPage() {
     try {
       const reason =
         status === "APPROVED"
-          ? "Approved by team captain"
-          : "Rejected by team captain";
-      await decideEventJoinRequest(requestId, status, reason);
+          ? "Approved by event group captain"
+          : "Rejected by event group captain";
+      const approvedRole =
+        status === "APPROVED" ? approvalRoleByRequestId[requestId] || "MEMBER" : undefined;
+      await decideEventJoinRequest(requestId, status, reason, approvedRole);
       await Promise.all([loadPending(selectedTeamId), loadBase()]);
     } catch (err) {
       setPendingError(err?.response?.data?.message || "Failed to update request");
     } finally {
       setDecisionBusyId(null);
     }
+  };
+
+  const onChangeApprovalRole = (requestId, role) => {
+    setApprovalRoleByRequestId((prev) => ({
+      ...prev,
+      [requestId]: role
+    }));
   };
 
   const selectedCaptainTeam = useMemo(
@@ -117,9 +136,9 @@ export default function TeamRequestsPage() {
     <div className="space-y-4">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">Team Requests</h1>
+          <h1 className="text-xl font-semibold">Event Group Requests</h1>
           <p className="text-sm text-gray-600">
-            Track your event/team join requests and approve requests if you are a captain.
+            Track your event-group join requests and approve requests if you are a captain.
           </p>
         </div>
         <button onClick={loadBase} className="px-3 py-2 rounded border" disabled={loading}>
@@ -157,7 +176,7 @@ export default function TeamRequestsPage() {
       ) : null}
 
       {loading ? (
-        <div className="p-3 border rounded">Loading team requests...</div>
+        <div className="p-3 border rounded">Loading event group requests...</div>
       ) : activeTab === "my" ? (
         <div className="overflow-auto border rounded">
           <table className="min-w-[1200px] w-full text-sm">
@@ -165,9 +184,9 @@ export default function TeamRequestsPage() {
               <tr>
                 <th className="text-left p-3 border-b">Request ID</th>
                 <th className="text-left p-3 border-b">Event</th>
-                <th className="text-left p-3 border-b">Team</th>
+                <th className="text-left p-3 border-b">Event Group</th>
                 <th className="text-left p-3 border-b">Type</th>
-                <th className="text-left p-3 border-b">Team Status</th>
+                <th className="text-left p-3 border-b">Event Group Status</th>
                 <th className="text-left p-3 border-b">Request Date</th>
                 <th className="text-left p-3 border-b">Status</th>
                 <th className="text-left p-3 border-b">Decision By</th>
@@ -213,7 +232,7 @@ export default function TeamRequestsPage() {
               {myRequests.length === 0 ? (
                 <tr>
                   <td className="p-3 text-gray-500" colSpan={10}>
-                    No event/team join requests found.
+                    No event-group join requests found.
                   </td>
                 </tr>
               ) : null}
@@ -224,13 +243,13 @@ export default function TeamRequestsPage() {
         <div className="space-y-3">
           {captainTeams.length === 0 ? (
             <div className="p-3 rounded border bg-gray-50 text-gray-700">
-              You are not a captain in any active team.
+              You are not a captain in any active event group.
             </div>
           ) : (
             <>
               <div className="flex flex-col md:flex-row md:items-end gap-3">
                 <div className="w-full md:max-w-md">
-                  <label className="block text-sm font-medium mb-1">Captain Team</label>
+                  <label className="block text-sm font-medium mb-1">Captain Event Group</label>
                   <select
                     value={selectedTeamId}
                     onChange={(e) => setSelectedTeamId(e.target.value)}
@@ -279,6 +298,7 @@ export default function TeamRequestsPage() {
                         <th className="text-left p-3 border-b">Department</th>
                         <th className="text-left p-3 border-b">Year</th>
                         <th className="text-left p-3 border-b">Request Date</th>
+                        <th className="text-left p-3 border-b">Approve As</th>
                         <th className="text-left p-3 border-b">Actions</th>
                       </tr>
                     </thead>
@@ -294,6 +314,19 @@ export default function TeamRequestsPage() {
                           <td className="p-3 border-b">{row.department || "-"}</td>
                           <td className="p-3 border-b">{row.year ?? "-"}</td>
                           <td className="p-3 border-b">{formatDateTime(row.request_date)}</td>
+                          <td className="p-3 border-b">
+                            <select
+                              value={approvalRoleByRequestId[row.event_request_id] || "MEMBER"}
+                              onChange={(e) =>
+                                onChangeApprovalRole(row.event_request_id, e.target.value)
+                              }
+                              disabled={decisionBusyId === row.event_request_id}
+                              className="border rounded px-2 py-1 bg-white text-sm"
+                            >
+                              <option value="MEMBER">MEMBER</option>
+                              <option value="VICE_CAPTAIN">VICE_CAPTAIN</option>
+                            </select>
+                          </td>
                           <td className="p-3 border-b">
                             <div className="flex flex-wrap gap-2">
                               <button
@@ -318,8 +351,8 @@ export default function TeamRequestsPage() {
                       ))}
                       {pendingRows.length === 0 ? (
                         <tr>
-                          <td className="p-3 text-gray-500" colSpan={7}>
-                            No pending requests for this team.
+                          <td className="p-3 text-gray-500" colSpan={8}>
+                            No pending requests for this event group.
                           </td>
                         </tr>
                       ) : null}

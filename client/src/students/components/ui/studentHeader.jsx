@@ -30,6 +30,22 @@ const toPhaseEndDateTime = (value) => {
   );
 };
 
+const formatCountdown = (ms) => {
+  if (!Number.isFinite(ms)) return "Unavailable";
+  if (ms <= 0) return "Expired";
+
+  const totalSeconds = Math.floor(ms / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+};
+
 const getInitials = (name) => {
   if (!name) return "ST";
   return name
@@ -46,10 +62,12 @@ const StudentHeader = () => {
   const [phase, setPhase] = useState(null);
   const [phaseTargets, setPhaseTargets] = useState(null);
   const [myGroup, setMyGroup] = useState(null);
+  const [rejoinDeadline, setRejoinDeadline] = useState(null);
 
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   // =========================
   // Load Phase + Group
@@ -76,11 +94,13 @@ const StudentHeader = () => {
 
         setPhase(phaseRes || null);
         setMyGroup(groupRes?.group ?? null);
+        setRejoinDeadline(groupRes?.rejoin_deadline ?? null);
         setPhaseTargets(targetRes);
       } catch {
         if (!mounted) return;
         setPhase(null);
         setMyGroup(null);
+        setRejoinDeadline(null);
         setPhaseTargets(null);
       } finally {
         if (!mounted) return;
@@ -95,6 +115,14 @@ const StudentHeader = () => {
       mounted = false;
       clearInterval(interval);
     };
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
   }, []);
 
   // =========================
@@ -202,6 +230,31 @@ const StudentHeader = () => {
     };
   }, [myGroup, phase, phaseTargets]);
 
+  const rejoinDeadlineWidget = useMemo(() => {
+    if (myGroup) return null;
+    if (!rejoinDeadline?.has_rejoin_deadline) return null;
+
+    const deadline = new Date(rejoinDeadline.rejoin_deadline_at);
+    if (Number.isNaN(deadline.getTime())) {
+      return {
+        visible: true,
+        text: "Unavailable",
+        toneClass: "text-gray-600",
+        title: "Join deadline unavailable"
+      };
+    }
+
+    const remainingMs = deadline.getTime() - nowMs;
+    const expired = remainingMs <= 0 || rejoinDeadline?.is_expired === true;
+
+    return {
+      visible: true,
+      text: expired ? "Expired" : `${formatCountdown(remainingMs)} left`,
+      toneClass: expired ? "text-red-700" : "text-amber-700",
+      title: `Join another group by ${deadline.toLocaleString()} (next working day deadline)`
+    };
+  }, [myGroup, rejoinDeadline, nowMs]);
+
   const initials = getInitials(studentName);
 
   // =========================
@@ -256,6 +309,15 @@ const StudentHeader = () => {
             {groupTierWidget.value}
           </span>
         </div>
+
+        {rejoinDeadlineWidget?.visible && (
+          <div className="hidden lg:flex text-xs" title={rejoinDeadlineWidget.title}>
+            Join Deadline:{" "}
+            <span className={`font-bold ml-1 ${rejoinDeadlineWidget.toneClass}`}>
+              {rejoinDeadlineWidget.text}
+            </span>
+          </div>
+        )}
 
         <div className="flex items-center gap-3">
           <div className="hidden lg:block text-right">

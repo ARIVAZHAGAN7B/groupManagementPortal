@@ -2,6 +2,8 @@ const repo = require("./membership.repository");
 const db = require("../../config/db");
 const phaseRepo = require("../phase/phase.repository");
 const systemConfigService = require("../systemConfig/systemConfig.service");
+const REJOIN_DEADLINE_HOURS = 24;
+const REJOIN_DEADLINE_RULE = "NEXT_WORKING_DAY_END";
 
 const toDateOnly = (value) => {
   const d = new Date(value);
@@ -13,6 +15,100 @@ const resolveGroupStatusByCount = (count, policy) => {
   const min = Number(policy.min_group_members) || 9;
   const max = Number(policy.max_group_members) || 11;
   return count >= min && count <= max ? "ACTIVE" : "INACTIVE";
+};
+
+const formatDateTime = (value) => {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString("en-US");
+};
+
+const addHours = (value, hours) => {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Date(d.getTime() + hours * 60 * 60 * 1000);
+};
+
+const isWeekend = (date) => {
+  const day = date.getDay();
+  return day === 0 || day === 6;
+};
+
+const nextWorkingDayDate = (value) => {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+
+  const cursor = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  cursor.setDate(cursor.getDate() + 1);
+
+  while (isWeekend(cursor)) {
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return cursor;
+};
+
+const endOfLocalDay = (value) => {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+};
+
+const getRejoinDeadlineFromLeaveDate = (leaveDate) => {
+  const nextWorkingDay = nextWorkingDayDate(leaveDate);
+  if (!nextWorkingDay) return null;
+  return endOfLocalDay(nextWorkingDay);
+};
+
+const getRejoinDeadlineInfo = async (studentId, options = {}) => {
+  const latestLeft = await repo.findLatestLeftMembershipByStudent(studentId, options.executor);
+  if (!latestLeft?.leave_date) {
+    return {
+      has_rejoin_deadline: false,
+      rule: REJOIN_DEADLINE_RULE,
+      deadline_hours: REJOIN_DEADLINE_HOURS,
+      latest_left_membership_id: latestLeft?.membership_id || null,
+      left_group_id: latestLeft?.group_id || null,
+      left_at: null,
+      rejoin_deadline_at: null,
+      is_expired: false
+    };
+  }
+
+  const leftAt = new Date(latestLeft.leave_date);
+  const deadlineAt = getRejoinDeadlineFromLeaveDate(leftAt);
+  const now = options.now ? new Date(options.now) : new Date();
+  const expired =
+    !Number.isNaN(now.getTime()) &&
+    deadlineAt instanceof Date &&
+    !Number.isNaN(deadlineAt.getTime()) &&
+    now.getTime() > deadlineAt.getTime();
+
+  return {
+    has_rejoin_deadline: true,
+    rule: REJOIN_DEADLINE_RULE,
+    deadline_hours: REJOIN_DEADLINE_HOURS,
+    latest_left_membership_id: latestLeft.membership_id,
+    left_group_id: latestLeft.group_id,
+    left_at: leftAt,
+    rejoin_deadline_at: deadlineAt,
+    is_expired: expired
+  };
+};
+
+const ensureRejoinDeadlineCompliance = async (studentId, options = {}) => {
+  const info = await getRejoinDeadlineInfo(studentId, options);
+  if (!info.has_rejoin_deadline || !info.is_expired || options.allowExpired === true) {
+    return info;
+  }
+
+  const leftText = formatDateTime(info.left_at) || "unknown";
+  const deadlineText = formatDateTime(info.rejoin_deadline_at) || "unknown";
+
+  throw new Error(
+    `Join deadline expired. Student left group ${info.left_group_id} on ${leftText} and must join by the end of the next working day (${deadlineText}). Admin approval is required.`
+  );
 };
 
 const ensureChangeDayLeaveAllowed = async (policy, options = {}) => {
@@ -39,6 +135,8 @@ const joinGroupService = async (student_id, groupId, role) => {
   if (existing.length > 0) {
     throw new Error("Student already belongs to a group");
   }
+
+  await ensureRejoinDeadlineCompliance(student_id);
 
   const [groupRows] = await db.query(
     "SELECT group_id, status FROM Sgroup WHERE group_id=? LIMIT 1",
@@ -80,10 +178,17 @@ const leaveGroupService = async (studentId, groupId, options = {}) => {
   const status = resolveGroupStatusByCount(count, policy);
   await repo.updateGroupStatus(groupId, status);
 
+  const rejoinDeadlineAt = getRejoinDeadlineFromLeaveDate(new Date());
+
   return {
     memberCount: count,
     status,
-    leave_deadline_days: 1
+    leave_deadline_days: 1,
+    rejoin_deadline_rule: REJOIN_DEADLINE_RULE,
+    rejoin_deadline_at:
+      rejoinDeadlineAt && !Number.isNaN(rejoinDeadlineAt.getTime())
+        ? rejoinDeadlineAt.toISOString()
+        : null
   };
 };
 
@@ -256,6 +361,10 @@ const removeMembershipService = async (membershipId, actorUser) => {
 };
 
 module.exports = {
+  REJOIN_DEADLINE_HOURS,
+  REJOIN_DEADLINE_RULE,
+  getRejoinDeadlineInfo,
+  ensureRejoinDeadlineCompliance,
   joinGroupService,
   leaveGroupService,
   getMembersService,

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchEvents } from "../../service/events.api";
 import {
-  createEventTeam,
-  fetchMyTeamMemberships,
-  fetchTeamMemberships,
-  fetchTeamsByEvent
+  createEventGroup,
+  fetchEventGroupMemberships,
+  fetchEventGroupsByEvent,
+  fetchMyEventGroupMemberships
 } from "../../service/teams.api";
 import {
   applyEventJoinRequest,
@@ -64,7 +64,7 @@ export default function TeamsPage() {
     try {
       const [eventRows, myRes, requestRows] = await Promise.all([
         fetchEvents(),
-        fetchMyTeamMemberships({ status: "ACTIVE" }),
+        fetchMyEventGroupMemberships({ status: "ACTIVE" }),
         getMyEventJoinRequests()
       ]);
 
@@ -81,7 +81,7 @@ export default function TeamsPage() {
         return active ? String(active.event_id) : normalizedEvents[0] ? String(normalizedEvents[0].event_id) : "";
       });
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to load events/teams data");
+      setError(err?.response?.data?.message || "Failed to load events/event groups data");
       setEvents([]);
       setMyActiveMemberships([]);
       setMyRequests([]);
@@ -100,10 +100,10 @@ export default function TeamsPage() {
     setLoadingTeams(true);
     setError("");
     try {
-      const rows = await fetchTeamsByEvent(eventId);
+      const rows = await fetchEventGroupsByEvent(eventId);
       setTeams(Array.isArray(rows) ? rows : []);
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to load teams for event");
+      setError(err?.response?.data?.message || "Failed to load event groups for event");
       setTeams([]);
     } finally {
       setLoadingTeams(false);
@@ -186,13 +186,13 @@ export default function TeamsPage() {
         description: String(teamForm.description || "").trim()
       };
       if (!payload.team_code || !payload.team_name) {
-        throw new Error("Team code and team name are required");
+        throw new Error("Event group code and name are required");
       }
-      await createEventTeam(selectedEventId, payload);
+      await createEventGroup(selectedEventId, payload);
       setTeamForm(EMPTY_TEAM_FORM);
       await Promise.all([loadBase(), loadTeamsForEvent(selectedEventId)]);
     } catch (err) {
-      setError(err?.response?.data?.message || err?.message || "Failed to create team");
+      setError(err?.response?.data?.message || err?.message || "Failed to create event group");
     } finally {
       setSavingTeam(false);
     }
@@ -200,7 +200,9 @@ export default function TeamsPage() {
 
   const onRequestJoin = async (team) => {
     if (!team?.team_id) return;
-    const ok = window.confirm(`Send join request to team ${team.team_name || team.team_code}?`);
+    const ok = window.confirm(
+      `Send join request to event group ${team.team_name || team.team_code}?`
+    );
     if (!ok) return;
 
     setBusyTeamId(team.team_id);
@@ -234,10 +236,10 @@ export default function TeamsPage() {
     setViewBusyTeamId(Number(team.team_id));
 
     try {
-      const rows = await fetchTeamMemberships(team.team_id, { status: "ACTIVE" });
+      const rows = await fetchEventGroupMemberships(team.team_id, { status: "ACTIVE" });
       setViewMembers(Array.isArray(rows) ? rows : []);
     } catch (err) {
-      setViewMembersError(err?.response?.data?.message || "Failed to load team members");
+      setViewMembersError(err?.response?.data?.message || "Failed to load event group members");
       setViewMembers([]);
     } finally {
       setViewMembersLoading(false);
@@ -261,9 +263,9 @@ export default function TeamsPage() {
     <div className="space-y-4">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">Event Teams</h1>
+          <h1 className="text-xl font-semibold">Event Groups</h1>
           <p className="text-sm text-gray-600">
-            Select an event, create a team (you become captain), or request to join a listed team.
+            Select an event, create an event group (you become captain), or request to join one.
           </p>
         </div>
         <button onClick={loadBase} className="px-3 py-2 rounded border" disabled={loading}>
@@ -303,13 +305,13 @@ export default function TeamsPage() {
         </div>
         <div className="p-3 rounded border bg-gray-50">
           <div className="text-xs uppercase tracking-wide font-semibold text-gray-500">
-            Teams (Selected Event)
+            Event Groups (Selected Event)
           </div>
           <div className="text-lg font-semibold">{teams.length}</div>
         </div>
         <div className="p-3 rounded border bg-gray-50">
           <div className="text-xs uppercase tracking-wide font-semibold text-gray-500">
-            My Team (Selected Event)
+            My Event Group (Selected Event)
           </div>
           <div className="text-lg font-semibold">
             {myActiveMembershipInSelectedEvent ? myActiveMembershipInSelectedEvent.team_code : "-"}
@@ -325,17 +327,18 @@ export default function TeamsPage() {
 
       <form onSubmit={onCreateTeam} className="border rounded p-4 bg-white space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-base font-semibold">Create Team In Selected Event</h2>
+          <h2 className="text-base font-semibold">Create Event Group In Selected Event</h2>
           {myActiveMembershipInSelectedEvent ? (
             <span className="text-sm text-amber-700">
-              You already belong to a team in this event ({myActiveMembershipInSelectedEvent.team_code})
+              You already belong to an event group in this event (
+              {myActiveMembershipInSelectedEvent.team_code})
             </span>
           ) : null}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
-            <label className="block text-sm font-medium mb-1">Team Code</label>
+            <label className="block text-sm font-medium mb-1">Event Group Code</label>
             <input
               value={teamForm.team_code}
               onChange={(e) => setTeamForm((p) => ({ ...p, team_code: e.target.value }))}
@@ -346,7 +349,7 @@ export default function TeamsPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Team Name</label>
+            <label className="block text-sm font-medium mb-1">Event Group Name</label>
             <input
               value={teamForm.team_name}
               onChange={(e) => setTeamForm((p) => ({ ...p, team_name: e.target.value }))}
@@ -379,7 +382,7 @@ export default function TeamsPage() {
           }
           className="px-4 py-2 rounded border"
         >
-          {savingTeam ? "Creating..." : "Create Team (Become Captain)"}
+          {savingTeam ? "Creating..." : "Create Event Group (Become Captain)"}
         </button>
       </form>
 
@@ -388,7 +391,7 @@ export default function TeamsPage() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="w-full max-w-md border rounded px-3 py-2"
-          placeholder="Search teams in selected event..."
+          placeholder="Search event groups in selected event..."
         />
       </div>
 
@@ -398,7 +401,7 @@ export default function TeamsPage() {
 
       {loading || loadingTeams ? (
         <div className="p-3 border rounded">
-          {loading ? "Loading events..." : "Loading teams for event..."}
+          {loading ? "Loading events..." : "Loading event groups for event..."}
         </div>
       ) : (
         <div className="overflow-auto border rounded">
@@ -463,7 +466,7 @@ export default function TeamsPage() {
                           onClick={() => onViewMembers(team)}
                           disabled={viewBusyTeamId === teamId}
                           className="px-3 py-1 rounded border bg-white disabled:opacity-60"
-                          title="View active team members"
+                          title="View active event group members"
                         >
                           {viewBusyTeamId === teamId ? "Loading..." : "View"}
                         </button>
@@ -474,7 +477,7 @@ export default function TeamsPage() {
                           className="px-3 py-1 rounded border disabled:opacity-60"
                           title={
                             myActiveMembershipInSelectedEvent
-                              ? "You already belong to a team in this event"
+                              ? "You already belong to an event group in this event"
                               : isJoined
                                 ? "Already an active member"
                                 : hasPending
@@ -482,7 +485,7 @@ export default function TeamsPage() {
                                   : !selectedEventActive
                                     ? "Event is not active"
                                     : !isActiveTeam
-                                      ? "Team is not active"
+                                      ? "Event group is not active"
                                       : "Send join request"
                           }
                         >
@@ -497,7 +500,7 @@ export default function TeamsPage() {
               {filteredTeams.length === 0 ? (
                 <tr>
                   <td className="p-3 text-gray-500" colSpan={10}>
-                    No teams found for the selected event.
+                    No event groups found for the selected event.
                   </td>
                 </tr>
               ) : null}
@@ -521,10 +524,10 @@ export default function TeamsPage() {
             <div className="px-4 py-3 border-b flex items-start justify-between gap-3">
               <div>
                 <h2 id="team-members-preview-title" className="text-base font-semibold">
-                  Team Members
+                  Event Group Members
                 </h2>
                 <p className="text-sm text-gray-600">
-                  {viewTeam.team_name || "-"} ({viewTeam.team_code || "-"}) | Team ID:{" "}
+                  {viewTeam.team_name || "-"} ({viewTeam.team_code || "-"}) | Event Group ID:{" "}
                   {viewTeam.team_id}
                 </p>
               </div>
@@ -544,7 +547,7 @@ export default function TeamsPage() {
             ) : null}
 
             {viewMembersLoading ? (
-              <div className="p-4">Loading team members...</div>
+              <div className="p-4">Loading event group members...</div>
             ) : (
               <div className="overflow-auto">
                 <table className="min-w-[860px] w-full text-sm">
@@ -575,7 +578,7 @@ export default function TeamsPage() {
                     {viewMembers.length === 0 ? (
                       <tr>
                         <td className="p-3 text-gray-500" colSpan={7}>
-                          No active members found for this team.
+                          No active members found for this event group.
                         </td>
                       </tr>
                     ) : null}

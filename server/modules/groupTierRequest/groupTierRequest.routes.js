@@ -9,7 +9,7 @@ const { authorize } = require("../../middlewares/role.middleware");
 router.post(
   "/apply",
   authenticate,
-  authorize("CAPTAIN", "ADMIN", "SYSTEM_ADMIN"),
+  authorize("CAPTAIN", "ADMIN", "SYSTEM_ADMIN","STUDENT"),
   validation.validateApplyTierChangeRequest,
   controller.applyTierChangeRequest
 );

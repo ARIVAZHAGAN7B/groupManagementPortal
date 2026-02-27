@@ -15,6 +15,10 @@ import {
   applyLeadershipRoleRequest,
   getMyLeadershipRoleRequests
 } from "../../service/leadershipRequests.api";
+import {
+  applyGroupTierChangeRequest,
+  getMyGroupTierChangeRequests
+} from "../../service/groupTierRequests.api";
 
 const formatDateTime = (value) => {
   if (!value) return "-";
@@ -52,6 +56,7 @@ const BADGE_STYLES = {
 };
 
 const LEADERSHIP_ROLES = ["CAPTAIN", "VICE_CAPTAIN", "STRATEGIST", "MANAGER"];
+const GROUP_TIERS = ["D", "C", "B", "A"];
 
 const Badge = ({ value, fallback = "-" }) => {
   const text = String(value || fallback);
@@ -91,6 +96,10 @@ const MyGroup = () => {
   const [leadershipRoleBusy, setLeadershipRoleBusy] = useState(false);
   const [selectedLeadershipRole, setSelectedLeadershipRole] = useState("CAPTAIN");
   const [leadershipRequestReason, setLeadershipRequestReason] = useState("");
+  const [tierChangeRequests, setTierChangeRequests] = useState([]);
+  const [tierRequestBusy, setTierRequestBusy] = useState(false);
+  const [selectedTierRequestTarget, setSelectedTierRequestTarget] = useState("");
+  const [tierRequestReason, setTierRequestReason] = useState("");
 
   const isCaptain = data?.role === "CAPTAIN";
   const pendingCount = pending.length;
@@ -107,23 +116,30 @@ const MyGroup = () => {
         setMembers([]);
         setPending([]);
         setLeadershipRequests([]);
+        setTierChangeRequests([]);
         setEligibility(null);
         setEligibilityErr("");
         return;
       }
 
-      const [memberData, pendingData, leadershipRequestData] = await Promise.all([
+      const [memberData, pendingData, leadershipRequestData, tierChangeRequestData] = await Promise.all([
         fetchGroupMembers(myGroup.group_id),
         myGroup.role === "CAPTAIN"
           ? getPendingRequestsByGroup(myGroup.group_id)
           : Promise.resolve([]),
-        getMyLeadershipRoleRequests().catch(() => [])
+        getMyLeadershipRoleRequests().catch(() => []),
+        Promise.resolve([])
       ]);
 
       setMembers(Array.isArray(memberData) ? memberData : []);
       setPending(Array.isArray(pendingData) ? pendingData : []);
       setLeadershipRequests(
         (Array.isArray(leadershipRequestData) ? leadershipRequestData : []).filter(
+          (row) => String(row?.group_id) === String(myGroup.group_id)
+        )
+      );
+      setTierChangeRequests(
+        (Array.isArray(tierChangeRequestData) ? tierChangeRequestData : []).filter(
           (row) => String(row?.group_id) === String(myGroup.group_id)
         )
       );
@@ -222,6 +238,29 @@ const MyGroup = () => {
     }
   };
 
+  const onSubmitTierChangeRequest = async () => {
+    if (!data?.group_id) return;
+    if (!selectedTierRequestTarget) return;
+
+    setTierRequestBusy(true);
+    setActionErr("");
+    try {
+      await applyGroupTierChangeRequest({
+        group_id: data.group_id,
+        requested_tier: selectedTierRequestTarget,
+        request_reason: tierRequestReason.trim()
+      });
+      setTierRequestReason("");
+      await load();
+    } catch (err) {
+      setActionErr(
+        err?.response?.data?.message || "Failed to submit promotion/demotion request."
+      );
+    } finally {
+      setTierRequestBusy(false);
+    }
+  };
+
   const onDecision = async (requestId, status) => {
     setDecisionBusyId(requestId);
     setActionErr("");
@@ -284,6 +323,55 @@ const MyGroup = () => {
       missingLeadershipRoles.length > 0 &&
       myPendingLeadershipRoleRequests.length === 0,
     [data?.role, missingLeadershipRoles, myPendingLeadershipRoleRequests.length]
+  );
+
+  const currentGroupTier = useMemo(
+    () => String(data?.tier || "").toUpperCase(),
+    [data?.tier]
+  );
+
+  const availableTierTargets = useMemo(
+    () => GROUP_TIERS.filter((tier) => tier !== currentGroupTier),
+    [currentGroupTier]
+  );
+
+  useEffect(() => {
+    if (availableTierTargets.length === 0) return;
+    if (!availableTierTargets.includes(selectedTierRequestTarget)) {
+      const currentRank = GROUP_TIERS.indexOf(currentGroupTier);
+      const suggested =
+        currentRank >= 0 && currentRank < GROUP_TIERS.length - 1
+          ? GROUP_TIERS[currentRank + 1]
+          : availableTierTargets[0];
+      setSelectedTierRequestTarget(
+        availableTierTargets.includes(suggested) ? suggested : availableTierTargets[0]
+      );
+    }
+  }, [availableTierTargets, currentGroupTier, selectedTierRequestTarget]);
+
+  const myPendingTierChangeRequests = useMemo(
+    () =>
+      (Array.isArray(tierChangeRequests) ? tierChangeRequests : []).filter(
+        (row) => String(row?.status || "").toUpperCase() === "PENDING"
+      ),
+    [tierChangeRequests]
+  );
+
+  const pendingTierChangeForCurrentGroup = useMemo(
+    () =>
+      myPendingTierChangeRequests.find(
+        (row) => String(row?.group_id) === String(data?.group_id)
+      ) || null,
+    [myPendingTierChangeRequests, data?.group_id]
+  );
+
+  const canRequestTierChange = useMemo(
+    () =>
+      isCaptain &&
+      Boolean(data?.group_id) &&
+      availableTierTargets.length > 0 &&
+      !pendingTierChangeForCurrentGroup,
+    [isCaptain, data?.group_id, availableTierTargets.length, pendingTierChangeForCurrentGroup]
   );
 
   const tabs = useMemo(
@@ -550,6 +638,116 @@ const MyGroup = () => {
                               <td className="p-2.5 border-b border-gray-100">{row.leadership_request_id}</td>
                               <td className="p-2.5 border-b border-gray-100">
                                 <Badge value={row.requested_role || "-"} />
+                              </td>
+                              <td className="p-2.5 border-b border-gray-100">
+                                <Badge value={row.status || "-"} />
+                              </td>
+                              <td className="p-2.5 border-b border-gray-100">
+                                {formatDateTime(row.request_date)}
+                              </td>
+                              <td className="p-2.5 border-b border-gray-100 text-xs text-gray-600">
+                                {row.decision_reason || "-"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {false && (isCaptain || tierChangeRequests.length > 0) && (
+                <div className="rounded-xl border border-purple-100 bg-purple-50/40 p-4 space-y-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-purple-900">
+                      Promotion / Demotion Request
+                    </h3>
+                    <p className="mt-1 text-xs text-purple-800">
+                      Captains can request a group tier promotion or demotion. Admin approval is required.
+                    </p>
+                  </div>
+
+                  {isCaptain ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-[180px_1fr_auto] gap-2 items-start">
+                      <select
+                        value={selectedTierRequestTarget}
+                        onChange={(e) => setSelectedTierRequestTarget(e.target.value)}
+                        disabled={tierRequestBusy || !canRequestTierChange}
+                        className="rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm text-gray-800"
+                      >
+                        {availableTierTargets.length === 0 ? (
+                          <option value="">No target tiers</option>
+                        ) : (
+                          availableTierTargets.map((tier) => (
+                            <option key={tier} value={tier}>
+                              {currentGroupTier ? `${currentGroupTier} -> ${tier}` : tier}
+                            </option>
+                          ))
+                        )}
+                      </select>
+
+                      <input
+                        type="text"
+                        value={tierRequestReason}
+                        onChange={(e) => setTierRequestReason(e.target.value)}
+                        disabled={tierRequestBusy || !canRequestTierChange}
+                        placeholder="Optional note for admin (why tier change is needed)"
+                        maxLength={255}
+                        className="rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm text-gray-800"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={onSubmitTierChangeRequest}
+                        disabled={tierRequestBusy || !canRequestTierChange || !selectedTierRequestTarget}
+                        className="rounded-lg border border-purple-300 bg-purple-600 px-3 py-2 text-sm font-semibold text-white hover:bg-purple-700 disabled:opacity-60"
+                      >
+                        {tierRequestBusy ? "Sending..." : "Send Tier Request"}
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {isCaptain && pendingTierChangeForCurrentGroup ? (
+                    <div className="text-xs text-purple-800">
+                      Pending request exists for this group:{" "}
+                      <span className="font-semibold">
+                        {pendingTierChangeForCurrentGroup.current_tier} to {pendingTierChangeForCurrentGroup.requested_tier}
+                      </span>
+                      . Wait for admin approval/rejection before sending another request.
+                    </div>
+                  ) : null}
+
+                  {isCaptain && availableTierTargets.length === 0 ? (
+                    <div className="text-xs text-purple-800">
+                      No alternate tier available for this group.
+                    </div>
+                  ) : null}
+
+                  {tierChangeRequests.length > 0 && (
+                    <div className="overflow-auto rounded-lg border border-purple-100 bg-white">
+                      <table className="min-w-[760px] w-full text-sm">
+                        <thead className="bg-purple-50/60">
+                          <tr>
+                            <th className="text-left p-2.5 border-b border-purple-100 text-xs">Request ID</th>
+                            <th className="text-left p-2.5 border-b border-purple-100 text-xs">Type</th>
+                            <th className="text-left p-2.5 border-b border-purple-100 text-xs">Change</th>
+                            <th className="text-left p-2.5 border-b border-purple-100 text-xs">Status</th>
+                            <th className="text-left p-2.5 border-b border-purple-100 text-xs">Request Date</th>
+                            <th className="text-left p-2.5 border-b border-purple-100 text-xs">Decision</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {tierChangeRequests.map((row) => (
+                            <tr key={row.tier_change_request_id} className="hover:bg-gray-50">
+                              <td className="p-2.5 border-b border-gray-100">{row.tier_change_request_id}</td>
+                              <td className="p-2.5 border-b border-gray-100">
+                                <Badge value={row.request_type || "-"} />
+                              </td>
+                              <td className="p-2.5 border-b border-gray-100 text-xs text-gray-700">
+                                <span className="font-semibold">{row.current_tier || "-"}</span>
+                                {" -> "}
+                                <span className="font-semibold">{row.requested_tier || "-"}</span>
                               </td>
                               <td className="p-2.5 border-b border-gray-100">
                                 <Badge value={row.status || "-"} />

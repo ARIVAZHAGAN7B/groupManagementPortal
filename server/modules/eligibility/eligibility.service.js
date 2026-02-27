@@ -122,12 +122,34 @@ const normalizeReasonCode = (value, fallbackPrefix = "ADMIN_OVERRIDE") => {
 
 const LEADERBOARD_LIMIT = 30;
 const LEADER_ROLES = ["CAPTAIN", "VICE_CAPTAIN", "STRATEGIST", "MANAGER"];
+const LEADERBOARD_TIERS = new Set(["D", "C", "B", "A"]);
 
 const withRanks = (rows = []) =>
   rows.map((row, index) => ({
     rank: index + 1,
     ...row
   }));
+
+const normalizeLeaderboardFilters = (query = {}) => {
+  const phaseIdRaw = String(query?.phase_id ?? "").trim();
+  const tierRaw = String(query?.tier ?? "").trim().toUpperCase();
+
+  let phase_id = phaseIdRaw || null;
+  if (phase_id && phase_id.toLowerCase() === "all") {
+    phase_id = null;
+  }
+
+  let tier = tierRaw || null;
+  if (tier === "ALL") {
+    tier = null;
+  }
+
+  if (tier && !LEADERBOARD_TIERS.has(tier)) {
+    throw new Error("tier must be one of D, C, B, A");
+  }
+
+  return { phase_id, tier };
+};
 
 const recordBasePoints = async (payload) => {
   const legacyActivityDate = payload.activity_date ? toDateOnly(payload.activity_date) : null;
@@ -465,12 +487,47 @@ const getAdminStudentOverview = async () => {
   };
 };
 
-const getStudentLeaderboards = async () => {
-  const [individualRows, leaderRows, groupRows] = await Promise.all([
-    repo.getIndividualLeaderboard(LEADERBOARD_LIMIT),
-    repo.getLeaderLeaderboard(LEADER_ROLES, LEADERBOARD_LIMIT),
-    repo.getGroupLeaderboard(LEADERBOARD_LIMIT)
-  ]);
+const getStudentLeaderboards = async (query = {}) => {
+  const filters = normalizeLeaderboardFilters(query);
+  const leaderboardFilters = filters.tier ? { tier: filters.tier } : {};
+
+  let phase = null;
+  let phaseWindow = null;
+  if (filters.phase_id) {
+    phase = await repo.getPhaseById(filters.phase_id);
+    if (!phase) throw new Error("Phase not found");
+
+    phaseWindow = getPhaseWindow(phase);
+    if (!phaseWindow) throw new Error("Phase dates are invalid");
+  }
+
+  const [individualRows, leaderRows, groupRows] = phaseWindow
+    ? await Promise.all([
+        repo.getIndividualLeaderboardByPhase(
+          phaseWindow.start_at,
+          phaseWindow.end_at,
+          LEADERBOARD_LIMIT,
+          leaderboardFilters
+        ),
+        repo.getLeaderLeaderboardByPhase(
+          LEADER_ROLES,
+          phaseWindow.start_at,
+          phaseWindow.end_at,
+          LEADERBOARD_LIMIT,
+          leaderboardFilters
+        ),
+        repo.getGroupLeaderboardByPhase(
+          phaseWindow.start_at,
+          phaseWindow.end_at,
+          LEADERBOARD_LIMIT,
+          leaderboardFilters
+        )
+      ])
+    : await Promise.all([
+        repo.getIndividualLeaderboard(LEADERBOARD_LIMIT, leaderboardFilters),
+        repo.getLeaderLeaderboard(LEADER_ROLES, LEADERBOARD_LIMIT, leaderboardFilters),
+        repo.getGroupLeaderboard(LEADERBOARD_LIMIT, leaderboardFilters)
+      ]);
 
   const normalizeStudentRow = (row) => ({
     ...row,
@@ -480,6 +537,22 @@ const getStudentLeaderboards = async () => {
 
   return {
     limit: LEADERBOARD_LIMIT,
+    filters: {
+      phase_id: filters.phase_id,
+      tier: filters.tier
+    },
+    points_scope: phaseWindow ? "PHASE" : "TOTAL",
+    phase:
+      phase && phaseWindow
+        ? {
+            phase_id: phase.phase_id,
+            phase_name: phase.phase_name || null,
+            start_date: phaseWindow.start_date,
+            end_date: phaseWindow.end_date,
+            start_time: phaseWindow.start_time,
+            end_time: phaseWindow.end_time
+          }
+        : null,
     individual: withRanks((individualRows || []).map(normalizeStudentRow)),
     leaders: withRanks((leaderRows || []).map(normalizeStudentRow)),
     groups: withRanks(

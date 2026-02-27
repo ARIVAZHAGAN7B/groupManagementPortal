@@ -173,12 +173,12 @@ const getAdminStudentOverview = async (_req, res) => {
   }
 };
 
-const getStudentLeaderboards = async (_req, res) => {
+const getStudentLeaderboards = async (req, res) => {
   try {
-    const data = await eligibilityService.getStudentLeaderboards();
+    const data = await eligibilityService.getStudentLeaderboards(req.query || {});
     res.json(data);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(400).json({ message: error.message });
   }
 };
 

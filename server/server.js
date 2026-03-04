@@ -3,6 +3,7 @@ const db = require("./config/db"); // import your MySQL pool
 const { startPhaseFinalizationCron } = require("./jobs/phaseFinalization.cron");
 const systemConfigRepo = require("./modules/systemConfig/systemConfig.repository");
 const auditRepo = require("./modules/audit/audit.repository");
+const groupPointRepo = require("./modules/groupPoint/groupPoint.repository");
 require("dotenv").config();
 
 const PORT = process.env.PORT || 5000;
@@ -15,6 +16,7 @@ const startServer = async () => {
 
     await systemConfigRepo.ensureSchema();
     await auditRepo.ensureSchema();
+    await groupPointRepo.ensureSchema();
 
     startPhaseFinalizationCron();
 

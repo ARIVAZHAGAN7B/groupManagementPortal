@@ -1,5 +1,6 @@
 const db = require("../../config/db");
 const repo = require("./eligibility.repository");
+const groupPointRepo = require("../groupPoint/groupPoint.repository");
 const { expandDepartmentCode } = require("../../utils/department.service");
 
 const pad2 = (value) => String(value).padStart(2, "0");
@@ -189,11 +190,32 @@ const recordBasePoints = async (payload) => {
 
     await repo.upsertBasePointsTotal(payload.student_id, payload.points, conn);
 
+    const membership = await groupPointRepo.findMembershipForStudentAt(
+      payload.student_id,
+      activityAt,
+      conn
+    );
+
+    let group_point_id = null;
+    if (membership?.membership_id && membership?.group_id) {
+      group_point_id = await groupPointRepo.insertGroupPoint(
+        {
+          student_id: payload.student_id,
+          group_id: membership.group_id,
+          membership_id: membership.membership_id,
+          points: payload.points,
+          created_at: activityAt
+        },
+        conn
+      );
+    }
+
     await conn.commit();
 
     const summary = await repo.getStudentBasePoints(payload.student_id, conn);
     return {
       history_id,
+      group_point_id,
       student_id: payload.student_id,
       total_base_points: summary?.total_base_points ?? payload.points
     };

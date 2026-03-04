@@ -19,9 +19,9 @@ const safeStringify = (value) => {
 };
 
 const normalizeActorUserId = (value) => {
-  if (value === undefined || value === null || value === "") return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
+  if (value === undefined || value === null) return null;
+  const trimmed = String(value).trim();
+  return trimmed || null;
 };
 
 const logAction = async ({
@@ -41,7 +41,7 @@ const logAction = async ({
     action: String(action),
     entity_type: String(entityType),
     entity_id: entityId === undefined || entityId === null ? null : String(entityId),
-    actor_user_id: normalizeActorUserId(actorUser?.userId),
+    actor_user_id: normalizeActorUserId(actorUser?.userId ?? actorUser?.user_id),
     actor_role: actorUser?.role ? String(actorUser.role) : null,
     reason_code: reasonCode ? String(reasonCode) : null,
     details_json: safeStringify(details),
@@ -102,7 +102,13 @@ const getAuditLogs = async (query = {}) => {
       actor_user_id:
         row.actor_user_id === undefined || row.actor_user_id === null
           ? null
-          : Number(row.actor_user_id),
+          : String(row.actor_user_id),
+      actor_name: row.actor_name ? String(row.actor_name) : null,
+      actor_reference_id:
+        row.actor_reference_id === undefined || row.actor_reference_id === null
+          ? null
+          : String(row.actor_reference_id),
+      actor_reference_type: row.actor_reference_type ? String(row.actor_reference_type) : null,
       details: row.details_json ? safeParseJson(row.details_json) : null
     }))
   };

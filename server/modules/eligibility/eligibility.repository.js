@@ -3,6 +3,7 @@ const db = require("../../config/db");
 const getExecutor = (executor) => executor || db;
 const BASE_POINT_ACTIVITY_AT_EXPR =
   "COALESCE(h.activity_at, TIMESTAMP(h.activity_date, '00:00:00'))";
+const GROUP_POINT_CREATED_AT_EXPR = "gp.created_at";
 
 const getPhaseById = async (phaseId, executor) => {
   const [rows] = await getExecutor(executor).query(
@@ -132,14 +133,20 @@ const getGroupPhasePoints = async (startDate, endDate, executor) => {
     `SELECT
        g.group_id,
        g.tier,
-       COALESCE(SUM(h.points), 0) AS this_phase_group_points
+       COALESCE(gps.this_phase_group_points, 0) AS this_phase_group_points
      FROM Sgroup g
-     LEFT JOIN memberships m
-       ON m.group_id = g.group_id
-       AND m.status = 'ACTIVE'
-     LEFT JOIN base_point_history h
-       ON h.student_id = m.student_id
-       AND ${BASE_POINT_ACTIVITY_AT_EXPR} BETWEEN ? AND ?
+     LEFT JOIN (
+       SELECT
+         gp.group_id,
+         SUM(gp.points) AS this_phase_group_points
+       FROM group_points gp
+       INNER JOIN memberships m
+         ON m.membership_id = gp.membership_id
+        AND m.status = 'ACTIVE'
+       WHERE ${GROUP_POINT_CREATED_AT_EXPR} BETWEEN ? AND ?
+       GROUP BY gp.group_id
+     ) gps
+       ON gps.group_id = g.group_id
      GROUP BY g.group_id, g.tier`,
     [startDate, endDate]
   );
@@ -154,17 +161,29 @@ const getGroupPhaseSnapshot = async (groupId, startDate, endDate, executor) => {
        g.group_name,
        g.tier,
        g.status AS group_status,
-       COUNT(DISTINCT m.membership_id) AS active_member_count,
-       COALESCE(SUM(COALESCE(h.points, 0)), 0) AS earned_points
+       COALESCE(mc.active_member_count, 0) AS active_member_count,
+       COALESCE(gps.earned_points, 0) AS earned_points
      FROM Sgroup g
-     LEFT JOIN memberships m
-       ON m.group_id = g.group_id
-      AND m.status = 'ACTIVE'
-     LEFT JOIN base_point_history h
-       ON h.student_id = m.student_id
-       AND ${BASE_POINT_ACTIVITY_AT_EXPR} BETWEEN ? AND ?
+     LEFT JOIN (
+       SELECT group_id, COUNT(*) AS active_member_count
+       FROM memberships
+       WHERE status = 'ACTIVE'
+       GROUP BY group_id
+     ) mc
+       ON mc.group_id = g.group_id
+     LEFT JOIN (
+       SELECT
+         gp.group_id,
+         SUM(gp.points) AS earned_points
+       FROM group_points gp
+       INNER JOIN memberships m
+         ON m.membership_id = gp.membership_id
+        AND m.status = 'ACTIVE'
+       WHERE ${GROUP_POINT_CREATED_AT_EXPR} BETWEEN ? AND ?
+       GROUP BY gp.group_id
+     ) gps
+       ON gps.group_id = g.group_id
      WHERE g.group_id = ?
-     GROUP BY g.group_id, g.group_code, g.group_name, g.tier, g.status
      LIMIT 1`,
     [startDate, endDate, groupId]
   );
@@ -596,7 +615,7 @@ const getLeaderLeaderboardByPhase = async (
 
 const getGroupLeaderboard = async (limit = 30, filters = {}, executor) => {
   const safeLimit = Math.max(1, Math.min(Number(limit) || 30, 100));
-  const clauses = [];
+  const clauses = ["COALESCE(mc.active_member_count, 0) > 0"];
   const values = [];
 
   if (filters?.tier) {
@@ -611,15 +630,28 @@ const getGroupLeaderboard = async (limit = 30, filters = {}, executor) => {
        g.group_name,
        g.tier,
        g.status AS group_status,
-       COUNT(m.membership_id) AS active_member_count,
-       COALESCE(SUM(COALESCE(bp.total_base_points, 0)), 0) AS total_base_points
+       COALESCE(mc.active_member_count, 0) AS active_member_count,
+       COALESCE(gpt.total_base_points, 0) AS total_base_points
      FROM Sgroup g
-     INNER JOIN memberships m
-       ON m.group_id = g.group_id
-      AND m.status = 'ACTIVE'
-     LEFT JOIN base_points bp ON bp.student_id = m.student_id
+     LEFT JOIN (
+       SELECT group_id, COUNT(*) AS active_member_count
+       FROM memberships
+       WHERE status = 'ACTIVE'
+       GROUP BY group_id
+     ) mc
+       ON mc.group_id = g.group_id
+     LEFT JOIN (
+       SELECT
+         gp.group_id,
+         SUM(gp.points) AS total_base_points
+       FROM group_points gp
+       INNER JOIN memberships m
+         ON m.membership_id = gp.membership_id
+        AND m.status = 'ACTIVE'
+       GROUP BY gp.group_id
+     ) gpt
+       ON gpt.group_id = g.group_id
      ${clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""}
-     GROUP BY g.group_id, g.group_code, g.group_name, g.tier, g.status
      ORDER BY total_base_points DESC, active_member_count DESC, g.group_id ASC
      LIMIT ?`,
     [...values, safeLimit]
@@ -629,7 +661,7 @@ const getGroupLeaderboard = async (limit = 30, filters = {}, executor) => {
 
 const getGroupLeaderboardByPhase = async (startAt, endAt, limit = 30, filters = {}, executor) => {
   const safeLimit = Math.max(1, Math.min(Number(limit) || 30, 100));
-  const clauses = [];
+  const clauses = ["COALESCE(mc.active_member_count, 0) > 0"];
   const values = [startAt, endAt];
 
   if (filters?.tier) {
@@ -644,17 +676,29 @@ const getGroupLeaderboardByPhase = async (startAt, endAt, limit = 30, filters = 
        g.group_name,
        g.tier,
        g.status AS group_status,
-       COUNT(m.membership_id) AS active_member_count,
-       COALESCE(SUM(COALESCE(h.points, 0)), 0) AS total_base_points
+       COALESCE(mc.active_member_count, 0) AS active_member_count,
+       COALESCE(gpt.total_base_points, 0) AS total_base_points
      FROM Sgroup g
-     INNER JOIN memberships m
-       ON m.group_id = g.group_id
-      AND m.status = 'ACTIVE'
-     LEFT JOIN base_point_history h
-       ON h.student_id = m.student_id
-      AND ${BASE_POINT_ACTIVITY_AT_EXPR} BETWEEN ? AND ?
+     LEFT JOIN (
+       SELECT group_id, COUNT(*) AS active_member_count
+       FROM memberships
+       WHERE status = 'ACTIVE'
+       GROUP BY group_id
+     ) mc
+       ON mc.group_id = g.group_id
+     LEFT JOIN (
+       SELECT
+         gp.group_id,
+         SUM(gp.points) AS total_base_points
+       FROM group_points gp
+       INNER JOIN memberships m
+         ON m.membership_id = gp.membership_id
+        AND m.status = 'ACTIVE'
+       WHERE ${GROUP_POINT_CREATED_AT_EXPR} BETWEEN ? AND ?
+       GROUP BY gp.group_id
+     ) gpt
+       ON gpt.group_id = g.group_id
      ${clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""}
-     GROUP BY g.group_id, g.group_code, g.group_name, g.tier, g.status
      ORDER BY total_base_points DESC, active_member_count DESC, g.group_id ASC
      LIMIT ?`,
     [...values, safeLimit]

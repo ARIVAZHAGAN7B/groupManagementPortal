@@ -19,6 +19,7 @@ const leadershipRequestRoutes = require("./modules/leadershipRequest/leadershipR
 const groupTierRequestRoutes = require("./modules/groupTierRequest/groupTierRequest.routes");
 const teamChangeTierRoutes = require("./modules/teamChangeTier/teamChangeTier.routes");
 const teamTargetRoutes = require("./modules/teamTarget/teamTarget.routes");
+const groupPointRoutes = require("./modules/groupPoint/groupPoint.routes");
 const {getProfile} = require("./getProfiles");
 
 const app = express();
@@ -52,6 +53,7 @@ app.use("/api/leadership-requests", leadershipRequestRoutes);
 app.use("/api/group-tier-requests", groupTierRequestRoutes);
 app.use("/api/team-change-tier", teamChangeTierRoutes);
 app.use("/api/team-targets", teamTargetRoutes);
+app.use("/api/group-points", groupPointRoutes);
 app.use("/api/profile", authenticate, getProfile);
 
 module.exports = app;

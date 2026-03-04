@@ -5,25 +5,45 @@ import { NavLink, useNavigate } from "react-router-dom";
 import Icons from "../../../assets/Icons";
 import { useAuth } from "../../../utils/AuthContext";
 
-const menuItems = [
-  { name: "Dashboard", path: "/", icon: Icons.Dashboard, end: true },
-  { name: "Audit Logs", path: "/audit-logs", icon: Icons.AuditLogs },
-  { name: "Group", path: "/groups", icon: Icons.CreateGroup },
-  { name: "Membership Management", path: "/membership-management", icon: Icons.MembershipManagement },
-  { name: "Student Management", path: "/student-management", icon: Icons.StudentManagement },
-  { name: "Base Points", path: "/base-points", icon: Icons.Leaderboard },
-  { name: "Team Management", path: "/team-management", icon: Icons.TeamManagement },
-  { name: "Event Group Management", path: "/event-group-management", icon: Icons.EventManagement },
-  { name: "Team Membership", path: "/team-membership-management", icon: Icons.MembershipManagement },
-  { name: "Team Targets", path: "/team-target-management", icon: Icons.Leaderboard },
-  { name: "Event Group Requests", path: "/event-join-requests", icon: Icons.EventManagement },
-  { name: "Leadership Management", path: "/leadership-management", icon: Icons.Notifications },
-  { name: "Tier Management", path: "/tier-management", icon: Icons.Leaderboard },
-  { name: "Event Management", path: "/event-management", icon: Icons.EventManagement },
-  { name: "Phase Configuration", path: "/phase-configuration", icon: Icons.PhaseConfiguration },
-  { name: "Change Day", path: "/change-day-management", icon: Icons.PhaseConfiguration },
-  { name: "Eligibility", path: "/eligibility", icon: Icons.Leaderboard },
-  { name: "Incubation Configuration", path: "/incubation-configuration", icon: Icons.IncubationConfiguration },
+const menuSections = [
+  {
+    title: "Core Functionalities",
+    items: [
+      { name: "Dashboard", path: "/", icon: Icons.Dashboard, end: true },
+      { name: "Group", path: "/groups", icon: Icons.CreateGroup },
+      { name: "Event Management", path: "/event-management", icon: Icons.EventManagement },
+      { name: "Base Points", path: "/base-points", icon: Icons.Leaderboard }
+    ]
+  },
+  {
+    title: "Configurations",
+    items: [
+      { name: "Phase Configuration", path: "/phase-configuration", icon: Icons.PhaseConfiguration },
+      { name: "Change Day", path: "/change-day-management", icon: Icons.PhaseConfiguration },
+      { name: "Incubation Configuration", path: "/incubation-configuration", icon: Icons.IncubationConfiguration },
+      { name: "Team Targets", path: "/team-target-management", icon: Icons.Leaderboard }
+    ]
+  },
+  {
+    title: "Managements",
+    items: [
+      { name: "Membership Management", path: "/membership-management", icon: Icons.MembershipManagement },
+      { name: "Student Management", path: "/student-management", icon: Icons.StudentManagement },
+      { name: "Team Management", path: "/team-management", icon: Icons.TeamManagement },
+      { name: "Event Group Management", path: "/event-group-management", icon: Icons.EventManagement },
+      { name: "Team Membership", path: "/team-membership-management", icon: Icons.MembershipManagement },
+      { name: "Event Group Requests", path: "/event-join-requests", icon: Icons.EventManagement },
+      { name: "Leadership Management", path: "/leadership-management", icon: Icons.Notifications },
+      { name: "Tier Management", path: "/tier-management", icon: Icons.Leaderboard },
+      { name: "Eligibility", path: "/eligibility", icon: Icons.Leaderboard }
+    ]
+  },
+  {
+    title: "Others",
+    items: [
+      { name: "Audit Logs", path: "/audit-logs", icon: Icons.AuditLogs }
+    ]
+  }
 ];
 
 const utilityItems = [
@@ -56,18 +76,25 @@ const SideBar = () => {
 
   return (
     <div className="flex h-full flex-col p-4">
-      <nav className="space-y-1">
-        {menuItems.map(({ name, path, icon: Icon, end }) => (
-          <NavLink key={name} to={path} end={end} className={linkClass}>
-            {({ isActive }) => (
-              <>
-                <span className={isActive ? "text-white" : "text-slate-500 group-hover:text-slate-700"}>
-                  <Icon fontSize="small" />
-                </span>
-                <span className="truncate">{name}</span>
-              </>
-            )}
-          </NavLink>
+      <nav className="space-y-5">
+        {menuSections.map(({ title, items }) => (
+          <section key={title} className="space-y-1">
+            <div className="px-4 pb-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">
+              {title}
+            </div>
+            {items.map(({ name, path, icon: Icon, end }) => (
+              <NavLink key={name} to={path} end={end} className={linkClass}>
+                {({ isActive }) => (
+                  <>
+                    <span className={isActive ? "text-white" : "text-slate-500 group-hover:text-slate-700"}>
+                      <Icon fontSize="small" />
+                    </span>
+                    <span className="truncate">{name}</span>
+                  </>
+                )}
+              </NavLink>
+            ))}
+          </section>
         ))}
       </nav>
 

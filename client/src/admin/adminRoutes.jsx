@@ -1,7 +1,7 @@
 import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import AdminDashboard from "./pages/AdminDashboard";
-import AuditLogs from "./pages/AuditLogs";
+import AuditLogs from "./pages/auditLogs";
 import CreateGroup from "./pages/CreateGroup";
 import EventManagement from "./pages/EventManagement";
 import GroupManagement from "./pages/groupManagement";

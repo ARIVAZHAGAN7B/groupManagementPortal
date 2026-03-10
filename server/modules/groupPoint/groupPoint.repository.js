@@ -65,6 +65,7 @@ const findMembershipForStudentAt = async (studentId, activityAt, executor) => {
     `SELECT membership_id, student_id, group_id, status, join_date, leave_date
      FROM memberships
      WHERE student_id = ?
+       AND status = 'ACTIVE'
        AND join_date <= ?
        AND (leave_date IS NULL OR leave_date > ?)
      ORDER BY join_date DESC, membership_id DESC

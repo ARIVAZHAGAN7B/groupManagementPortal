@@ -14,11 +14,17 @@ const defaultTargets = () =>
     group_target: ""
   }));
 
-const toInputDate = (value) => {
-  if (!value) return "";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toISOString().split("T")[0];
+const pad2 = (value) => String(value).padStart(2, "0");
+
+const addDaysToDateInput = (value, days) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || "").trim());
+  if (!match) return "";
+
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  if (Number.isNaN(date.getTime())) return "";
+
+  date.setDate(date.getDate() + Number(days || 0));
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
 };
 
 export default function PhaseConfiguration() {
@@ -34,7 +40,7 @@ export default function PhaseConfiguration() {
   const [form, setForm] = useState({
     phase_name: "",
     start_date: "",
-    total_working_days: 10,
+    end_date: "",
     change_day_number: 5,
     start_time: "08:00",
     end_time: "19:00"
@@ -82,11 +88,12 @@ export default function PhaseConfiguration() {
 
   const canCreate = useMemo(() => {
     const hasPhaseName = String(form.phase_name || "").trim().length > 0;
+    const parsedChangeDayNumber = Number(form.change_day_number);
     const hasValidDateInputs =
       form.start_date &&
-      Number(form.total_working_days) > 1 &&
-      Number(form.change_day_number) > 0 &&
-      Number(form.change_day_number) < Number(form.total_working_days);
+      Number.isInteger(parsedChangeDayNumber) &&
+      parsedChangeDayNumber > 0 &&
+      (!form.end_date || String(form.end_date) > String(form.start_date));
 
     const hasValidTargets = targets.every((t) => {
       const group = Number(t.group_target);
@@ -128,13 +135,15 @@ export default function PhaseConfiguration() {
       const payload = {
         phase_name: String(form.phase_name || "").trim(),
         start_date: form.start_date,
-        total_working_days: Number(form.total_working_days),
         change_day_number: Number(form.change_day_number),
         start_time: form.start_time,
         end_time: form.end_time,
         targets: normalizedTargets,
         individual_target: parsedIndividualTarget
       };
+      if (form.end_date) {
+        payload.end_date = form.end_date;
+      }
       const res = await createPhase(payload);
       setPhase(res?.phase || null);
       await loadCurrentPhase();
@@ -198,120 +207,127 @@ export default function PhaseConfiguration() {
     return <div className="p-4 border rounded">Loading phase configuration...</div>;
   }
 
+  const inputClass =
+    "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 transition";
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Phase Configuration</h1>
-        <button onClick={loadCurrentPhase} className="px-3 py-2 rounded border">
+    <div className="p-6 max-w-6xl space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-base font-bold text-gray-900">Phase Configuration</h1>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Create new phases and configure eligibility targets for each tier.
+          </p>
+        </div>
+        <button
+          onClick={loadCurrentPhase}
+          className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors w-fit"
+        >
           Refresh
         </button>
       </div>
 
       {error ? (
-        <div className="p-3 rounded border border-red-300 bg-red-50 text-red-700">{error}</div>
+        <div className="px-4 py-2.5 rounded-lg border border-red-200 bg-red-50 text-sm text-red-700">
+          {error}
+        </div>
       ) : null}
 
       {success ? (
-        <div className="p-3 rounded border border-green-300 bg-green-50 text-green-700">{success}</div>
+        <div className="px-4 py-2.5 rounded-lg border border-green-200 bg-green-50 text-sm text-green-700">
+          {success}
+        </div>
       ) : null}
 
-      <section className="p-4 rounded border space-y-3">
-        <h2 className="font-semibold">Current Active Phase</h2>
-        {phase ? (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
-            <div className="p-3 rounded bg-gray-50 border">
-              <div className="text-gray-500">Phase</div>
-              <div className="font-medium break-all">{phase.phase_name || phase.phase_id || "-"}</div>
-            </div>
-            <div className="p-3 rounded bg-gray-50 border">
-              <div className="text-gray-500">Start Date</div>
-              <div className="font-medium">{toInputDate(phase.start_date)}</div>
-            </div>
-            <div className="p-3 rounded bg-gray-50 border">
-              <div className="text-gray-500">Change Day</div>
-              <div className="font-medium">{toInputDate(phase.change_day)}</div>
-            </div>
-            <div className="p-3 rounded bg-gray-50 border">
-              <div className="text-gray-500">End Date</div>
-              <div className="font-medium">{toInputDate(phase.end_date)}</div>
-            </div>
-          </div>
-        ) : (
-          <div className="text-sm text-gray-600">No active phase found.</div>
-        )}
-      </section>
+      <section className="rounded-xl border border-gray-100 bg-white p-5 space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-900">Create Phase</h2>
+          <p className="text-xs text-gray-500 mt-1">
+            Enter schedule values. If end date is not set, total working days defaults to 10.
+          </p>
+        </div>
 
-      <section className="p-4 rounded border space-y-3">
-        <h2 className="font-semibold">Create New Phase</h2>
-        <form onSubmit={onCreatePhase} className="grid grid-cols-1 md:grid-cols-7 gap-3">
+        <form onSubmit={onCreatePhase} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           <label className="text-sm">
-            <div className="mb-1">Phase Name</div>
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              Phase Name
+            </div>
             <input
               type="text"
               value={form.phase_name}
               onChange={(e) => setForm((p) => ({ ...p, phase_name: e.target.value }))}
-              className="w-full border rounded px-3 py-2"
+              className={inputClass}
               placeholder="e.g. Phase 1"
             />
           </label>
 
           <label className="text-sm">
-            <div className="mb-1">Start Date</div>
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              Start Date
+            </div>
             <input
               type="date"
               value={form.start_date}
               onChange={(e) => setForm((p) => ({ ...p, start_date: e.target.value }))}
-              className="w-full border rounded px-3 py-2"
+              className={inputClass}
             />
           </label>
 
           <label className="text-sm">
-            <div className="mb-1">Total Working Days</div>
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              End Date (Optional)
+            </div>
             <input
-              type="number"
-              min={2}
-              value={form.total_working_days}
-              onChange={(e) => setForm((p) => ({ ...p, total_working_days: e.target.value }))}
-              className="w-full border rounded px-3 py-2"
+              type="date"
+              value={form.end_date}
+              min={addDaysToDateInput(form.start_date, 1) || undefined}
+              onChange={(e) => setForm((p) => ({ ...p, end_date: e.target.value }))}
+              className={inputClass}
             />
           </label>
 
           <label className="text-sm">
-            <div className="mb-1">Change Day Number</div>
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              Change Day Number
+            </div>
             <input
               type="number"
               min={1}
               value={form.change_day_number}
               onChange={(e) => setForm((p) => ({ ...p, change_day_number: e.target.value }))}
-              className="w-full border rounded px-3 py-2"
+              className={inputClass}
             />
           </label>
 
           <label className="text-sm">
-            <div className="mb-1">Start Time</div>
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              Start Time
+            </div>
             <input
               type="time"
               value={form.start_time}
               onChange={(e) => setForm((p) => ({ ...p, start_time: e.target.value }))}
-              className="w-full border rounded px-3 py-2"
+              className={inputClass}
             />
           </label>
 
           <label className="text-sm">
-            <div className="mb-1">End Time</div>
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              End Time
+            </div>
             <input
               type="time"
               value={form.end_time}
               onChange={(e) => setForm((p) => ({ ...p, end_time: e.target.value }))}
-              className="w-full border rounded px-3 py-2"
+              className={inputClass}
             />
           </label>
 
-          <div className="flex items-end">
+          <div className="xl:col-span-3 md:col-span-2 flex justify-end pt-1">
             <button
               type="submit"
               disabled={!canCreate || createLoading}
-              className="w-full px-3 py-2 rounded border disabled:opacity-60"
+              className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
             >
               {createLoading ? "Creating..." : "Create Phase"}
             </button>
@@ -319,56 +335,54 @@ export default function PhaseConfiguration() {
         </form>
       </section>
 
-      <section className="p-4 rounded border space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold">Tier Targets</h2>
-          <button
-            onClick={onSaveTargets}
-            disabled={!phase?.phase_id || targetsLoading}
-            className="px-3 py-2 rounded border disabled:opacity-60"
-          >
-            {targetsLoading ? "Saving..." : "Save Targets"}
-          </button>
+      <section className="rounded-xl border border-gray-100 bg-white p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">Set Targets</h2>
+            <p className="text-xs text-gray-500 mt-1">Update active-phase group and individual targets.</p>
+          </div>
         </div>
 
-        <div className="overflow-auto border rounded">
-          <table className="min-w-[560px] w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left p-3 border-b">Tier</th>
-                <th className="text-left p-3 border-b">Group Target</th>
-              </tr>
-            </thead>
-            <tbody>
-              {targets.map((row) => (
-                <tr key={row.tier}>
-                  <td className="p-3 border-b font-medium">{row.tier}</td>
-                  <td className="p-3 border-b">
-                    <input
-                      type="number"
-                      min={0}
-                      value={row.group_target}
-                      onChange={(e) => onTargetChange(row.tier, e.target.value)}
-                      className="w-full border rounded px-3 py-2"
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {targets.map((row) => (
+            <label key={row.tier} className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-sm">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                Tier {row.tier}
+              </div>
+              <input
+                type="number"
+                min={0}
+                value={row.group_target}
+                onChange={(e) => onTargetChange(row.tier, e.target.value)}
+                className={`${inputClass} mt-2`}
+                placeholder="Group target"
+              />
+            </label>
+          ))}
         </div>
 
-        <div className="max-w-sm">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,320px)_auto] gap-3 items-end">
           <label className="text-sm">
-            <div className="mb-1 font-medium">Individual Target (Same for All Students)</div>
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              Individual Target (All Students)
+            </div>
             <input
               type="number"
               min={0}
               value={individualTarget}
               onChange={(e) => setIndividualTarget(e.target.value)}
-              className="w-full border rounded px-3 py-2"
+              className={inputClass}
+              placeholder="Individual target"
             />
           </label>
+
+          <button
+            onClick={onSaveTargets}
+            disabled={!phase?.phase_id || targetsLoading}
+            className="w-fit px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+          >
+            {targetsLoading ? "Saving..." : "Save Targets"}
+          </button>
         </div>
       </section>
     </div>

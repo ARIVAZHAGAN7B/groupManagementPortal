@@ -17,31 +17,59 @@ import {
   decideLeadershipRoleRequest,
 } from "../../../service/leadershipRequests.api";
 
+const BADGE_STYLES = {
+  ACTIVE: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  INACTIVE: "border-slate-200 bg-slate-100 text-slate-600",
+  PENDING: "border-amber-200 bg-amber-50 text-amber-700",
+  APPROVED: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  REJECTED: "border-red-200 bg-red-50 text-red-700",
+  A: "border-blue-200 bg-blue-50 text-blue-700",
+  B: "border-violet-200 bg-violet-50 text-violet-700",
+  C: "border-amber-200 bg-amber-50 text-amber-700",
+  D: "border-slate-200 bg-slate-100 text-slate-700",
+  CAPTAIN: "border-blue-200 bg-blue-50 text-blue-700",
+  VICE_CAPTAIN: "border-violet-200 bg-violet-50 text-violet-700",
+  STRATEGIST: "border-indigo-200 bg-indigo-50 text-indigo-700",
+  MANAGER: "border-amber-200 bg-amber-50 text-amber-700",
+  MEMBER: "border-slate-200 bg-slate-100 text-slate-700",
+};
+
+const LEADERSHIP_ROLES = ["CAPTAIN", "VICE_CAPTAIN", "STRATEGIST", "MANAGER"];
+
+const titleFont = { fontFamily: "\"Georgia\", \"Times New Roman\", serif" };
+
 const Badge = ({ value }) => {
-  const styles = {
-    ACTIVE: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    INACTIVE: "bg-gray-100 text-gray-500 border-gray-200",
-    PENDING: "bg-amber-50 text-amber-700 border-amber-200",
-    A: "bg-blue-50 text-blue-700 border-blue-200",
-    B: "bg-purple-50 text-purple-700 border-purple-200",
-    C: "bg-orange-50 text-orange-700 border-orange-200",
-    D: "bg-gray-100 text-gray-600 border-gray-200",
-  };
-  const cls = styles[String(value).toUpperCase()] ?? "bg-gray-100 text-gray-600 border-gray-200";
+  const text = String(value || "-");
+  const key = text.toUpperCase();
+  const cls = BADGE_STYLES[key] || "border-slate-200 bg-slate-100 text-slate-600";
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-md border text-xs font-semibold ${cls}`}>
-      {value}
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${cls}`}>
+      {text}
     </span>
   );
 };
 
-const LEADERSHIP_ROLES = ["CAPTAIN", "VICE_CAPTAIN", "STRATEGIST", "MANAGER"];
+const StatCard = ({ label, value, extra = null }) => (
+  <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">{label}</p>
+    <div className="mt-2 text-base font-semibold text-slate-900">{value}</div>
+    {extra ? <div className="mt-1 text-xs text-slate-500">{extra}</div> : null}
+  </div>
+);
+
+const formatDateTime = (value) => {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleString();
+};
 
 export default function GroupDetailsPage() {
   const { id } = useParams();
   const nav = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
+
   const [group, setGroup] = useState(null);
   const [members, setMembers] = useState([]);
   const [pending, setPending] = useState([]);
@@ -49,13 +77,13 @@ export default function GroupDetailsPage() {
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-
   const [busy, setBusy] = useState(false);
   const [actionErr, setActionErr] = useState("");
 
   const [pendingLoading, setPendingLoading] = useState(false);
   const [pendingErr, setPendingErr] = useState("");
   const [decisionBusyId, setDecisionBusyId] = useState(null);
+
   const [pendingLeadershipLoading, setPendingLeadershipLoading] = useState(false);
   const [pendingLeadershipErr, setPendingLeadershipErr] = useState("");
   const [leadershipDecisionBusyId, setLeadershipDecisionBusyId] = useState(null);
@@ -68,7 +96,7 @@ export default function GroupDetailsPage() {
     setErr("");
     try {
       const [g, m] = await Promise.all([fetchGroupById(id), fetchGroupMembers(id)]);
-      setGroup(g);
+      setGroup(g || null);
       setMembers(Array.isArray(m) ? m : []);
     } catch (e) {
       setErr(
@@ -76,6 +104,8 @@ export default function GroupDetailsPage() {
           e?.response?.data?.error ||
           "Failed to load group"
       );
+      setGroup(null);
+      setMembers([]);
     } finally {
       setLoading(false);
     }
@@ -129,7 +159,6 @@ export default function GroupDetailsPage() {
     loadAll();
     loadPending();
     loadPendingLeadership();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const onJoin = async () => {
@@ -158,6 +187,50 @@ export default function GroupDetailsPage() {
     }
   };
 
+  const isAdminLike = useMemo(
+    () => ["ADMIN", "SYSTEM_ADMIN"].includes(String(user?.role || "").toUpperCase()),
+    [user?.role]
+  );
+
+  const missingLeadershipRoles = useMemo(() => {
+    const activeRoles = new Set(
+      (Array.isArray(members) ? members : [])
+        .map((m) => String(m?.role || "").toUpperCase())
+        .filter(Boolean)
+    );
+    return LEADERSHIP_ROLES.filter((role) => !activeRoles.has(role));
+  }, [members]);
+
+  const activeLeadershipCount = useMemo(
+    () => LEADERSHIP_ROLES.length - missingLeadershipRoles.length,
+    [missingLeadershipRoles]
+  );
+
+  const allStudentsAreMembers = useMemo(
+    () => members.length > 0 && activeLeadershipCount === 0,
+    [members.length, activeLeadershipCount]
+  );
+
+  const showPendingSection = useMemo(
+    () => pendingLoading || pendingErr || pending.length > 0,
+    [pendingLoading, pendingErr, pending.length]
+  );
+
+  const showLeadershipPendingSection = useMemo(
+    () =>
+      pendingLeadershipLoading ||
+      pendingLeadershipErr ||
+      pendingLeadershipRequests.length > 0 ||
+      (isAdminLike && allStudentsAreMembers),
+    [
+      pendingLeadershipLoading,
+      pendingLeadershipErr,
+      pendingLeadershipRequests.length,
+      isAdminLike,
+      allStudentsAreMembers,
+    ]
+  );
+
   const onDecision = async (requestRow, status) => {
     const requestId = requestRow?.request_id;
     if (!requestId) return;
@@ -168,8 +241,7 @@ export default function GroupDetailsPage() {
       let approvedRole;
 
       if (status === "APPROVED" && isAdminLike && missingLeadershipRoles.length > 0) {
-        const suggestedRole =
-          missingLeadershipRoles[0] || "CAPTAIN";
+        const suggestedRole = missingLeadershipRoles[0] || "CAPTAIN";
         const input = window.prompt(
           `Missing leadership roles: ${missingLeadershipRoles.join(", ")}. Approve this request with role (${LEADERSHIP_ROLES.join(", ")}, MEMBER)?`,
           suggestedRole
@@ -179,10 +251,7 @@ export default function GroupDetailsPage() {
           return;
         }
 
-        approvedRole = String(input || "")
-          .trim()
-          .toUpperCase();
-
+        approvedRole = String(input || "").trim().toUpperCase();
         const validRoles = [...LEADERSHIP_ROLES, "MEMBER"];
         if (!validRoles.includes(approvedRole)) {
           throw new Error(`Role must be one of: ${validRoles.join(", ")}`);
@@ -230,178 +299,168 @@ export default function GroupDetailsPage() {
     }
   };
 
-  const showPendingSection = useMemo(
-    () => pendingLoading || pendingErr || pending.length > 0,
-    [pendingLoading, pendingErr, pending.length]
-  );
+  if (loading) {
+    return <div className="p-8 text-sm text-slate-500">Loading group details...</div>;
+  }
 
-  const isAdminLike = useMemo(
-    () => ["ADMIN", "SYSTEM_ADMIN"].includes(String(user?.role || "").toUpperCase()),
-    [user?.role]
-  );
-
-  const missingLeadershipRoles = useMemo(() => {
-    const activeRoles = new Set(
-      (Array.isArray(members) ? members : [])
-        .map((m) => String(m?.role || "").toUpperCase())
-        .filter(Boolean)
-    );
-
-    return LEADERSHIP_ROLES.filter((role) => !activeRoles.has(role));
-  }, [members]);
-
-  const activeLeadershipCount = useMemo(
-    () => LEADERSHIP_ROLES.length - missingLeadershipRoles.length,
-    [missingLeadershipRoles]
-  );
-
-  const allLeadershipRolesEmpty = useMemo(
-    () => missingLeadershipRoles.length === LEADERSHIP_ROLES.length,
-    [missingLeadershipRoles]
-  );
-
-  const allStudentsAreMembers = useMemo(
-    () => members.length > 0 && activeLeadershipCount === 0,
-    [members.length, activeLeadershipCount]
-  );
-
-  const showLeadershipPendingSection = useMemo(
-    () =>
-      pendingLeadershipLoading ||
-      pendingLeadershipErr ||
-      pendingLeadershipRequests.length > 0 ||
-      (isAdminLike && allStudentsAreMembers),
-    [
-      pendingLeadershipLoading,
-      pendingLeadershipErr,
-      pendingLeadershipRequests.length,
-      isAdminLike,
-      allStudentsAreMembers
-    ]
-  );
-
-  if (loading)
+  if (err) {
     return (
-      <div className="p-8 text-sm text-gray-400">Loading group details…</div>
+      <div className="m-6 rounded-xl border border-red-200 bg-red-50 p-8 text-sm text-red-700">
+        {err}
+      </div>
     );
-  if (err)
-    return (
-      <div className="p-8 text-sm text-red-600 bg-red-50 rounded-lg m-6">{err}</div>
-    );
-  if (!group)
-    return (
-      <div className="p-8 text-sm text-gray-400">Group not found.</div>
-    );
+  }
+
+  if (!group) {
+    return <div className="p-8 text-sm text-slate-500">Group not found.</div>;
+  }
 
   return (
-    <div className="p-6 space-y-5 max-w-5xl">
-
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-base font-bold text-gray-900">Group Details</h1>
-          <p className="text-xs text-gray-400 mt-0.5">{group.group_code} · {group.group_id}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => nav("/groups")}
-            className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-          >
-            ← Back
-          </button>
-          <button
-            onClick={() => {
-              loadAll();
-              loadPending();
-              loadPendingLeadership();
-            }}
-            className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-          >
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      {/* Info Card */}
-      <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
-        {[
-          { label: "Name", value: group.group_name },
-          { label: "Active Members", value: members.length },
-          { label: "Tier", value: <Badge value={group.tier} /> },
-          { label: "Status", value: <Badge value={group.status} /> },
-        ].map(({ label, value }) => (
-          <div key={label}>
-            <p className="text-[10.5px] font-semibold uppercase tracking-wider text-gray-400 mb-0.5">{label}</p>
-            <p className="text-sm font-semibold text-gray-800">{value}</p>
+    <div className="mx-auto w-full max-w-7xl space-y-5 px-4 py-5 md:px-6">
+      <section className="rounded-2xl border border-slate-200 bg-gradient-to-r from-[#f6f9ff] via-[#f2f6ff] to-[#eaf1ff] p-5 shadow-[0_20px_35px_-30px_rgba(15,23,42,0.9)] md:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+              Group Workspace
+            </p>
+            <h1 className="mt-1 text-3xl text-slate-900" style={titleFont}>
+              Group Details
+            </h1>
+            <p className="mt-2 text-sm text-slate-600">
+              {group.group_code} - ID {group.group_id}
+            </p>
           </div>
-        ))}
-      </div>
 
-      {/* Alerts */}
-      {actionErr && (
-        <div className="px-4 py-2.5 rounded-lg border border-red-200 bg-red-50 text-sm text-red-700">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => nav("/groups")}
+              className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            >
+              Back to Groups
+            </button>
+            <button
+              onClick={() => {
+                loadAll();
+                loadPending();
+                loadPendingLeadership();
+              }}
+              className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <StatCard label="Group Name" value={group.group_name || "-"} />
+          <StatCard label="Active Members" value={members.length} />
+          <StatCard label="Tier" value={<Badge value={group.tier} />} />
+          <StatCard label="Status" value={<Badge value={group.status} />} />
+          <StatCard
+            label="Leadership Gaps"
+            value={missingLeadershipRoles.length === 0 ? "None" : missingLeadershipRoles.join(", ")}
+            extra={missingLeadershipRoles.length === 0 ? "All leadership roles assigned" : "Assign missing roles"}
+          />
+        </div>
+      </section>
+
+      {actionErr ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {actionErr}
         </div>
-      )}
+      ) : null}
 
-      {/* Actions */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          disabled={busy}
-          onClick={onJoin}
-          className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          title="Student only (backend enforces)"
-        >
-          {busy ? "Working…" : "Join Group"}
-        </button>
-        <button
-          disabled={busy}
-          onClick={onLeave}
-          className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-          title="Student/Captain only (backend enforces)"
-        >
-          {busy ? "Working…" : "Leave Group"}
-        </button>
-      </div>
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_16px_30px_-28px_rgba(15,23,42,0.9)]">
+        <div className="flex flex-wrap gap-2">
+          <button
+            disabled={busy}
+            onClick={onJoin}
+            className="rounded-xl border border-[#7d95d8] bg-[#e9efff] px-4 py-2 text-sm font-semibold text-[#23366f] transition hover:bg-[#dbe5ff] disabled:opacity-60"
+            title="Student only (backend enforces)"
+          >
+            {busy ? "Working..." : "Join Group"}
+          </button>
+          <button
+            disabled={busy}
+            onClick={onLeave}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+            title="Student/Captain only (backend enforces)"
+          >
+            {busy ? "Working..." : "Leave Group"}
+          </button>
+        </div>
+      </section>
 
-      {/* Leadership Recovery Requests */}
-      {showLeadershipPendingSection && isAdminLike && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
+      {showLeadershipPendingSection && isAdminLike ? (
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_16px_30px_-28px_rgba(15,23,42,0.9)] md:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-bold text-gray-900">Pending Leadership Role Requests</h2>
-              {pendingLeadershipRequests.length > 0 && (
-                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold">
-                  {pendingLeadershipRequests.length}
-                </span>
-              )}
+              <h2 className="text-base font-semibold text-slate-900">Pending Leadership Requests</h2>
+              <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#e9efff] px-1.5 py-0.5 text-[11px] font-bold text-[#23366f]">
+                {pendingLeadershipRequests.length}
+              </span>
             </div>
             <button
               onClick={loadPendingLeadership}
               disabled={pendingLeadershipLoading}
-              className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
             >
               {pendingLeadershipLoading ? "Loading..." : "Reload"}
             </button>
           </div>
 
-          {(allLeadershipRolesEmpty || allStudentsAreMembers) && (
-            <div className="px-4 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800">
-              Admin notification: this group has no active leadership roles (all students are members).
-              Students can request a leadership role from their My Group page, and you can validate it here.
+          {(missingLeadershipRoles.length === LEADERSHIP_ROLES.length || allStudentsAreMembers) ? (
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              This group currently has no active leadership role. Students can request leadership roles and admin can validate them here.
             </div>
-          )}
+          ) : null}
 
-          {pendingLeadershipErr && (
-            <div className="px-4 py-2.5 rounded-lg border border-red-200 bg-red-50 text-sm text-red-700">
+          {pendingLeadershipErr ? (
+            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {pendingLeadershipErr}
             </div>
-          )}
+          ) : null}
 
-          <div className="overflow-auto rounded-xl border border-gray-100">
+          <div className="mt-4 space-y-3 md:hidden">
+            {pendingLeadershipRequests.map((r) => (
+              <article key={r.leadership_request_id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-700">{r.student_name || "-"}</p>
+                    <p className="text-xs text-slate-500">{r.student_id}</p>
+                  </div>
+                  <Badge value={r.requested_role} />
+                </div>
+                <p className="mt-2 text-xs text-slate-500">{formatDateTime(r.request_date)}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    disabled={leadershipDecisionBusyId === r.leadership_request_id}
+                    onClick={() => onLeadershipDecision(r, "APPROVED")}
+                    className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 disabled:opacity-60"
+                  >
+                    {leadershipDecisionBusyId === r.leadership_request_id ? "..." : "Approve"}
+                  </button>
+                  <button
+                    disabled={leadershipDecisionBusyId === r.leadership_request_id}
+                    onClick={() => onLeadershipDecision(r, "REJECTED")}
+                    className="rounded-md border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 disabled:opacity-60"
+                  >
+                    {leadershipDecisionBusyId === r.leadership_request_id ? "..." : "Reject"}
+                  </button>
+                </div>
+              </article>
+            ))}
+            {!pendingLeadershipLoading && pendingLeadershipRequests.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
+                No pending leadership requests.
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-4 hidden overflow-auto rounded-xl border border-slate-200 md:block">
             <table className="min-w-[980px] w-full text-sm">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
+                <tr className="border-b border-slate-200 bg-slate-50">
                   {[
                     "Request ID",
                     "Student ID",
@@ -409,50 +468,42 @@ export default function GroupDetailsPage() {
                     "Requested Role",
                     "Current Role",
                     "Request Date",
-                    "Actions"
+                    "Actions",
                   ].map((h) => (
                     <th
                       key={h}
-                      className="text-left px-4 py-2.5 text-[10.5px] font-semibold uppercase tracking-wider text-gray-400"
+                      className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500"
                     >
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-slate-100">
                 {pendingLeadershipRequests.map((r) => (
-                  <tr key={r.leadership_request_id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 text-xs text-gray-400 font-mono">
-                      {r.leadership_request_id}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-700">{r.student_id}</td>
-                    <td className="px-4 py-3 text-xs text-gray-600">
-                      <div className="font-medium text-gray-700">{r.student_name || "-"}</div>
+                  <tr key={r.leadership_request_id} className="transition hover:bg-slate-50">
+                    <td className="px-4 py-3 font-mono text-xs text-slate-500">{r.leadership_request_id}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-slate-700">{r.student_id}</td>
+                    <td className="px-4 py-3 text-xs text-slate-600">
+                      <div className="font-medium text-slate-700">{r.student_name || "-"}</div>
                       <div>{r.student_email || "-"}</div>
                     </td>
-                    <td className="px-4 py-3">
-                      <Badge value={r.requested_role} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge value={r.current_membership_role || "-"} />
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">
-                      {r.request_date ? new Date(r.request_date).toLocaleString() : "-"}
-                    </td>
+                    <td className="px-4 py-3"><Badge value={r.requested_role} /></td>
+                    <td className="px-4 py-3"><Badge value={r.current_membership_role || "-"} /></td>
+                    <td className="px-4 py-3 text-xs text-slate-500">{formatDateTime(r.request_date)}</td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2">
                         <button
                           disabled={leadershipDecisionBusyId === r.leadership_request_id}
                           onClick={() => onLeadershipDecision(r, "APPROVED")}
-                          className="px-3 py-1 rounded-md bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                          className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 disabled:opacity-60"
                         >
                           {leadershipDecisionBusyId === r.leadership_request_id ? "..." : "Approve"}
                         </button>
                         <button
                           disabled={leadershipDecisionBusyId === r.leadership_request_id}
                           onClick={() => onLeadershipDecision(r, "REJECTED")}
-                          className="px-3 py-1 rounded-md border border-gray-200 bg-white text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                          className="rounded-md border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 disabled:opacity-60"
                         >
                           {leadershipDecisionBusyId === r.leadership_request_id ? "..." : "Reject"}
                         </button>
@@ -460,123 +511,153 @@ export default function GroupDetailsPage() {
                     </td>
                   </tr>
                 ))}
-                {!pendingLeadershipLoading && pendingLeadershipRequests.length === 0 && (
+                {!pendingLeadershipLoading && pendingLeadershipRequests.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-6 text-center text-sm text-gray-400">
-                      No pending leadership role requests.
+                    <td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-500">
+                      No pending leadership requests.
                     </td>
                   </tr>
-                )}
+                ) : null}
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        </section>
+      ) : null}
 
-      {/* Pending Requests */}
-      {showPendingSection && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
+      {showPendingSection ? (
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_16px_30px_-28px_rgba(15,23,42,0.9)] md:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-bold text-gray-900">Pending Join Requests</h2>
-              {pending.length > 0 && (
-                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold">
-                  {pending.length}
-                </span>
-              )}
+              <h2 className="text-base font-semibold text-slate-900">Pending Join Requests</h2>
+              <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#fff3d8] px-1.5 py-0.5 text-[11px] font-bold text-[#8a6200]">
+                {pending.length}
+              </span>
             </div>
             <button
               onClick={loadPending}
               disabled={pendingLoading}
-              className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
             >
-              {pendingLoading ? "Loading…" : "Reload"}
+              {pendingLoading ? "Loading..." : "Reload"}
             </button>
           </div>
 
-          {pendingErr && (
-            <div className="px-4 py-2.5 rounded-lg border border-red-200 bg-red-50 text-sm text-red-700">
+          {pendingErr ? (
+            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {pendingErr}
             </div>
-          )}
+          ) : null}
 
-          {isAdminLike && missingLeadershipRoles.length > 0 && pending.length > 0 && (
-            <div className="px-4 py-2.5 rounded-lg border border-blue-200 bg-blue-50 text-sm text-blue-700">
-              Missing leadership roles: <span className="font-semibold">{missingLeadershipRoles.join(", ")}</span>.
-              Approve pending requests and assign leadership roles so the group can be activated.
+          {isAdminLike && missingLeadershipRoles.length > 0 && pending.length > 0 ? (
+            <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+              Missing leadership roles: <span className="font-semibold">{missingLeadershipRoles.join(", ")}</span>. Approve and assign roles where needed.
             </div>
-          )}
+          ) : null}
 
-          <div className="overflow-auto rounded-xl border border-gray-100">
+          <div className="mt-4 space-y-3 md:hidden">
+            {pending.map((r) => (
+              <article key={r.request_id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-xs text-slate-500">Request #{r.request_id}</p>
+                    <p className="text-sm font-semibold text-slate-800">{r.student_id}</p>
+                  </div>
+                  <Badge value={r.status} />
+                </div>
+                <p className="mt-2 text-xs text-slate-500">{formatDateTime(r.request_date)}</p>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    disabled={decisionBusyId === r.request_id}
+                    onClick={() => onDecision(r, "APPROVED")}
+                    className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 disabled:opacity-60"
+                  >
+                    {decisionBusyId === r.request_id ? "..." : "Approve"}
+                  </button>
+                  <button
+                    disabled={decisionBusyId === r.request_id}
+                    onClick={() => onDecision(r, "REJECTED")}
+                    className="rounded-md border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 disabled:opacity-60"
+                  >
+                    {decisionBusyId === r.request_id ? "..." : "Reject"}
+                  </button>
+                </div>
+              </article>
+            ))}
+            {!pendingLoading && pending.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
+                No pending join requests.
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-4 hidden overflow-auto rounded-xl border border-slate-200 md:block">
             <table className="min-w-[860px] w-full text-sm">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
+                <tr className="border-b border-slate-200 bg-slate-50">
                   {["Request ID", "Student ID", "Request Date", "Status", "Actions"].map((h) => (
-                    <th key={h} className="text-left px-4 py-2.5 text-[10.5px] font-semibold uppercase tracking-wider text-gray-400">
+                    <th
+                      key={h}
+                      className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500"
+                    >
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-slate-100">
                 {pending.map((r) => (
-                  <tr key={r.request_id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 text-xs text-gray-400 font-mono">{r.request_id}</td>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-700">{r.student_id}</td>
-                    <td className="px-4 py-3 text-xs text-gray-500">
-                      {r.request_date ? new Date(r.request_date).toLocaleString() : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge value={r.status} />
-                    </td>
+                  <tr key={r.request_id} className="transition hover:bg-slate-50">
+                    <td className="px-4 py-3 font-mono text-xs text-slate-500">{r.request_id}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-slate-700">{r.student_id}</td>
+                    <td className="px-4 py-3 text-xs text-slate-500">{formatDateTime(r.request_date)}</td>
+                    <td className="px-4 py-3"><Badge value={r.status} /></td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2">
                         <button
                           disabled={decisionBusyId === r.request_id}
                           onClick={() => onDecision(r, "APPROVED")}
-                          className="px-3 py-1 rounded-md bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                          className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 disabled:opacity-60"
                         >
-                          {decisionBusyId === r.request_id ? "…" : "Approve"}
+                          {decisionBusyId === r.request_id ? "..." : "Approve"}
                         </button>
                         <button
                           disabled={decisionBusyId === r.request_id}
                           onClick={() => onDecision(r, "REJECTED")}
-                          className="px-3 py-1 rounded-md border border-gray-200 bg-white text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                          className="rounded-md border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 disabled:opacity-60"
                         >
-                          {decisionBusyId === r.request_id ? "…" : "Reject"}
+                          {decisionBusyId === r.request_id ? "..." : "Reject"}
                         </button>
                       </div>
                     </td>
                   </tr>
                 ))}
-                {!pendingLoading && pending.length === 0 && (
+                {!pendingLoading && pending.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-sm text-gray-400">
-                      No pending requests.
+                    <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-500">
+                      No pending join requests.
                     </td>
                   </tr>
-                )}
+                ) : null}
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        </section>
+      ) : null}
 
-      {/* Members */}
-      <div className="space-y-3">
-        <h2 className="text-sm font-bold text-gray-900">
-          Members
-          <span className="ml-2 text-xs font-medium text-gray-400">{members.length}</span>
-        </h2>
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_16px_30px_-28px_rgba(15,23,42,0.9)] md:p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-slate-900">Members</h2>
+          <span className="text-xs font-medium text-slate-500">{members.length} active</span>
+        </div>
         <GroupMembersTable
           members={members}
-          canEditRole={["CAPTAIN", "ADMIN", "SYSTEM_ADMIN"].includes(user.role)}
-          canRemoveMember={["CAPTAIN", "ADMIN", "SYSTEM_ADMIN"].includes(user.role)}
+          canEditRole={["CAPTAIN", "ADMIN", "SYSTEM_ADMIN"].includes(String(user?.role || "").toUpperCase())}
+          canRemoveMember={["CAPTAIN", "ADMIN", "SYSTEM_ADMIN"].includes(String(user?.role || "").toUpperCase())}
           onChanged={loadAll}
           highlightStudentId={highlightStudentId}
           highlightMembershipId={highlightMembershipId}
         />
-      </div>
+      </section>
     </div>
   );
 }

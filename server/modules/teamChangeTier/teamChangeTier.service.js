@@ -2,6 +2,7 @@ const db = require("../../config/db");
 const repo = require("./teamChangeTier.repository");
 const phaseRepo = require("../phase/phase.repository");
 const eligibilityRepo = require("../eligibility/eligibility.repository");
+const eligibilityService = require("../eligibility/eligibility.service");
 const groupRepo = require("../group/group.repository");
 
 const ADMIN_ROLES = ["ADMIN", "SYSTEM_ADMIN"];
@@ -137,9 +138,18 @@ const buildRecommendation = ({
   };
 };
 
-const getEligibilityMapForPhase = async (phaseId, executor) => {
-  if (!phaseId) return new Map();
-  const rows = await eligibilityRepo.getGroupEligibility(phaseId, {}, executor);
+const getEligibilityMapForPhase = async (phase, executor) => {
+  if (!phase?.phase_id) return new Map();
+
+  let rows = await eligibilityRepo.getGroupEligibility(phase.phase_id, {}, executor);
+  if (
+    (!Array.isArray(rows) || rows.length === 0) &&
+    String(phase.status || "").toUpperCase() !== "ACTIVE"
+  ) {
+    await eligibilityService.evaluatePhaseEligibility(phase.phase_id);
+    rows = await eligibilityRepo.getGroupEligibility(phase.phase_id, {}, executor);
+  }
+
   return new Map(
     (Array.isArray(rows) ? rows : []).map((row) => [
       String(row.group_id),
@@ -155,8 +165,8 @@ const getPhaseTierChangePreview = async (phaseId, actorUser) => {
 
   const [groups, phaseEligibility, previousPhaseEligibility, savedChanges] = await Promise.all([
     groupRepo.getAllGroups(),
-    getEligibilityMapForPhase(phase.phase_id),
-    getEligibilityMapForPhase(previousPhase?.phase_id || null),
+    getEligibilityMapForPhase(phase),
+    getEligibilityMapForPhase(previousPhase || null),
     repo.findByPhase(phase.phase_id)
   ]);
 
@@ -239,6 +249,20 @@ const getPhaseTierChangePreview = async (phaseId, actorUser) => {
 
 const computeSingleGroupPreviewTx = async (conn, phaseId, groupId) => {
   const { phase, previousPhase } = await getPhaseContext(phaseId);
+
+  // Backfill missing eligibility for historical phases before deriving decisions.
+  if (String(phase.status || "").toUpperCase() !== "ACTIVE") {
+    const phaseRows = await eligibilityRepo.getGroupEligibility(phase.phase_id, {});
+    if (!Array.isArray(phaseRows) || phaseRows.length === 0) {
+      await eligibilityService.evaluatePhaseEligibility(phase.phase_id);
+    }
+  }
+  if (previousPhase && String(previousPhase.status || "").toUpperCase() !== "ACTIVE") {
+    const prevRows = await eligibilityRepo.getGroupEligibility(previousPhase.phase_id, {});
+    if (!Array.isArray(prevRows) || prevRows.length === 0) {
+      await eligibilityService.evaluatePhaseEligibility(previousPhase.phase_id);
+    }
+  }
 
   const [groupRows] = await conn.query(
     `SELECT g.group_id, g.group_code, g.group_name, g.tier, g.status
@@ -362,4 +386,3 @@ module.exports = {
   applyPhaseTierChange,
   getPhaseWiseTeamChangeTier
 };
-

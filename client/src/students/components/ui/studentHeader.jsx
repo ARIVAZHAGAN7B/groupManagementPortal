@@ -56,7 +56,7 @@ const getInitials = (name) => {
     .join("");
 };
 
-const StudentHeader = () => {
+const StudentHeader = ({ onMenuClick }) => {
   const { user } = useAuth();
 
   const [phase, setPhase] = useState(null);
@@ -266,7 +266,12 @@ const StudentHeader = () => {
 
       {/* Left */}
       <div className="flex items-center gap-3">
-        <button className="grid h-10 w-10 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden">
+        <button
+          type="button"
+          aria-label="Open navigation menu"
+          onClick={() => onMenuClick?.()}
+          className="grid h-10 w-10 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden"
+        >
           <MenuRoundedIcon fontSize="small" />
         </button>
 

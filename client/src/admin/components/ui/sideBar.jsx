@@ -51,7 +51,7 @@ const utilityItems = [
   { name: "Settings", icon: SettingsOutlinedIcon },
 ];
 
-const SideBar = () => {
+const SideBar = ({ onNavigate }) => {
   const { logout } = useAuth();
   const navigate = useNavigate();
 
@@ -70,6 +70,7 @@ const SideBar = () => {
     try {
       await logout?.();
     } finally {
+      onNavigate?.();
       navigate("/login", { replace: true });
     }
   };
@@ -83,7 +84,7 @@ const SideBar = () => {
               {title}
             </div>
             {items.map(({ name, path, icon: Icon, end }) => (
-              <NavLink key={name} to={path} end={end} className={linkClass}>
+              <NavLink key={name} to={path} end={end} onClick={() => onNavigate?.()} className={linkClass}>
                 {({ isActive }) => (
                   <>
                     <span className={isActive ? "text-white" : "text-slate-500 group-hover:text-slate-700"}>

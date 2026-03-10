@@ -25,6 +25,18 @@ router.post(
   phaseController.setPhaseTargets
 );
 
+router.put(
+  "/:phase_id/change-day",
+  authorize("ADMIN", "SYSTEM_ADMIN"),
+  phaseController.updatePhaseChangeDay
+);
+
+router.put(
+  "/:phase_id/settings",
+  authorize("ADMIN", "SYSTEM_ADMIN"),
+  phaseController.updatePhaseSettings
+);
+
 /**
  * Authenticated users (Student / Captain / Admin can view)
  */

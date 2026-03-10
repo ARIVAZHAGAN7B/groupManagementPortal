@@ -101,9 +101,13 @@ const finalizeExpiredActivePhases = async () => {
   }
 };
 
-const calculatePhaseDates = async (startDate, totalDays, changeDayNumber) => {
+const getHolidayDateList = async () => {
   const [holidayRows] = await db.query(`SELECT holiday_date FROM holidays`);
-  const holidays = holidayRows.map((h) => toDateOnly(h.holiday_date)).filter(Boolean);
+  return holidayRows.map((h) => toDateOnly(h.holiday_date)).filter(Boolean);
+};
+
+const calculatePhaseDates = async (startDate, totalDays, changeDayNumber) => {
+  const holidays = await getHolidayDateList();
 
   let count = 0;
   let currentDate = new Date(startDate);
@@ -124,6 +128,55 @@ const calculatePhaseDates = async (startDate, totalDays, changeDayNumber) => {
   }
 
   return { changeDay, endDate };
+};
+
+const calculateChangeDayNumberForDate = async (startDate, changeDayDate) => {
+  const holidays = await getHolidayDateList();
+
+  let count = 0;
+  const currentDate = new Date(startDate);
+
+  while (currentDate <= changeDayDate) {
+    if (isWorkingDay(currentDate, holidays)) {
+      count += 1;
+    }
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return count;
+};
+
+const calculateWorkingDaysInRange = async (startDate, endDate) => {
+  const holidays = await getHolidayDateList();
+  let count = 0;
+  const currentDate = new Date(startDate);
+
+  while (currentDate <= endDate) {
+    if (isWorkingDay(currentDate, holidays)) {
+      count += 1;
+    }
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return count;
+};
+
+const calculateChangeDayDateByNumber = async (startDate, changeDayNumber) => {
+  const holidays = await getHolidayDateList();
+  let count = 0;
+  const currentDate = new Date(startDate);
+
+  while (count < changeDayNumber) {
+    if (isWorkingDay(currentDate, holidays)) {
+      count += 1;
+    }
+    if (count === changeDayNumber) {
+      return new Date(currentDate);
+    }
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return null;
 };
 
 const normalizeTargets = (targets) => {
@@ -182,6 +235,8 @@ const normalizePhaseName = (value) => {
 };
 
 const createPhase = async (data) => {
+  await finalizeExpiredActivePhases();
+
   if (!data?.start_date) {
     throw new Error("start_date is required");
   }
@@ -193,28 +248,59 @@ const createPhase = async (data) => {
     throw new Error("Invalid start_date");
   }
 
-  const totalWorkingDays = Number(data.total_working_days || 10);
   const changeDayNumber = Number(data.change_day_number || 5);
+  const configuredEndDate = data?.end_date ? toStartOfDay(data.end_date) : null;
   const startTime = normalizeTimeValue(data.start_time, "08:00:00", "start_time");
   const endTime = normalizeTimeValue(data.end_time, "19:00:00", "end_time");
+  let totalWorkingDays = Number(data.total_working_days || 10);
+  let endDate = null;
+  let changeDay = null;
 
-  if (!Number.isInteger(totalWorkingDays) || totalWorkingDays <= 0) {
-    throw new Error("total_working_days must be a positive integer");
+  if (!Number.isInteger(changeDayNumber) || changeDayNumber <= 0) {
+    throw new Error("change_day_number must be a positive integer");
   }
 
-  if (
-    !Number.isInteger(changeDayNumber) ||
-    changeDayNumber <= 0 ||
-    changeDayNumber >= totalWorkingDays
-  ) {
-    throw new Error("change_day_number must be between 1 and total_working_days - 1");
-  }
+  if (data?.end_date !== undefined && data?.end_date !== null && data?.end_date !== "") {
+    if (!configuredEndDate) {
+      throw new Error("Invalid end_date");
+    }
 
-  const { changeDay, endDate } = await calculatePhaseDates(
-    startDate,
-    totalWorkingDays,
-    changeDayNumber
-  );
+    if (configuredEndDate <= startDate) {
+      throw new Error("end_date must be after start_date");
+    }
+
+    endDate = configuredEndDate;
+    totalWorkingDays = await calculateWorkingDaysInRange(startDate, endDate);
+
+    if (!Number.isInteger(totalWorkingDays) || totalWorkingDays <= 1) {
+      throw new Error("Configured start_date and end_date must include at least 2 working days");
+    }
+
+    if (changeDayNumber >= totalWorkingDays) {
+      throw new Error("change_day_number must be between 1 and total_working_days - 1");
+    }
+
+    changeDay = await calculateChangeDayDateByNumber(startDate, changeDayNumber);
+    if (!changeDay || changeDay > endDate) {
+      throw new Error("change_day_number exceeds available working days before end_date");
+    }
+  } else {
+    if (!Number.isInteger(totalWorkingDays) || totalWorkingDays <= 0) {
+      throw new Error("total_working_days must be a positive integer");
+    }
+
+    if (changeDayNumber >= totalWorkingDays) {
+      throw new Error("change_day_number must be between 1 and total_working_days - 1");
+    }
+
+    const calculatedDates = await calculatePhaseDates(
+      startDate,
+      totalWorkingDays,
+      changeDayNumber
+    );
+    changeDay = calculatedDates.changeDay;
+    endDate = calculatedDates.endDate;
+  }
   const normalizedTargets = normalizeTargets(data.targets);
   const normalizedIndividualTarget = normalizeIndividualTarget(data.individual_target);
 
@@ -231,9 +317,22 @@ const createPhase = async (data) => {
     status: "ACTIVE"
   };
 
+  // Ensure outgoing active phases have evaluated eligibility and completed status
+  // so "previous phase eligibility" is available for tier-management flows.
+  const activePhases = await repo.getActivePhases();
+  for (const activePhase of Array.isArray(activePhases) ? activePhases : []) {
+    if (!activePhase?.phase_id) continue;
+    await eligibilityService.evaluatePhaseEligibility(activePhase.phase_id);
+  }
+
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
+    for (const activePhase of Array.isArray(activePhases) ? activePhases : []) {
+      if (!activePhase?.phase_id) continue;
+      await repo.updatePhaseStatus(activePhase.phase_id, "COMPLETED", connection);
+    }
+    // Safety fallback in case of unexpected concurrent active rows.
     await repo.deactivateActivePhases(connection);
     await repo.insertPhase(phase, connection);
     for (const target of normalizedTargets) {
@@ -363,6 +462,125 @@ const isChangeDay = async (phase_id) => {
   };
 };
 
+const updatePhaseSettings = async (phase_id, payload = {}) => {
+  await finalizeExpiredActivePhases();
+
+  const phase = await repo.getPhaseById(phase_id);
+  if (!phase) {
+    throw new Error("Phase not found");
+  }
+
+  if (String(phase.status || "").toUpperCase() !== "ACTIVE") {
+    throw new Error("Only active phase settings can be updated");
+  }
+
+  const startDate = toStartOfDay(phase.start_date);
+  const currentChangeDay = toStartOfDay(phase.change_day);
+  const nextEndDate = payload?.end_date ? toStartOfDay(payload.end_date) : toStartOfDay(phase.end_date);
+  if (!startDate || !nextEndDate || !currentChangeDay) {
+    throw new Error("Phase has invalid date values");
+  }
+
+  if (nextEndDate <= startDate) {
+    throw new Error("end_date must be after start_date");
+  }
+
+  if (currentChangeDay >= nextEndDate) {
+    throw new Error("end_date must be after current change_day");
+  }
+
+  const totalWorkingDays = await calculateWorkingDaysInRange(startDate, nextEndDate);
+  if (!Number.isInteger(totalWorkingDays) || totalWorkingDays <= 1) {
+    throw new Error("Configured phase must include at least 2 working days");
+  }
+
+  const changeDayNumber = await calculateChangeDayNumberForDate(startDate, currentChangeDay);
+  if (
+    !Number.isInteger(changeDayNumber) ||
+    changeDayNumber <= 0 ||
+    changeDayNumber >= totalWorkingDays
+  ) {
+    throw new Error("Current change_day is outside the configured phase window");
+  }
+
+  const startTime = normalizeTimeValue(payload?.start_time, phase.start_time || "08:00:00", "start_time");
+  const endTime = normalizeTimeValue(payload?.end_time, phase.end_time || "19:00:00", "end_time");
+
+  await repo.updatePhaseSettings(
+    phase_id,
+    {
+      end_date: formatDateOnly(nextEndDate),
+      total_working_days: totalWorkingDays,
+      change_day_number: changeDayNumber,
+      start_time: startTime,
+      end_time: endTime
+    }
+  );
+
+  // Re-run finalization after settings update so eligibility/status update immediately
+  // when the phase end window is moved to the past.
+  await finalizeExpiredActivePhases();
+
+  return repo.getPhaseById(phase_id);
+};
+
+const updatePhaseChangeDay = async (phase_id, change_day) => {
+  await finalizeExpiredActivePhases();
+
+  const phase = await repo.getPhaseById(phase_id);
+  if (!phase) {
+    throw new Error("Phase not found");
+  }
+
+  if (String(phase.status || "").toUpperCase() !== "ACTIVE") {
+    throw new Error("Only active phase change day can be updated");
+  }
+
+  const selectedDate = toStartOfDay(change_day);
+  if (!selectedDate) {
+    throw new Error("Invalid change_day");
+  }
+
+  const startDate = toStartOfDay(phase.start_date);
+  const endDate = toStartOfDay(phase.end_date);
+  const today = toStartOfDay(new Date());
+  if (!startDate || !endDate || !today) {
+    throw new Error("Phase has invalid date boundaries");
+  }
+
+  const minAllowedDate = new Date(startDate);
+  minAllowedDate.setDate(minAllowedDate.getDate() + 1);
+
+  const endMinusOneDate = new Date(endDate);
+  endMinusOneDate.setDate(endMinusOneDate.getDate() - 1);
+
+  const maxAllowedDate = today < endMinusOneDate ? today : endMinusOneDate;
+  if (maxAllowedDate < minAllowedDate) {
+    throw new Error("No valid change day range available for this phase");
+  }
+
+  if (selectedDate < minAllowedDate || selectedDate > maxAllowedDate) {
+    throw new Error(
+      `change_day must be between ${formatDateOnly(minAllowedDate)} and ${formatDateOnly(
+        maxAllowedDate
+      )}`
+    );
+  }
+
+  const changeDayNumber = await calculateChangeDayNumberForDate(startDate, selectedDate);
+  if (!Number.isInteger(changeDayNumber) || changeDayNumber <= 0) {
+    throw new Error("Unable to compute change_day_number for the selected date");
+  }
+
+  const totalWorkingDays = Number(phase.total_working_days);
+  if (Number.isInteger(totalWorkingDays) && changeDayNumber >= totalWorkingDays) {
+    throw new Error("change_day must be before the final working day");
+  }
+
+  await repo.updatePhaseChangeDay(phase_id, formatDateOnly(selectedDate), changeDayNumber);
+  return repo.getPhaseById(phase_id);
+};
+
 module.exports = {
   createPhase,
   setPhaseTargets,
@@ -371,5 +589,7 @@ module.exports = {
   getCurrentPhase,
   getPhaseById,
   getAllPhases,
-  isChangeDay
+  isChangeDay,
+  updatePhaseSettings,
+  updatePhaseChangeDay
 };

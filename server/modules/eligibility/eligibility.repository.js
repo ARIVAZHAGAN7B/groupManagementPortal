@@ -103,8 +103,8 @@ const getAllStudentsWithActiveGroupAndBasePoints = async (executor) => {
        s.email,
        s.department,
        s.year,
-       COALESCE(bp.total_base_points, 0) AS total_base_points,
-       bp.last_updated AS base_points_last_updated,
+       COALESCE(bph.total_base_points, bp.total_base_points, 0) AS total_base_points,
+       COALESCE(bph.last_updated, bp.last_updated) AS base_points_last_updated,
        m.membership_id,
        m.group_id,
        m.role AS membership_role,
@@ -118,6 +118,15 @@ const getAllStudentsWithActiveGroupAndBasePoints = async (executor) => {
      FROM students s
      LEFT JOIN base_points bp
        ON bp.student_id = s.student_id
+     LEFT JOIN (
+       SELECT
+         h.student_id,
+         COALESCE(SUM(h.points), 0) AS total_base_points,
+         MAX(h.created_at) AS last_updated
+       FROM base_point_history h
+       GROUP BY h.student_id
+     ) bph
+       ON bph.student_id = s.student_id
      LEFT JOIN memberships m
        ON m.student_id = s.student_id
       AND m.status = 'ACTIVE'
@@ -269,11 +278,26 @@ const upsertBasePointsTotal = async (studentId, deltaPoints, executor) => {
 
 const getStudentBasePoints = async (studentId, executor) => {
   const [rows] = await getExecutor(executor).query(
-    `SELECT student_id, total_base_points, last_updated
-     FROM base_points
-     WHERE student_id = ?
+    `SELECT
+       s.student_id,
+       COALESCE(bph.total_base_points, bp.total_base_points, 0) AS total_base_points,
+       COALESCE(bph.last_updated, bp.last_updated) AS last_updated
+     FROM students s
+     LEFT JOIN base_points bp
+       ON bp.student_id = s.student_id
+     LEFT JOIN (
+       SELECT
+         h.student_id,
+         COALESCE(SUM(h.points), 0) AS total_base_points,
+         MAX(h.created_at) AS last_updated
+       FROM base_point_history h
+       WHERE h.student_id = ?
+       GROUP BY h.student_id
+     ) bph
+       ON bph.student_id = s.student_id
+     WHERE s.student_id = ?
      LIMIT 1`,
-    [studentId]
+    [studentId, studentId]
   );
   return rows[0] || null;
 };
@@ -445,7 +469,7 @@ const getIndividualLeaderboard = async (limit = 30, filters = {}, executor) => {
        s.email,
        s.department,
        s.year,
-       COALESCE(bp.total_base_points, 0) AS total_base_points,
+       COALESCE(bph.total_base_points, bp.total_base_points, 0) AS total_base_points,
        m.group_id,
        m.role AS membership_role,
        g.group_code,
@@ -453,12 +477,20 @@ const getIndividualLeaderboard = async (limit = 30, filters = {}, executor) => {
        g.tier AS group_tier
      FROM students s
      LEFT JOIN base_points bp ON bp.student_id = s.student_id
+     LEFT JOIN (
+       SELECT
+         h.student_id,
+         COALESCE(SUM(h.points), 0) AS total_base_points
+       FROM base_point_history h
+       GROUP BY h.student_id
+     ) bph
+       ON bph.student_id = s.student_id
      LEFT JOIN memberships m
        ON m.student_id = s.student_id
       AND m.status = 'ACTIVE'
      LEFT JOIN Sgroup g ON g.group_id = m.group_id
      ${clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""}
-     ORDER BY COALESCE(bp.total_base_points, 0) DESC, s.student_id ASC
+     ORDER BY COALESCE(bph.total_base_points, bp.total_base_points, 0) DESC, s.student_id ASC
      LIMIT ?`,
     [...values, safeLimit]
   );
@@ -531,7 +563,7 @@ const getLeaderLeaderboard = async (roles = [], limit = 30, filters = {}, execut
        s.email,
        s.department,
        s.year,
-       COALESCE(bp.total_base_points, 0) AS total_base_points,
+       COALESCE(bph.total_base_points, bp.total_base_points, 0) AS total_base_points,
        m.membership_id,
        m.group_id,
        m.role AS membership_role,
@@ -541,11 +573,19 @@ const getLeaderLeaderboard = async (roles = [], limit = 30, filters = {}, execut
      FROM memberships m
      INNER JOIN students s ON s.student_id = m.student_id
      LEFT JOIN base_points bp ON bp.student_id = s.student_id
+     LEFT JOIN (
+       SELECT
+         h.student_id,
+         COALESCE(SUM(h.points), 0) AS total_base_points
+       FROM base_point_history h
+       GROUP BY h.student_id
+     ) bph
+       ON bph.student_id = s.student_id
      LEFT JOIN Sgroup g ON g.group_id = m.group_id
      WHERE m.status = 'ACTIVE'
        AND m.role IN (${placeholders})
        ${tierClause}
-     ORDER BY COALESCE(bp.total_base_points, 0) DESC, s.student_id ASC
+     ORDER BY COALESCE(bph.total_base_points, bp.total_base_points, 0) DESC, s.student_id ASC
      LIMIT ?`,
     [...values, safeLimit]
   );

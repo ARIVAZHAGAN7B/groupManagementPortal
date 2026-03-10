@@ -93,6 +93,67 @@ const isChangeDay = async (req, res) => {
   }
 };
 
+const updatePhaseChangeDay = async (req, res) => {
+  try {
+    const { phase_id } = req.params;
+    const { change_day } = req.body || {};
+    const phase = await phaseService.updatePhaseChangeDay(phase_id, change_day);
+
+    await auditService.logActionSafe({
+      req,
+      actorUser: req.user,
+      action: "PHASE_CHANGE_DAY_UPDATED",
+      entityType: "PHASE",
+      entityId: phase_id,
+      details: {
+        change_day: phase?.change_day ?? null,
+        change_day_number: phase?.change_day_number ?? null
+      }
+    });
+
+    res.json({
+      message: "Change day updated successfully",
+      phase
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+const updatePhaseSettings = async (req, res) => {
+  try {
+    const { phase_id } = req.params;
+    const { end_date, start_time, end_time } = req.body || {};
+    const phase = await phaseService.updatePhaseSettings(phase_id, {
+      end_date,
+      start_time,
+      end_time
+    });
+
+    await auditService.logActionSafe({
+      req,
+      actorUser: req.user,
+      action: "PHASE_SETTINGS_UPDATED",
+      entityType: "PHASE",
+      entityId: phase_id,
+      details: {
+        end_date: phase?.end_date ?? null,
+        total_working_days: phase?.total_working_days ?? null,
+        change_day_number: phase?.change_day_number ?? null,
+        start_time: phase?.start_time ?? null,
+        end_time: phase?.end_time ?? null
+      }
+    });
+
+    res.json({
+      message: "Phase settings updated successfully",
+      phase
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
 module.exports = {
   createPhase,
   setPhaseTargets,
@@ -100,5 +161,7 @@ module.exports = {
   getCurrentPhase,
   getAllPhases,
   getPhaseById,
-  isChangeDay
+  isChangeDay,
+  updatePhaseSettings,
+  updatePhaseChangeDay
 };

@@ -32,3 +32,15 @@ export async function checkPhaseChangeDay(phaseId) {
   const { data } = await api.get(`/api/phases/${phaseId}/is-change-day`);
   return data; // { isChangeDay, change_day }
 }
+
+export async function updatePhaseChangeDay(phaseId, changeDay) {
+  const { data } = await api.put(`/api/phases/${phaseId}/change-day`, {
+    change_day: changeDay
+  });
+  return data; // { message, phase }
+}
+
+export async function updatePhaseSettings(phaseId, payload) {
+  const { data } = await api.put(`/api/phases/${phaseId}/settings`, payload);
+  return data; // { message, phase }
+}

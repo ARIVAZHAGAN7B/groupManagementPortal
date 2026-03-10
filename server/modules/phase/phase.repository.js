@@ -90,6 +90,17 @@ exports.getCurrentPhase = async () => {
   return rows[0];
 };
 
+exports.getActivePhases = async (executor) => {
+  const exec = getExecutor(executor);
+  const [rows] = await exec.execute(
+    `SELECT *
+     FROM phases
+     WHERE status = 'ACTIVE'
+     ORDER BY start_date DESC, phase_id DESC`
+  );
+  return rows;
+};
+
 exports.getExpiredActivePhases = async (todayDate, executor) => {
   const exec = getExecutor(executor);
   const [rows] = await exec.execute(
@@ -126,6 +137,35 @@ exports.getPhaseById = async (phase_id) => {
     [phase_id]
   );
   return rows[0];
+};
+
+exports.updatePhaseChangeDay = async (phase_id, change_day, change_day_number, executor) => {
+  await getExecutor(executor).execute(
+    `UPDATE phases
+     SET change_day = ?, change_day_number = ?
+     WHERE phase_id = ?`,
+    [change_day, change_day_number, phase_id]
+  );
+};
+
+exports.updatePhaseSettings = async (phase_id, payload, executor) => {
+  await getExecutor(executor).execute(
+    `UPDATE phases
+     SET end_date = ?,
+         total_working_days = ?,
+         change_day_number = ?,
+         start_time = ?,
+         end_time = ?
+     WHERE phase_id = ?`,
+    [
+      payload.end_date,
+      payload.total_working_days,
+      payload.change_day_number,
+      payload.start_time,
+      payload.end_time,
+      phase_id
+    ]
+  );
 };
 
 exports.getIndividualPhaseTarget = async (phase_id) => {

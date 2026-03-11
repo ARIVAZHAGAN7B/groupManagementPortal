@@ -1,8 +1,84 @@
 const db = require("../../config/db");
 
 const getExecutor = (executor) => executor || db;
+const REQUIRED_PHASE_STATUSES = ["ACTIVE", "INACTIVE", "COMPLETED"];
+let ensurePhaseStatusColumnPromise = null;
+
+const parseEnumValues = (columnType) => {
+  const matches = String(columnType || "").match(/'((?:''|[^'])*)'/g) || [];
+  return matches.map((token) => token.slice(1, -1).replace(/''/g, "'"));
+};
+
+const escapeSqlString = (value) => String(value).replace(/'/g, "''");
+
+const ensurePhaseStatusColumn = async () => {
+  if (ensurePhaseStatusColumnPromise) return ensurePhaseStatusColumnPromise;
+
+  ensurePhaseStatusColumnPromise = (async () => {
+    const [rows] = await db.execute(
+      `SELECT DATA_TYPE, COLUMN_TYPE, COLUMN_DEFAULT, IS_NULLABLE
+       FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'phases'
+         AND COLUMN_NAME = 'status'
+       LIMIT 1`
+    );
+
+    const column = rows?.[0];
+    if (!column) return;
+    if (String(column.DATA_TYPE || "").toLowerCase() !== "enum") return;
+
+    const existingValues = parseEnumValues(column.COLUMN_TYPE);
+    if (existingValues.length === 0) return;
+
+    const existingUpper = new Set(existingValues.map((value) => String(value).toUpperCase()));
+    const mergedValues = [...existingValues];
+    for (const status of REQUIRED_PHASE_STATUSES) {
+      if (!existingUpper.has(status)) {
+        mergedValues.push(status);
+      }
+    }
+
+    if (mergedValues.length === existingValues.length) return;
+
+    const currentDefault =
+      column.COLUMN_DEFAULT === null || column.COLUMN_DEFAULT === undefined
+        ? null
+        : String(column.COLUMN_DEFAULT);
+    const defaultValue =
+      currentDefault &&
+      mergedValues.find(
+        (value) => String(value).toUpperCase() === String(currentDefault).toUpperCase()
+      );
+    const effectiveDefault =
+      defaultValue ||
+      mergedValues.find((value) => String(value).toUpperCase() === "INACTIVE") ||
+      mergedValues[0];
+    const isNullable = String(column.IS_NULLABLE || "").toUpperCase() === "YES";
+
+    const enumValuesSql = mergedValues
+      .map((value) => `'${escapeSqlString(value)}'`)
+      .join(", ");
+    const nullabilitySql = isNullable ? "NULL" : "NOT NULL";
+    const defaultSql =
+      effectiveDefault === null || effectiveDefault === undefined
+        ? ""
+        : ` DEFAULT '${escapeSqlString(effectiveDefault)}'`;
+
+    await db.execute(
+      `ALTER TABLE phases
+       MODIFY COLUMN status ENUM(${enumValuesSql}) ${nullabilitySql}${defaultSql}`
+    );
+  })().catch((error) => {
+    ensurePhaseStatusColumnPromise = null;
+    throw error;
+  });
+
+  return ensurePhaseStatusColumnPromise;
+};
 
 exports.insertPhase = async (phase, executor) => {
+  await ensurePhaseStatusColumn();
   const sql = `
     INSERT INTO phases (
       phase_id,
@@ -33,6 +109,7 @@ exports.insertPhase = async (phase, executor) => {
 };
 
 exports.deactivateActivePhases = async (executor) => {
+  await ensurePhaseStatusColumn();
   await getExecutor(executor).execute(
     `UPDATE phases SET status = 'INACTIVE' WHERE status = 'ACTIVE'`
   );
@@ -85,7 +162,17 @@ exports.getPhaseTargets = async (phase_id) => {
 
 exports.getCurrentPhase = async () => {
   const [rows] = await db.execute(
-    `SELECT * FROM phases WHERE status='ACTIVE' ORDER BY start_date DESC LIMIT 1`
+    `SELECT *
+     FROM phases
+     WHERE status IN ('ACTIVE', 'INACTIVE')
+       AND TIMESTAMP(start_date, COALESCE(start_time, '00:00:00')) <= NOW()
+       AND TIMESTAMP(end_date, COALESCE(end_time, '23:59:59')) > NOW()
+     ORDER BY
+       start_date DESC,
+       start_time DESC,
+       CASE WHEN status = 'ACTIVE' THEN 0 ELSE 1 END,
+       phase_id DESC
+     LIMIT 1`
   );
   return rows[0];
 };
@@ -107,14 +194,42 @@ exports.getExpiredActivePhases = async (todayDate, executor) => {
     `SELECT *
      FROM phases
      WHERE status = 'ACTIVE'
-       AND TIMESTAMP(end_date, COALESCE(end_time, '23:59:59')) < ?
+       AND TIMESTAMP(end_date, COALESCE(end_time, '23:59:59')) <= ?
      ORDER BY end_date ASC, phase_id ASC`,
      [todayDate]
   );
   return rows;
 };
 
+exports.getExpiredInactivePhases = async (todayDate, executor) => {
+  const exec = getExecutor(executor);
+  const [rows] = await exec.execute(
+    `SELECT *
+     FROM phases
+     WHERE status = 'INACTIVE'
+       AND TIMESTAMP(end_date, COALESCE(end_time, '23:59:59')) <= ?
+     ORDER BY end_date ASC, phase_id ASC`,
+    [todayDate]
+  );
+  return rows;
+};
+
+exports.getDueInactivePhases = async (todayDate, executor) => {
+  const exec = getExecutor(executor);
+  const [rows] = await exec.execute(
+    `SELECT *
+     FROM phases
+     WHERE status = 'INACTIVE'
+       AND TIMESTAMP(start_date, COALESCE(start_time, '00:00:00')) <= ?
+       AND TIMESTAMP(end_date, COALESCE(end_time, '23:59:59')) > ?
+     ORDER BY start_date ASC, start_time ASC, phase_id ASC`,
+    [todayDate, todayDate]
+  );
+  return rows;
+};
+
 exports.updatePhaseStatus = async (phase_id, status, executor) => {
+  await ensurePhaseStatusColumn();
   const exec = getExecutor(executor);
   await exec.execute(
     `UPDATE phases SET status = ? WHERE phase_id = ?`,

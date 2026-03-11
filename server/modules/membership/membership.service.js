@@ -129,6 +129,13 @@ const ensureChangeDayLeaveAllowed = async (policy, options = {}) => {
 };
 
 const joinGroupService = async (student_id, groupId, role) => {
+  const normalizedRole = String(role || "MEMBER")
+    .trim()
+    .toUpperCase();
+  if (!VALID_ROLES.includes(normalizedRole)) {
+    throw new Error("Invalid role");
+  }
+
   const policy = await systemConfigService.getOperationalPolicy();
   const existing = await repo.findActiveMembershipByStudent(student_id);
 
@@ -155,7 +162,20 @@ const joinGroupService = async (student_id, groupId, role) => {
     throw new Error("Group is full");
   }
 
-  await repo.createMembership(student_id, groupId, role);
+  if (LEADERSHIP_ROLES.includes(normalizedRole)) {
+    const [sameRoleRows] = await db.query(
+      `SELECT membership_id
+       FROM memberships
+       WHERE group_id=? AND status='ACTIVE' AND role=?
+       LIMIT 1`,
+      [groupId, normalizedRole]
+    );
+    if (sameRoleRows.length > 0) {
+      throw new Error(`This group already has a ${normalizedRole}`);
+    }
+  }
+
+  await repo.createMembership(student_id, groupId, normalizedRole);
 
   const count = await repo.countGroupMembers(groupId);
 
@@ -198,6 +218,7 @@ const getMembersService = async (groupId) => {
 };
 
 const VALID_ROLES = ["CAPTAIN", "VICE_CAPTAIN", "STRATEGIST", "MANAGER", "MEMBER"];
+const LEADERSHIP_ROLES = ["CAPTAIN", "VICE_CAPTAIN", "STRATEGIST", "MANAGER"];
 const ADMIN_ROLES = ["ADMIN", "SYSTEM_ADMIN"];
 
 const ensureActorCanUpdateRole = async (conn, actorUser, groupId) => {
@@ -249,15 +270,22 @@ const updateRoleService = async (membershipId, newRole, actorUser) => {
 
     await ensureActorCanUpdateRole(conn, actorUser, membership.group_id);
 
-    // If setting CAPTAIN -> ensure only one captain per group
-    if (newRole === "CAPTAIN") {
-      const [capRows] = await conn.query(
-        "SELECT membership_id FROM memberships WHERE group_id=? AND role='CAPTAIN' AND status='ACTIVE' FOR UPDATE",
-        [membership.group_id]
+    // Leadership roles are unique per group (max one holder per role).
+    if (LEADERSHIP_ROLES.includes(newRole)) {
+      const [sameRoleRows] = await conn.query(
+        `SELECT membership_id
+         FROM memberships
+         WHERE group_id=? AND role=? AND status='ACTIVE'
+         LIMIT 1
+         FOR UPDATE`,
+        [membership.group_id, newRole]
       );
 
-      if (capRows.length > 0 && capRows[0].membership_id !== membership.membership_id) {
-        throw new Error("This group already has a CAPTAIN");
+      if (
+        sameRoleRows.length > 0 &&
+        String(sameRoleRows[0].membership_id) !== String(membership.membership_id)
+      ) {
+        throw new Error(`This group already has a ${newRole}`);
       }
     }
 

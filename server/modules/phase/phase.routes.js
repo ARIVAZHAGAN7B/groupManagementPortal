@@ -51,6 +51,11 @@ router.get(
 );
 
 router.get(
+  "/working-days/preview",
+  phaseController.previewWorkingDays
+);
+
+router.get(
   "/:phase_id",
   phaseController.getPhaseById
 );

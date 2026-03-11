@@ -72,6 +72,18 @@ const getAllPhases = async (_req, res) => {
   }
 };
 
+const previewWorkingDays = async (req, res) => {
+  try {
+    const data = await phaseService.previewWorkingDays({
+      start_date: req.query?.start_date,
+      end_date: req.query?.end_date
+    });
+    res.json(data);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
 const getPhaseById = async (req, res) => {
   try {
     const phase = await phaseService.getPhaseById(req.params.phase_id);
@@ -160,6 +172,7 @@ module.exports = {
   getPhaseTargets,
   getCurrentPhase,
   getAllPhases,
+  previewWorkingDays,
   getPhaseById,
   isChangeDay,
   updatePhaseSettings,

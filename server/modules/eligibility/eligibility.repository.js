@@ -20,8 +20,13 @@ const getCurrentPhase = async (executor) => {
   const [rows] = await getExecutor(executor).query(
     `SELECT phase_id, phase_name, start_date, end_date, start_time, end_time
      FROM phases
-     WHERE status = 'ACTIVE'
-     ORDER BY start_date DESC
+     WHERE status IN ('ACTIVE', 'INACTIVE')
+       AND TIMESTAMP(start_date, COALESCE(start_time, '00:00:00')) <= NOW()
+       AND TIMESTAMP(end_date, COALESCE(end_time, '23:59:59')) > NOW()
+     ORDER BY
+       start_date DESC,
+       start_time DESC,
+       CASE WHEN status = 'ACTIVE' THEN 0 ELSE 1 END
      LIMIT 1`
   );
   return rows[0] || null;

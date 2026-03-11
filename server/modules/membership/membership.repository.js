@@ -1,4 +1,5 @@
 const db = require("../../config/db");
+const groupPointRepo = require("../groupPoint/groupPoint.repository");
 const getExecutor = (executor) => executor || db;
 
 const findActiveMembershipByStudent = async (studentId) => {
@@ -40,10 +41,23 @@ const leaveMembership = async (membershipId) => {
 
 const getGroupMembers = async (groupId) => {
   console.log("Fetching members for groupId:", groupId);
+  await groupPointRepo.ensureSchema();
   const [rows] = await db.query(
-    `SELECT m.membership_id, m.student_id, m.role, m.join_date, u.name, u.email
+    `SELECT
+       m.membership_id,
+       m.student_id,
+       m.role,
+       m.join_date,
+       u.name,
+       u.email,
+       COALESCE(gpt.base_points_earned, 0) AS base_points_earned
      FROM memberships m
      JOIN students u ON u.student_id = m.student_id
+     LEFT JOIN (
+       SELECT gp.membership_id, SUM(gp.points) AS base_points_earned
+       FROM group_points gp
+       GROUP BY gp.membership_id
+     ) gpt ON gpt.membership_id = m.membership_id
      WHERE m.group_id=? AND m.status='ACTIVE'`,
     [groupId]
   );

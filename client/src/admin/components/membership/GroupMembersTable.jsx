@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { deleteMembership, updateMemberRole } from "../../../service/membership.api";
 
 const ROLES = ["CAPTAIN", "VICE_CAPTAIN", "STRATEGIST", "MANAGER", "MEMBER"];
@@ -30,6 +30,8 @@ const formatDateTime = (value) => {
   return d.toLocaleString();
 };
 
+const formatPoints = (value) => (Number(value) || 0).toLocaleString();
+
 export default function GroupMembersTable({
   members,
   canEditRole = false,
@@ -42,10 +44,17 @@ export default function GroupMembersTable({
 }) {
   const [savingId, setSavingId] = useState(null);
   const [removingId, setRemovingId] = useState(null);
+  const [popup, setPopup] = useState(null);
+
+  useEffect(() => {
+    if (!popup) return undefined;
+    const timer = setTimeout(() => setPopup(null), 3000);
+    return () => clearTimeout(timer);
+  }, [popup]);
 
   const rows = Array.isArray(members) ? members : [];
   const extraActionColumn = canRemoveMember;
-  const emptyColSpan = showMembershipId ? (extraActionColumn ? 7 : 6) : extraActionColumn ? 6 : 5;
+  const emptyColSpan = showMembershipId ? (extraActionColumn ? 8 : 7) : extraActionColumn ? 7 : 6;
 
   const changeRole = async (membershipId, role) => {
     setSavingId(membershipId);
@@ -53,7 +62,18 @@ export default function GroupMembersTable({
       await updateMemberRole(membershipId, role);
       onChanged?.();
     } catch (e) {
-      window.alert(e?.response?.data?.message || e?.response?.data?.error || "Role update failed");
+      const apiMessage = e?.response?.data?.message || e?.response?.data?.error || "";
+      const normalizedMessage = String(apiMessage).toUpperCase();
+      const roleAlreadyFilled =
+        normalizedMessage.includes("ALREADY HAS A") ||
+        normalizedMessage.includes("ALREADY FILLED");
+
+      setPopup({
+        title: "Unable to assign role",
+        message: roleAlreadyFilled
+          ? "Cannot assign this role because it is already filled."
+          : apiMessage || "Role update failed.",
+      });
     } finally {
       setSavingId(null);
     }
@@ -71,7 +91,10 @@ export default function GroupMembersTable({
       await deleteMembership(membershipId);
       onChanged?.();
     } catch (e) {
-      window.alert(e?.response?.data?.message || e?.response?.data?.error || "Member removal failed");
+      setPopup({
+        title: "Unable to remove member",
+        message: e?.response?.data?.message || e?.response?.data?.error || "Member removal failed.",
+      });
     } finally {
       setRemovingId(null);
     }
@@ -79,6 +102,32 @@ export default function GroupMembersTable({
 
   return (
     <div className="space-y-3">
+      {popup ? (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/40 px-4"
+          onClick={() => setPopup(null)}
+        >
+          <div
+            className="w-[min(92vw,420px)] rounded-xl border border-red-200 bg-white p-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-slate-900">{popup.title}</p>
+                <p className="mt-1 text-xs text-slate-600">{popup.message}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPopup(null)}
+                className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="space-y-3 md:hidden">
         {rows.map((m) => {
           const isHighlighted =
@@ -109,6 +158,7 @@ export default function GroupMembersTable({
               <div className="mt-2 text-xs text-slate-600">
                 <p>{m.email || "-"}</p>
                 <p className="mt-1">Joined: {formatDateTime(m.join_date)}</p>
+                <p className="mt-1">Base Points: {formatPoints(m.base_points_earned)}</p>
                 {showMembershipId ? (
                   <p className="mt-1 font-mono text-slate-500">Membership: {m.membership_id}</p>
                 ) : null}
@@ -153,7 +203,7 @@ export default function GroupMembersTable({
       </div>
 
       <div className="hidden overflow-auto rounded-xl border border-slate-200 md:block">
-        <table className="min-w-[900px] w-full text-sm">
+        <table className="min-w-[1020px] w-full text-sm">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50">
               {showMembershipId ? (
@@ -161,7 +211,7 @@ export default function GroupMembersTable({
                   Membership ID
                 </th>
               ) : null}
-              {["Student ID", "Name", "Email", "Role", "Join Date"].map((h) => (
+              {["Student ID", "Name", "Email", "Role", "Join Date", "Base Points Earned"].map((h) => (
                 <th
                   key={h}
                   className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500"
@@ -218,6 +268,9 @@ export default function GroupMembersTable({
                     )}
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-500">{formatDateTime(m.join_date)}</td>
+                  <td className="px-4 py-3 text-xs font-semibold text-slate-700">
+                    {formatPoints(m.base_points_earned)}
+                  </td>
                   {extraActionColumn ? (
                     <td className="px-4 py-3">
                       {rowRemovable ? (

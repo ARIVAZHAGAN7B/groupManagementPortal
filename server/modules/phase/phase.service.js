@@ -88,16 +88,155 @@ const normalizeTimeValue = (value, fallback, fieldName) => {
   return `${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}`;
 };
 
+const buildDateTimeFromDateAndTime = (dateValue, normalizedTime) => {
+  const d = parseDateValue(dateValue);
+  if (!d) return null;
+
+  const [hours, minutes, seconds] = String(normalizedTime || "00:00:00")
+    .split(":")
+    .map((item) => Number(item));
+
+  if (
+    !Number.isInteger(hours) ||
+    !Number.isInteger(minutes) ||
+    !Number.isInteger(seconds)
+  ) {
+    return null;
+  }
+
+  return new Date(
+    d.getFullYear(),
+    d.getMonth(),
+    d.getDate(),
+    hours,
+    minutes,
+    seconds,
+    0
+  );
+};
+
+const resolvePhaseStatusByWindow = (startDate, endDate, startTime, endTime) => {
+  const startAt = buildDateTimeFromDateAndTime(startDate, startTime);
+  const endAt = buildDateTimeFromDateAndTime(endDate, endTime);
+  const now = new Date();
+
+  if (!startAt || !endAt || Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) {
+    throw new Error("Phase has invalid start/end date-time values");
+  }
+
+  if (endAt <= startAt) {
+    throw new Error("Phase end date-time must be after phase start date-time");
+  }
+
+  if (now >= endAt) return "COMPLETED";
+  if (now >= startAt) return "ACTIVE";
+  return "INACTIVE";
+};
+
+const windowsOverlap = (aStartAt, aEndAt, bStartAt, bEndAt) =>
+  aStartAt < bEndAt && bStartAt < aEndAt;
+
+const ensureNoPhaseWindowOverlap = async ({
+  currentPhaseId = null,
+  startDate,
+  endDate,
+  startTime,
+  endTime
+}) => {
+  const startAt = buildDateTimeFromDateAndTime(startDate, startTime);
+  const endAt = buildDateTimeFromDateAndTime(endDate, endTime);
+  if (!startAt || !endAt || Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) {
+    throw new Error("Phase has invalid start/end date-time values");
+  }
+
+  const phases = await repo.getAllPhases();
+  for (const phase of Array.isArray(phases) ? phases : []) {
+    if (!phase?.phase_id) continue;
+    if (currentPhaseId && String(phase.phase_id) === String(currentPhaseId)) continue;
+
+    const existingStartTime = normalizeTimeValue(
+      phase.start_time || "00:00:00",
+      "00:00:00",
+      "start_time"
+    );
+    const existingEndTime = normalizeTimeValue(
+      phase.end_time || "23:59:59",
+      "23:59:59",
+      "end_time"
+    );
+    const existingStartAt = buildDateTimeFromDateAndTime(phase.start_date, existingStartTime);
+    const existingEndAt = buildDateTimeFromDateAndTime(phase.end_date, existingEndTime);
+    if (
+      !existingStartAt ||
+      !existingEndAt ||
+      Number.isNaN(existingStartAt.getTime()) ||
+      Number.isNaN(existingEndAt.getTime())
+    ) {
+      continue;
+    }
+
+    if (windowsOverlap(startAt, endAt, existingStartAt, existingEndAt)) {
+      throw new Error(
+        `Phase window overlaps with existing phase (${phase.phase_name || phase.phase_id}). Set start date/time after previous phase end.`
+      );
+    }
+  }
+};
+
+const completePhaseWithEvaluation = async (phaseId) => {
+  await eligibilityService.evaluatePhaseEligibility(phaseId);
+  await repo.updatePhaseStatus(phaseId, "COMPLETED");
+};
+
 const finalizeExpiredActivePhases = async () => {
   const now = formatDateTime(new Date());
+  const nowDate = new Date();
   if (!now) return;
 
-  const expiredPhases = await repo.getExpiredActivePhases(now);
-  if (!Array.isArray(expiredPhases) || expiredPhases.length === 0) return;
+  const [expiredActivePhases, expiredInactivePhases] = await Promise.all([
+    repo.getExpiredActivePhases(now),
+    repo.getExpiredInactivePhases(now)
+  ]);
 
-  for (const phase of expiredPhases) {
-    await eligibilityService.evaluatePhaseEligibility(phase.phase_id);
-    await repo.updatePhaseStatus(phase.phase_id, "COMPLETED");
+  for (const phase of Array.isArray(expiredActivePhases) ? expiredActivePhases : []) {
+    await completePhaseWithEvaluation(phase.phase_id);
+  }
+
+  for (const phase of Array.isArray(expiredInactivePhases) ? expiredInactivePhases : []) {
+    await completePhaseWithEvaluation(phase.phase_id);
+  }
+
+  const dueInactivePhases = await repo.getDueInactivePhases(now);
+  for (const duePhase of Array.isArray(dueInactivePhases) ? dueInactivePhases : []) {
+    let hasBlockingActivePhase = false;
+    const activePhases = await repo.getActivePhases();
+    for (const activePhase of Array.isArray(activePhases) ? activePhases : []) {
+      if (String(activePhase.phase_id) === String(duePhase.phase_id)) continue;
+
+      const activeEndTime = normalizeTimeValue(
+        activePhase.end_time || "23:59:59",
+        "23:59:59",
+        "end_time"
+      );
+      const activeEndAt = buildDateTimeFromDateAndTime(activePhase.end_date, activeEndTime);
+
+      if (
+        activeEndAt &&
+        !Number.isNaN(activeEndAt.getTime()) &&
+        nowDate < activeEndAt
+      ) {
+        hasBlockingActivePhase = true;
+        break;
+      }
+
+      await completePhaseWithEvaluation(activePhase.phase_id);
+    }
+
+    if (hasBlockingActivePhase) {
+      continue;
+    }
+
+    await repo.updatePhaseStatus(duePhase.phase_id, "ACTIVE");
   }
 };
 
@@ -159,6 +298,33 @@ const calculateWorkingDaysInRange = async (startDate, endDate) => {
   }
 
   return count;
+};
+
+const calculateWorkingDaysMetricsInRange = async (startDate, endDate) => {
+  const holidays = await getHolidayDateList();
+  let totalWorkingDays = 0;
+  let holidayCount = 0;
+  const currentDate = new Date(startDate);
+
+  while (currentDate <= endDate) {
+    const formatted = formatDateOnly(currentDate);
+    const isHoliday = holidays.includes(formatted);
+
+    if (isHoliday && currentDate.getDay() !== 0 && currentDate.getDay() !== 6) {
+      holidayCount += 1;
+    }
+
+    if (isWorkingDay(currentDate, holidays)) {
+      totalWorkingDays += 1;
+    }
+
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return {
+    total_working_days: totalWorkingDays,
+    holiday_count: holidayCount
+  };
 };
 
 const calculateChangeDayDateByNumber = async (startDate, changeDayNumber) => {
@@ -304,6 +470,14 @@ const createPhase = async (data) => {
   const normalizedTargets = normalizeTargets(data.targets);
   const normalizedIndividualTarget = normalizeIndividualTarget(data.individual_target);
 
+  await ensureNoPhaseWindowOverlap({
+    currentPhaseId: null,
+    startDate,
+    endDate,
+    startTime,
+    endTime
+  });
+
   const phase = {
     phase_id,
     phase_name,
@@ -314,13 +488,14 @@ const createPhase = async (data) => {
     change_day: formatDateOnly(changeDay),
     start_time: startTime,
     end_time: endTime,
-    status: "ACTIVE"
+    status: resolvePhaseStatusByWindow(startDate, endDate, startTime, endTime)
   };
 
   // Ensure outgoing active phases have evaluated eligibility and completed status
   // so "previous phase eligibility" is available for tier-management flows.
-  const activePhases = await repo.getActivePhases();
-  for (const activePhase of Array.isArray(activePhases) ? activePhases : []) {
+  const activePhasesToClose =
+    phase.status === "ACTIVE" ? await repo.getActivePhases() : [];
+  for (const activePhase of Array.isArray(activePhasesToClose) ? activePhasesToClose : []) {
     if (!activePhase?.phase_id) continue;
     await eligibilityService.evaluatePhaseEligibility(activePhase.phase_id);
   }
@@ -328,12 +503,15 @@ const createPhase = async (data) => {
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
-    for (const activePhase of Array.isArray(activePhases) ? activePhases : []) {
-      if (!activePhase?.phase_id) continue;
-      await repo.updatePhaseStatus(activePhase.phase_id, "COMPLETED", connection);
+    if (phase.status === "ACTIVE") {
+      for (const activePhase of Array.isArray(activePhasesToClose) ? activePhasesToClose : []) {
+        if (!activePhase?.phase_id) continue;
+        await repo.updatePhaseStatus(activePhase.phase_id, "COMPLETED", connection);
+      }
+      // Safety fallback in case of unexpected concurrent active rows.
+      await repo.deactivateActivePhases(connection);
     }
-    // Safety fallback in case of unexpected concurrent active rows.
-    await repo.deactivateActivePhases(connection);
+
     await repo.insertPhase(phase, connection);
     for (const target of normalizedTargets) {
       await repo.insertPhaseTarget(
@@ -506,6 +684,14 @@ const updatePhaseSettings = async (phase_id, payload = {}) => {
   const startTime = normalizeTimeValue(payload?.start_time, phase.start_time || "08:00:00", "start_time");
   const endTime = normalizeTimeValue(payload?.end_time, phase.end_time || "19:00:00", "end_time");
 
+  await ensureNoPhaseWindowOverlap({
+    currentPhaseId: phase_id,
+    startDate,
+    endDate: nextEndDate,
+    startTime,
+    endTime
+  });
+
   await repo.updatePhaseSettings(
     phase_id,
     {
@@ -581,6 +767,32 @@ const updatePhaseChangeDay = async (phase_id, change_day) => {
   return repo.getPhaseById(phase_id);
 };
 
+const previewWorkingDays = async ({ start_date, end_date } = {}) => {
+  const startDate = toStartOfDay(start_date);
+  const endDate = toStartOfDay(end_date);
+
+  if (!startDate) {
+    throw new Error("start_date is required");
+  }
+
+  if (!endDate) {
+    throw new Error("end_date is required");
+  }
+
+  if (endDate <= startDate) {
+    throw new Error("end_date must be after start_date");
+  }
+
+  const metrics = await calculateWorkingDaysMetricsInRange(startDate, endDate);
+
+  return {
+    start_date: formatDateOnly(startDate),
+    end_date: formatDateOnly(endDate),
+    total_working_days: metrics.total_working_days,
+    holiday_count: metrics.holiday_count
+  };
+};
+
 module.exports = {
   createPhase,
   setPhaseTargets,
@@ -591,5 +803,6 @@ module.exports = {
   getAllPhases,
   isChangeDay,
   updatePhaseSettings,
-  updatePhaseChangeDay
+  updatePhaseChangeDay,
+  previewWorkingDays
 };

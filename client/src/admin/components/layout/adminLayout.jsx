@@ -8,6 +8,7 @@ const SIDEBAR_W = 256;
 const AdminLayout = ({ children }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const useFlushContentShell = location.pathname === "/phase-configuration";
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -42,11 +43,19 @@ const AdminLayout = ({ children }) => {
           </div>
         </aside>
 
-        <main className="flex-1 min-w-0 overflow-y-auto bg-slate-50 p-4 lg:p-8">
+        <main
+          className={`flex-1 min-w-0 overflow-y-auto ${
+            useFlushContentShell ? "bg-[#f6f6f8] p-6 lg:p-10" : "bg-slate-50 p-4 lg:p-8"
+          }`}
+        >
           <div className="mx-auto w-full max-w-7xl">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:p-6">
-              {children}
-            </div>
+            {useFlushContentShell ? (
+              children
+            ) : (
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:p-6">
+                {children}
+              </div>
+            )}
           </div>
         </main>
       </div>

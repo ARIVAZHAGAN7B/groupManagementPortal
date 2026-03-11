@@ -15,6 +15,16 @@ export async function fetchAllPhases() {
   return Array.isArray(data) ? data : [];
 }
 
+export async function fetchWorkingDaysPreview(startDate, endDate) {
+  const { data } = await api.get("/api/phases/working-days/preview", {
+    params: {
+      start_date: startDate,
+      end_date: endDate
+    }
+  });
+  return data;
+}
+
 export async function fetchPhaseTargets(phaseId) {
   const { data } = await api.get(`/api/phases/${phaseId}/targets`);
   return data;

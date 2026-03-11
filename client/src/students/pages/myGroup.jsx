@@ -12,10 +12,6 @@ import {
 import { fetchCurrentPhase } from "../../service/phase.api";
 import { fetchGroupEligibilitySummary } from "../../service/eligibility.api";
 import {
-  applyLeadershipRoleRequest,
-  getMyLeadershipRoleRequests
-} from "../../service/leadershipRequests.api";
-import {
   applyGroupTierChangeRequest,
   getMyGroupTierChangeRequests
 } from "../../service/groupTierRequests.api";
@@ -55,7 +51,6 @@ const BADGE_STYLES = {
   NOT_AVAILABLE: "bg-gray-100 text-gray-600 border-gray-200"
 };
 
-const LEADERSHIP_ROLES = ["CAPTAIN", "VICE_CAPTAIN", "STRATEGIST", "MANAGER"];
 const GROUP_TIERS = ["D", "C", "B", "A"];
 
 const Badge = ({ value, fallback = "-" }) => {
@@ -92,10 +87,6 @@ const MyGroup = () => {
   const [eligibility, setEligibility] = useState(null);
   const [eligibilityLoading, setEligibilityLoading] = useState(false);
   const [eligibilityErr, setEligibilityErr] = useState("");
-  const [leadershipRequests, setLeadershipRequests] = useState([]);
-  const [leadershipRoleBusy, setLeadershipRoleBusy] = useState(false);
-  const [selectedLeadershipRole, setSelectedLeadershipRole] = useState("CAPTAIN");
-  const [leadershipRequestReason, setLeadershipRequestReason] = useState("");
   const [tierChangeRequests, setTierChangeRequests] = useState([]);
   const [tierRequestBusy, setTierRequestBusy] = useState(false);
   const [selectedTierRequestTarget, setSelectedTierRequestTarget] = useState("");
@@ -115,29 +106,22 @@ const MyGroup = () => {
       if (!myGroup) {
         setMembers([]);
         setPending([]);
-        setLeadershipRequests([]);
         setTierChangeRequests([]);
         setEligibility(null);
         setEligibilityErr("");
         return;
       }
 
-      const [memberData, pendingData, leadershipRequestData, tierChangeRequestData] = await Promise.all([
+      const [memberData, pendingData, tierChangeRequestData] = await Promise.all([
         fetchGroupMembers(myGroup.group_id),
         myGroup.role === "CAPTAIN"
           ? getPendingRequestsByGroup(myGroup.group_id)
           : Promise.resolve([]),
-        getMyLeadershipRoleRequests().catch(() => []),
         Promise.resolve([])
       ]);
 
       setMembers(Array.isArray(memberData) ? memberData : []);
       setPending(Array.isArray(pendingData) ? pendingData : []);
-      setLeadershipRequests(
-        (Array.isArray(leadershipRequestData) ? leadershipRequestData : []).filter(
-          (row) => String(row?.group_id) === String(myGroup.group_id)
-        )
-      );
       setTierChangeRequests(
         (Array.isArray(tierChangeRequestData) ? tierChangeRequestData : []).filter(
           (row) => String(row?.group_id) === String(myGroup.group_id)
@@ -215,29 +199,6 @@ const MyGroup = () => {
     }
   };
 
-  const onSubmitLeadershipRoleRequest = async () => {
-    if (!data?.group_id) return;
-    if (!selectedLeadershipRole) return;
-
-    setLeadershipRoleBusy(true);
-    setActionErr("");
-    try {
-      await applyLeadershipRoleRequest({
-        group_id: data.group_id,
-        requested_role: selectedLeadershipRole,
-        request_reason: leadershipRequestReason.trim()
-      });
-      setLeadershipRequestReason("");
-      await load();
-    } catch (err) {
-      setActionErr(
-        err?.response?.data?.message || "Failed to submit leadership role request."
-      );
-    } finally {
-      setLeadershipRoleBusy(false);
-    }
-  };
-
   const onSubmitTierChangeRequest = async () => {
     if (!data?.group_id) return;
     if (!selectedTierRequestTarget) return;
@@ -283,47 +244,6 @@ const MyGroup = () => {
     if (eligibility?.is_eligible === false) return "No";
     return "Not available";
   }, [eligibility]);
-
-  const activeLeadershipCount = useMemo(
-    () =>
-      (Array.isArray(members) ? members : []).filter((member) =>
-        LEADERSHIP_ROLES.includes(String(member?.role || "").toUpperCase())
-      ).length,
-    [members]
-  );
-
-  const missingLeadershipRoles = useMemo(() => {
-    const occupied = new Set(
-      (Array.isArray(members) ? members : [])
-        .map((member) => String(member?.role || "").toUpperCase())
-        .filter((role) => LEADERSHIP_ROLES.includes(role))
-    );
-
-    return LEADERSHIP_ROLES.filter((role) => !occupied.has(role));
-  }, [members]);
-
-  useEffect(() => {
-    if (missingLeadershipRoles.length === 0) return;
-    if (!missingLeadershipRoles.includes(selectedLeadershipRole)) {
-      setSelectedLeadershipRole(missingLeadershipRoles[0]);
-    }
-  }, [missingLeadershipRoles, selectedLeadershipRole]);
-
-  const myPendingLeadershipRoleRequests = useMemo(
-    () =>
-      (Array.isArray(leadershipRequests) ? leadershipRequests : []).filter(
-        (row) => String(row?.status || "").toUpperCase() === "PENDING"
-      ),
-    [leadershipRequests]
-  );
-
-  const canRequestLeadershipRole = useMemo(
-    () =>
-      data?.role === "MEMBER" &&
-      missingLeadershipRoles.length > 0 &&
-      myPendingLeadershipRoleRequests.length === 0,
-    [data?.role, missingLeadershipRoles, myPendingLeadershipRoleRequests.length]
-  );
 
   const currentGroupTier = useMemo(
     () => String(data?.tier || "").toUpperCase(),
@@ -558,104 +478,6 @@ const MyGroup = () => {
                   </p>
                 </div>
               </div>
-
-              {(missingLeadershipRoles.length > 0 || leadershipRequests.length > 0) && (
-                <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-4 space-y-3">
-                  <div>
-                    <h3 className="text-sm font-semibold text-blue-900">
-                      Leadership Role Recovery
-                    </h3>
-                    <p className="mt-1 text-xs text-blue-800">
-                      Missing leadership roles: {missingLeadershipRoles.length > 0
-                        ? missingLeadershipRoles.join(", ")
-                        : "None"}.
-                      {" "}
-                      {activeLeadershipCount === 0
-                        ? "No leadership roles are currently occupied, so admin has been alerted."
-                        : "Admin approval is required before a role request is applied."}
-                    </p>
-                  </div>
-
-                  {canRequestLeadershipRole ? (
-                    <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_auto] gap-2 items-start">
-                      <select
-                        value={selectedLeadershipRole}
-                        onChange={(e) => setSelectedLeadershipRole(e.target.value)}
-                        disabled={leadershipRoleBusy}
-                        className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-gray-800"
-                      >
-                        {missingLeadershipRoles.map((role) => (
-                          <option key={role} value={role}>
-                            {role}
-                          </option>
-                        ))}
-                      </select>
-
-                      <input
-                        type="text"
-                        value={leadershipRequestReason}
-                        onChange={(e) => setLeadershipRequestReason(e.target.value)}
-                        disabled={leadershipRoleBusy}
-                        placeholder="Optional note for admin (why you fit this role)"
-                        maxLength={255}
-                        className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-gray-800"
-                      />
-
-                      <button
-                        type="button"
-                        onClick={onSubmitLeadershipRoleRequest}
-                        disabled={leadershipRoleBusy || !selectedLeadershipRole}
-                        className="rounded-lg border border-blue-300 bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-                      >
-                        {leadershipRoleBusy ? "Sending..." : "Send Role Request"}
-                      </button>
-                    </div>
-                  ) : data?.role !== "MEMBER" ? (
-                    <div className="text-xs text-blue-800">
-                      Leadership role requests are available for members. Captains/admin can assign roles directly.
-                    </div>
-                  ) : myPendingLeadershipRoleRequests.length > 0 ? (
-                    <div className="text-xs text-blue-800">
-                      You already have a pending leadership role request. Wait for admin validation.
-                    </div>
-                  ) : null}
-
-                  {leadershipRequests.length > 0 && (
-                    <div className="overflow-auto rounded-lg border border-blue-100 bg-white">
-                      <table className="min-w-[720px] w-full text-sm">
-                        <thead className="bg-blue-50/60">
-                          <tr>
-                            <th className="text-left p-2.5 border-b border-blue-100 text-xs">Request ID</th>
-                            <th className="text-left p-2.5 border-b border-blue-100 text-xs">Requested Role</th>
-                            <th className="text-left p-2.5 border-b border-blue-100 text-xs">Status</th>
-                            <th className="text-left p-2.5 border-b border-blue-100 text-xs">Request Date</th>
-                            <th className="text-left p-2.5 border-b border-blue-100 text-xs">Decision</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {leadershipRequests.map((row) => (
-                            <tr key={row.leadership_request_id} className="hover:bg-gray-50">
-                              <td className="p-2.5 border-b border-gray-100">{row.leadership_request_id}</td>
-                              <td className="p-2.5 border-b border-gray-100">
-                                <Badge value={row.requested_role || "-"} />
-                              </td>
-                              <td className="p-2.5 border-b border-gray-100">
-                                <Badge value={row.status || "-"} />
-                              </td>
-                              <td className="p-2.5 border-b border-gray-100">
-                                {formatDateTime(row.request_date)}
-                              </td>
-                              <td className="p-2.5 border-b border-gray-100 text-xs text-gray-600">
-                                {row.decision_reason || "-"}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              )}
 
               {false && (isCaptain || tierChangeRequests.length > 0) && (
                 <div className="rounded-xl border border-purple-100 bg-purple-50/40 p-4 space-y-3">

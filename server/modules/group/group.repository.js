@@ -22,7 +22,12 @@ exports.getAllGroups = async () => {
         SELECT COUNT(*)
         FROM memberships m
         WHERE m.group_id = g.group_id AND m.status = 'ACTIVE'
-      ) AS active_member_count
+      ) AS active_member_count,
+      (
+        SELECT COALESCE(SUM(gp.points), 0)
+        FROM group_points gp
+        WHERE gp.group_id = g.group_id
+      ) AS total_points
     FROM Sgroup g
     ORDER BY g.group_id ASC
   `);
@@ -37,7 +42,12 @@ exports.getGroupById = async (id) => {
          SELECT COUNT(*)
          FROM memberships m
          WHERE m.group_id = g.group_id AND m.status = 'ACTIVE'
-       ) AS active_member_count
+       ) AS active_member_count,
+       (
+         SELECT COALESCE(SUM(gp.points), 0)
+         FROM group_points gp
+         WHERE gp.group_id = g.group_id
+       ) AS total_points
      FROM Sgroup g
      WHERE g.group_id = ?`,
     [id]

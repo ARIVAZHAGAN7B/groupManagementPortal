@@ -6,8 +6,14 @@ import {
   updatePhaseChangeDay,
   updatePhaseSettings
 } from "../../service/phase.api";
+import ChangeDayManagementChangeDaySection from "../components/ChangeDayManagementChangeDaySection";
+import ChangeDayManagementOverviewCards from "../components/ChangeDayManagementOverviewCards";
+import ChangeDayManagementPageHeader from "../components/ChangeDayManagementPageHeader";
+import ChangeDayManagementPhaseSettingsSection from "../components/ChangeDayManagementPhaseSettingsSection";
+import ChangeDayManagementStatusBanner from "../components/ChangeDayManagementStatusBanner";
+import ChangeDayManagementTargetsSection from "../components/ChangeDayManagementTargetsSection";
 
-const TIERS = ["D", "C", "B", "A"];
+const TIERS = ["A", "B", "C", "D"];
 
 const defaultTargets = () =>
   TIERS.map((tier) => ({
@@ -261,7 +267,7 @@ export default function ChangeDayManagement() {
         toDateInput(updatedPhase?.change_day || prev)
       );
       setSuccess(res?.message || "Phase settings updated successfully.");
-    } catch (err) {
+    } catch (err) { 
       setError(err?.response?.data?.error || "Failed to update phase settings");
     } finally {
       setSavingPhaseSettings(false);
@@ -317,247 +323,68 @@ export default function ChangeDayManagement() {
 
   if (loading) {
     return (
-      <div className="p-6 max-w-5xl">
-        <div className="py-10 text-center text-sm text-gray-400">Loading change-day management...</div>
+      <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-500 shadow-sm">
+        Loading change-day management...
       </div>
     );
   }
 
-  const inputClass =
-    "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 transition";
-
   return (
-    <div className="p-6 max-w-6xl space-y-5">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-base font-bold text-gray-900">Change Day Management</h1>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Update change day and phase configuration settings for the active phase.
-          </p>
-        </div>
-        <button
-          onClick={load}
-          className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors w-fit"
-        >
-          Refresh
-        </button>
-      </div>
+    <section className="mx-auto w-full max-w-6xl space-y-6 font-[Inter] text-slate-900">
+      <ChangeDayManagementPageHeader loading={loading} onRefresh={load} />
 
       {error ? (
-        <div className="px-4 py-2.5 rounded-lg border border-red-200 bg-red-50 text-sm text-red-700">
-          {error}
-        </div>
+        <ChangeDayManagementStatusBanner tone="error" message={error} />
       ) : null}
 
       {success ? (
-        <div className="px-4 py-2.5 rounded-lg border border-green-200 bg-green-50 text-sm text-green-700">
-          {success}
-        </div>
+        <ChangeDayManagementStatusBanner tone="success" message={success} />
       ) : null}
 
       {!currentPhase ? (
-        <div className="rounded-xl border border-gray-100 bg-white px-4 py-8 text-center text-sm text-gray-500">
+        <div className="rounded-xl border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500 shadow-sm">
           No active phase found.
         </div>
       ) : (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-              <p className="text-[10.5px] font-semibold uppercase tracking-wider text-gray-400">Current Phase</p>
-              <p className="mt-1 text-sm font-semibold text-gray-800 break-all">
-                {currentPhase.phase_name || currentPhase.phase_id || "-"}
-              </p>
-            </div>
-            <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-              <p className="text-[10.5px] font-semibold uppercase tracking-wider text-gray-400">Change Day Count</p>
-              <p className="mt-1 text-xl font-bold text-blue-600">{currentPhase.change_day_number ?? "-"}</p>
-            </div>
-            <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-              <p className="text-[10.5px] font-semibold uppercase tracking-wider text-gray-400">Change Day Date</p>
-              <p className="mt-1 text-sm font-semibold text-gray-800">{formatDate(currentPhase.change_day)}</p>
-            </div>
-            <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-              <p className="text-[10.5px] font-semibold uppercase tracking-wider text-gray-400">Phase End Date</p>
-              <p className="mt-1 text-sm font-semibold text-gray-800">{formatDate(currentPhase.end_date)}</p>
-            </div>
+        <>
+          <ChangeDayManagementOverviewCards
+            currentPhase={currentPhase}
+            formatDate={formatDate}
+          />
+
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <ChangeDayManagementChangeDaySection
+              changeDayRange={changeDayRange}
+              formatDate={formatDate}
+              onSave={onSaveChangeDay}
+              saving={savingChangeDay || !currentPhase?.phase_id}
+              selectedChangeDay={selectedChangeDay}
+              setSelectedChangeDay={setSelectedChangeDay}
+            />
+
+            <ChangeDayManagementPhaseSettingsSection
+              minEndDate={minEndDate}
+              onSave={onSavePhaseSettings}
+              saving={savingPhaseSettings || !currentPhase?.phase_id}
+              setSettingsForm={setSettingsForm}
+              settingsForm={settingsForm}
+            />
+
+            <ChangeDayManagementTargetsSection
+              individualTarget={individualTarget}
+              onSave={onSaveTargets}
+              onTargetChange={onTargetChange}
+              saving={savingTargets || !currentPhase?.phase_id}
+              setIndividualTarget={setIndividualTarget}
+              targets={targets}
+            />
           </div>
-
-          <section className="rounded-xl border border-gray-100 bg-white p-5 space-y-4">
-            <div>
-              <h2 className="text-sm font-semibold text-gray-900">Update Change Day</h2>
-              <p className="text-xs text-gray-500 mt-1">
-                Pick a date within the allowed range. Change day count updates automatically.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-[minmax(0,260px)_1fr] gap-4 items-end">
-              <label className="text-sm block">
-                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                  Change Day Date
-                </div>
-                <input
-                  type="date"
-                  value={selectedChangeDay}
-                  min={changeDayRange.min || undefined}
-                  max={changeDayRange.max || undefined}
-                  onChange={(e) => setSelectedChangeDay(e.target.value)}
-                  disabled={!changeDayRange.hasWindow || savingChangeDay}
-                  className={inputClass}
-                />
-              </label>
-
-              <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5 text-xs text-gray-600">
-                {changeDayRange.hasWindow ? (
-                  <>
-                    Valid range: <span className="font-medium">{formatDate(changeDayRange.min)}</span> to{" "}
-                    <span className="font-medium">{formatDate(changeDayRange.max)}</span>
-                  </>
-                ) : (
-                  <>No valid change-day range available for this phase.</>
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-1">
-              <button
-                type="button"
-                onClick={onSaveChangeDay}
-                disabled={savingChangeDay || !changeDayRange.hasWindow || !currentPhase?.phase_id}
-                className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
-              >
-                {savingChangeDay ? "Saving..." : "Save Change Day"}
-              </button>
-            </div>
-          </section>
-
-          <section className="rounded-xl border border-gray-100 bg-white p-5 space-y-4">
-            <div>
-              <h2 className="text-sm font-semibold text-gray-900">Update Phase End & Time</h2>
-              <p className="text-xs text-gray-500 mt-1">
-                Update phase end date and start/end time for the current phase.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <label className="text-sm">
-                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                  End Date
-                </div>
-                <input
-                  type="date"
-                  value={settingsForm.end_date}
-                  min={minEndDate || undefined}
-                  onChange={(e) =>
-                    setSettingsForm((prev) => ({
-                      ...prev,
-                      end_date: e.target.value
-                    }))
-                  }
-                  className={inputClass}
-                />
-              </label>
-
-              <label className="text-sm">
-                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                  Start Time
-                </div>
-                <input
-                  type="time"
-                  value={settingsForm.start_time}
-                  onChange={(e) =>
-                    setSettingsForm((prev) => ({
-                      ...prev,
-                      start_time: e.target.value
-                    }))
-                  }
-                  className={inputClass}
-                />
-              </label>
-
-              <label className="text-sm">
-                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                  End Time
-                </div>
-                <input
-                  type="time"
-                  value={settingsForm.end_time}
-                  onChange={(e) =>
-                    setSettingsForm((prev) => ({
-                      ...prev,
-                      end_time: e.target.value
-                    }))
-                  }
-                  className={inputClass}
-                />
-              </label>
-            </div>
-
-            <div className="flex justify-end pt-1">
-              <button
-                type="button"
-                onClick={onSavePhaseSettings}
-                disabled={savingPhaseSettings || !currentPhase?.phase_id}
-                className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
-              >
-                {savingPhaseSettings ? "Saving..." : "Save Phase Settings"}
-              </button>
-            </div>
-          </section>
-
-          <section className="rounded-xl border border-gray-100 bg-white p-5 space-y-4">
-            <div>
-              <h2 className="text-sm font-semibold text-gray-900">Update Targets</h2>
-              <p className="text-xs text-gray-500 mt-1">
-                Configure group target by tier and individual target for the active phase.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {targets.map((row) => (
-                <label
-                  key={row.tier}
-                  className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-sm"
-                >
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                    Tier {row.tier}
-                  </div>
-                  <input
-                    type="number"
-                    min={0}
-                    value={row.group_target}
-                    onChange={(e) => onTargetChange(row.tier, e.target.value)}
-                    className={`${inputClass} mt-2`}
-                  />
-                </label>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-[minmax(0,320px)_auto] gap-3 items-end">
-              <label className="text-sm">
-                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                  Individual Target (All Students)
-                </div>
-                <input
-                  type="number"
-                  min={0}
-                  value={individualTarget}
-                  onChange={(e) => setIndividualTarget(e.target.value)}
-                  className={inputClass}
-                />
-              </label>
-
-              <button
-                type="button"
-                onClick={onSaveTargets}
-                disabled={savingTargets || !currentPhase?.phase_id}
-                className="w-fit px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
-              >
-                {savingTargets ? "Saving..." : "Save Targets"}
-              </button>
-            </div>
-          </section>
-        </div>
+        </>
       )}
-    </div>
+
+      <footer className="pt-2 text-center text-sm text-slate-400">
+        © 2024 Student Portal Management System. All rights reserved.
+      </footer>
+    </section>
   );
 }

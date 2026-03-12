@@ -16,6 +16,10 @@ const addDiscoveryFields = (group, policy, options = {}) => {
     group.active_member_count === undefined || group.active_member_count === null
       ? null
       : Number(group.active_member_count);
+  const totalPoints =
+    group.total_points === undefined || group.total_points === null
+      ? 0
+      : Number(group.total_points);
   const maxMembers = Number(policy.max_group_members);
   const vacancies =
     activeMemberCount === null || Number.isNaN(maxMembers)
@@ -28,6 +32,7 @@ const addDiscoveryFields = (group, policy, options = {}) => {
   return {
     ...group,
     active_member_count: activeMemberCount,
+    total_points: Number.isNaN(totalPoints) ? 0 : totalPoints,
     vacancies,
     accepting_applications: acceptingApplications,
     current_phase_id: options.currentPhaseId || null,

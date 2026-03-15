@@ -1,25 +1,42 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
+import AllGroupsBadge from "../components/allGroups/AllGroupsBadge";
+import {
+  TeamDesktopTableShell,
+  TeamTableSearchField,
+  TeamTableSelectField
+} from "../components/teams/TeamDesktopTableControls";
+import TeamMembersPreviewModal from "../components/teams/TeamMembersPreviewModal";
+import TeamPageDetailTile from "../components/teams/TeamPageDetailTile";
+import TeamPageFilters from "../components/teams/TeamPageFilters";
+import TeamPageHero from "../components/teams/TeamPageHero";
 import {
   fetchMyTeamMemberships,
   fetchTeamMemberships,
   fetchTeams,
   joinTeam
 } from "../../service/teams.api";
+import {
+  formatLabel,
+  formatMemberCount,
+  formatShortDate,
+  getUniqueCount
+} from "../components/teams/teamPage.utils";
 
-const formatDateTime = (value) => {
-  if (!value) return "-";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toISOString().split("T")[0];
-};
+const inputClassName =
+  "w-full rounded-2xl border border-slate-300 bg-[#f3f4f6] px-4 py-3 text-sm font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#1754cf]/35 focus:ring-2 focus:ring-[#1754cf]/10";
+
+const selectClassName =
+  "w-full rounded-2xl border border-slate-300 bg-[#f3f4f6] px-4 py-3 text-sm font-medium text-slate-700 outline-none transition focus:border-[#1754cf]/35 focus:ring-2 focus:ring-[#1754cf]/10";
 
 export default function TeamsRegularPage() {
   const [teams, setTeams] = useState([]);
   const [myMemberships, setMyMemberships] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [loadingTeams, setLoadingTeams] = useState(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [typeFilter, setTypeFilter] = useState("ALL");
   const [busyTeamId, setBusyTeamId] = useState(null);
   const [viewTeam, setViewTeam] = useState(null);
   const [viewMembers, setViewMembers] = useState([]);
@@ -27,14 +44,16 @@ export default function TeamsRegularPage() {
   const [viewMembersError, setViewMembersError] = useState("");
   const [viewBusyTeamId, setViewBusyTeamId] = useState(null);
 
-  const loadBase = async () => {
+  const loadBase = useCallback(async () => {
     setLoading(true);
     setError("");
+
     try {
       const [teamRows, membershipRes] = await Promise.all([
         fetchTeams({ exclude_team_type: "EVENT" }),
         fetchMyTeamMemberships({ status: "ACTIVE", exclude_team_type: "EVENT" })
       ]);
+
       setTeams(Array.isArray(teamRows) ? teamRows : []);
       setMyMemberships(Array.isArray(membershipRes?.memberships) ? membershipRes.memberships : []);
     } catch (err) {
@@ -44,74 +63,155 @@ export default function TeamsRegularPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const loadTeams = async () => {
-    setLoadingTeams(true);
-    setError("");
-    try {
-      const rows = await fetchTeams({ exclude_team_type: "EVENT" });
-      setTeams(Array.isArray(rows) ? rows : []);
-    } catch (err) {
-      setError(err?.response?.data?.message || "Failed to load teams");
-      setTeams([]);
-    } finally {
-      setLoadingTeams(false);
-    }
-  };
+  }, []);
 
   useEffect(() => {
     loadBase();
-  }, []);
+  }, [loadBase]);
 
   const myTeamIdSet = useMemo(
-    () => new Set(myMemberships.map((m) => Number(m.team_id))),
+    () => new Set(myMemberships.map((membership) => Number(membership.team_id))),
     [myMemberships]
   );
 
+  const typeOptions = useMemo(() => {
+    return [
+      "ALL",
+      ...new Set(teams.map((team) => String(team.team_type || "").trim()).filter(Boolean))
+    ];
+  }, [teams]);
+
   const filteredTeams = useMemo(() => {
-    const q = String(query || "").trim().toLowerCase();
-    if (!q) return teams;
-    return teams.filter((row) =>
-      [
-        row.team_code,
-        row.team_name,
-        row.team_type,
-        row.status,
-        row.description
-      ]
-        .map((v) => String(v ?? "").toLowerCase())
-        .join(" ")
-        .includes(q)
-    );
-  }, [teams, query]);
+    const normalizedQuery = String(query || "").trim().toLowerCase();
 
-  const onJoin = async (team) => {
-    if (!team?.team_id) return;
-    const ok = window.confirm(`Join team ${team.team_name || team.team_code}?`);
-    if (!ok) return;
+    return teams.filter((team) => {
+      const matchesQuery =
+        !normalizedQuery ||
+        [
+          team.team_code,
+          team.team_name,
+          team.team_type,
+          team.status,
+          team.description
+        ]
+          .map((value) => String(value || "").toLowerCase())
+          .join(" ")
+          .includes(normalizedQuery);
 
-    setBusyTeamId(Number(team.team_id));
-    setError("");
-    try {
-      await joinTeam(team.team_id);
-      await Promise.all([loadBase(), loadTeams()]);
-    } catch (err) {
-      setError(err?.response?.data?.message || "Failed to join team");
-    } finally {
-      setBusyTeamId(null);
+      const matchesStatus =
+        statusFilter === "ALL" || String(team.status || "").toUpperCase() === statusFilter;
+
+      const matchesType = typeFilter === "ALL" || String(team.team_type || "") === typeFilter;
+
+      return matchesQuery && matchesStatus && matchesType;
+    });
+  }, [query, statusFilter, teams, typeFilter]);
+
+  const activeFilters = useMemo(() => {
+    const items = [];
+
+    if (String(query || "").trim()) {
+      items.push(`Search: ${String(query).trim()}`);
     }
-  };
+    if (statusFilter !== "ALL") {
+      items.push(`Status: ${formatLabel(statusFilter)}`);
+    }
+    if (typeFilter !== "ALL") {
+      items.push(`Type: ${formatLabel(typeFilter)}`);
+    }
 
-  const closeViewMembers = () => {
+    return items;
+  }, [query, statusFilter, typeFilter]);
+
+  const canResetFilters = activeFilters.length > 0;
+  const activeTeamsCount = useMemo(
+    () => teams.filter((team) => String(team.status || "").toUpperCase() === "ACTIVE").length,
+    [teams]
+  );
+  const teamTypeCount = useMemo(() => getUniqueCount(teams, (team) => team.team_type), [teams]);
+  const headerSummary =
+    filteredTeams.length !== teams.length
+      ? `Showing ${filteredTeams.length} of ${teams.length} teams`
+      : `${teams.length} teams in directory`;
+
+  const resetFilters = useCallback(() => {
+    setQuery("");
+    setStatusFilter("ALL");
+    setTypeFilter("ALL");
+  }, []);
+
+  const resolveJoinAction = useCallback(
+    (team) => {
+      const teamId = Number(team?.team_id);
+      const isJoined = myTeamIdSet.has(teamId);
+      const isActiveTeam = String(team?.status || "").toUpperCase() === "ACTIVE";
+      const isBusy = busyTeamId === teamId;
+
+      if (isBusy) {
+        return {
+          disabled: true,
+          label: "Joining...",
+          title: "Joining team"
+        };
+      }
+
+      if (isJoined) {
+        return {
+          disabled: true,
+          label: "Joined",
+          title: "Already an active member"
+        };
+      }
+
+      if (!isActiveTeam) {
+        return {
+          disabled: true,
+          label: "Join",
+          title: "Only active teams can be joined"
+        };
+      }
+
+      return {
+        disabled: false,
+        label: "Join",
+        title: "Join team"
+      };
+    },
+    [busyTeamId, myTeamIdSet]
+  );
+
+  const onJoin = useCallback(
+    async (team) => {
+      const joinAction = resolveJoinAction(team);
+      if (joinAction.disabled || !team?.team_id) return;
+
+      const ok = window.confirm(`Join team ${team.team_name || team.team_code}?`);
+      if (!ok) return;
+
+      setBusyTeamId(Number(team.team_id));
+      setError("");
+
+      try {
+        await joinTeam(team.team_id);
+        await loadBase();
+      } catch (err) {
+        setError(err?.response?.data?.message || "Failed to join team");
+      } finally {
+        setBusyTeamId(null);
+      }
+    },
+    [loadBase, resolveJoinAction]
+  );
+
+  const closeViewMembers = useCallback(() => {
     setViewTeam(null);
     setViewMembers([]);
     setViewMembersError("");
     setViewMembersLoading(false);
     setViewBusyTeamId(null);
-  };
+  }, []);
 
-  const onViewMembers = async (team) => {
+  const onViewMembers = useCallback(async (team) => {
     if (!team?.team_id) return;
 
     setViewTeam(team);
@@ -130,217 +230,345 @@ export default function TeamsRegularPage() {
       setViewMembersLoading(false);
       setViewBusyTeamId(null);
     }
-  };
+  }, []);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">Teams</h1>
-          <p className="text-sm text-gray-600">
-            Browse regular teams and join directly.
-          </p>
-        </div>
-        <button onClick={loadBase} className="px-3 py-2 rounded border" disabled={loading}>
-          {loading ? "Loading..." : "Refresh"}
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="p-3 rounded border bg-gray-50">
-          <div className="text-xs uppercase tracking-wide font-semibold text-gray-500">
-            Available Teams
-          </div>
-          <div className="text-lg font-semibold">{teams.length}</div>
-        </div>
-        <div className="p-3 rounded border bg-gray-50">
-          <div className="text-xs uppercase tracking-wide font-semibold text-gray-500">
-            My Active Teams
-          </div>
-          <div className="text-lg font-semibold">{myMemberships.length}</div>
-        </div>
-        <div className="p-3 rounded border bg-gray-50">
-          <div className="text-xs uppercase tracking-wide font-semibold text-gray-500">
-            Filtered
-          </div>
-          <div className="text-lg font-semibold">{filteredTeams.length}</div>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="w-full max-w-md border rounded px-3 py-2"
-          placeholder="Search teams..."
-        />
-      </div>
+    <div className="max-w-screen-2xl space-y-3 p-4 md:p-5">
+      <TeamPageHero
+        loading={loading}
+        onRefresh={loadBase}
+        eyebrow="Team Discovery"
+        title="Teams"
+        summary={headerSummary}
+        actionLabel="Refresh"
+        actionBusyLabel="Refreshing..."
+        stats={[
+          {
+            accentClass: "bg-[#1754cf]",
+            detail:
+              filteredTeams.length !== teams.length ? `Visible ${filteredTeams.length}` : "All teams",
+            label: "Total",
+            value: teams.length
+          },
+          {
+            accentClass: "bg-emerald-500",
+            detail: "Teams you already belong to",
+            label: "Joined",
+            value: myMemberships.length
+          },
+          {
+            accentClass: "bg-sky-500",
+            detail: "Available for direct join",
+            label: "Active",
+            value: activeTeamsCount
+          },
+          {
+            accentClass: "bg-slate-400",
+            detail: "Distinct categories",
+            label: "Types",
+            value: teamTypeCount
+          }
+        ]}
+      />
 
       {error ? (
-        <div className="p-3 rounded border border-red-300 bg-red-50 text-red-700">{error}</div>
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          {error}
+        </div>
       ) : null}
 
-      {loading || loadingTeams ? (
-        <div className="p-3 border rounded">Loading teams...</div>
-      ) : (
-        <div className="overflow-auto border rounded">
-          <table className="min-w-[1200px] w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left p-3 border-b">Code</th>
-                <th className="text-left p-3 border-b">Name</th>
-                <th className="text-left p-3 border-b">Type</th>
-                <th className="text-left p-3 border-b">Status</th>
-                <th className="text-left p-3 border-b">Members</th>
-                <th className="text-left p-3 border-b">Created</th>
-                <th className="text-left p-3 border-b">Description</th>
-                <th className="text-left p-3 border-b">Action</th>
-              </tr>
-            </thead>
-            <tbody>
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:hidden">
+        <TeamPageFilters
+          className="lg:hidden"
+          activeFilters={activeFilters}
+          canReset={canResetFilters}
+          itemLabel="teams"
+          onReset={resetFilters}
+          panelTitle="Filter Teams"
+          resultCount={filteredTeams.length}
+          totalCount={teams.length}
+          withDivider
+        >
+          <label className="block">
+            <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Search
+            </span>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search by code, name, type, or description"
+              className={inputClassName}
+            />
+          </label>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Status
+              </span>
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+                className={selectClassName}
+              >
+                <option value="ALL">All statuses</option>
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+                <option value="FROZEN">Frozen</option>
+                <option value="ARCHIVED">Archived</option>
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Team Type
+              </span>
+              <select
+                value={typeFilter}
+                onChange={(event) => setTypeFilter(event.target.value)}
+                className={selectClassName}
+              >
+                <option value="ALL">All team types</option>
+                {typeOptions
+                  .filter((option) => option !== "ALL")
+                  .map((option) => (
+                    <option key={option} value={option}>
+                      {formatLabel(option)}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          </div>
+        </TeamPageFilters>
+
+        {loading ? (
+          <div className="px-4 py-12 text-center text-sm text-slate-500">Loading teams...</div>
+        ) : filteredTeams.length === 0 ? (
+          <div className="px-4 py-12 text-center text-sm text-slate-500">
+            No teams found for the current filters.
+          </div>
+        ) : (
+          <>
+            <div className="space-y-3 p-4 lg:hidden">
               {filteredTeams.map((team) => {
+                const joinAction = resolveJoinAction(team);
                 const teamId = Number(team.team_id);
-                const isJoined = myTeamIdSet.has(teamId);
-                const isActiveTeam = String(team.status || "").toUpperCase() === "ACTIVE";
-                const isBusy = busyTeamId === teamId;
-                const actionDisabled = isBusy || isJoined || !isActiveTeam;
 
                 return (
-                  <tr key={team.team_id} className="hover:bg-gray-50">
-                    <td className="p-3 border-b font-semibold">{team.team_code || "-"}</td>
-                    <td className="p-3 border-b">{team.team_name || "-"}</td>
-                    <td className="p-3 border-b">{team.team_type || "-"}</td>
-                    <td className="p-3 border-b">{team.status || "-"}</td>
-                    <td className="p-3 border-b">{Number(team.active_member_count || 0)}</td>
-                    <td className="p-3 border-b">{formatDateTime(team.created_at)}</td>
-                    <td className="p-3 border-b max-w-[280px]">
-                      <div className="truncate" title={team.description || ""}>
-                        {team.description || "-"}
+                  <article
+                    key={team.team_id}
+                    className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h2 className="truncate text-base font-bold text-slate-900">
+                          {team.team_name || "-"}
+                        </h2>
+                        <p className="mt-0.5 text-xs text-slate-500">{team.team_code || "No code"}</p>
                       </div>
-                    </td>
-                    <td className="p-3 border-b">
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => onViewMembers(team)}
-                          disabled={viewBusyTeamId === teamId}
-                          className="px-3 py-1 rounded border bg-white disabled:opacity-60"
-                          title="View active team members"
-                        >
-                          {viewBusyTeamId === teamId ? "Loading..." : "View"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onJoin(team)}
-                          disabled={actionDisabled}
-                          className="px-3 py-1 rounded border disabled:opacity-60"
-                          title={
-                            isJoined
-                              ? "Already an active member"
-                              : !isActiveTeam
-                                ? "Team is not active"
-                                : "Join team"
-                          }
-                        >
-                          {isBusy ? "Joining..." : isJoined ? "Joined" : "Join"}
-                        </button>
+                      <AllGroupsBadge value={formatLabel(team.status, "Unknown")} />
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <AllGroupsBadge value={formatLabel(team.team_type, "Team")} />
+                      {myTeamIdSet.has(teamId) ? <AllGroupsBadge value="Active Member" /> : null}
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <TeamPageDetailTile
+                        label="Members"
+                        value={formatMemberCount(team.active_member_count)}
+                      />
+                      <TeamPageDetailTile
+                        label="Created"
+                        value={formatShortDate(team.created_at)}
+                      />
+                    </div>
+
+                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        Description
                       </div>
-                    </td>
-                  </tr>
+                      <p className="mt-1 text-sm leading-6 text-slate-600">
+                        {team.description || "No description added."}
+                      </p>
+                    </div>
+
+                    <div className="mt-4 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onViewMembers(team)}
+                        disabled={viewBusyTeamId === teamId}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-70"
+                        title="View team members"
+                      >
+                        <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onJoin(team)}
+                        disabled={joinAction.disabled}
+                        title={joinAction.title}
+                        className="rounded-lg border border-[#1754cf]/15 bg-[#1754cf]/8 px-3.5 py-2 text-sm font-semibold text-[#1754cf] transition hover:bg-[#1754cf]/12 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                      >
+                        {joinAction.label}
+                      </button>
+                    </div>
+                  </article>
                 );
               })}
+            </div>
 
-              {filteredTeams.length === 0 ? (
+          </>
+        )}
+      </section>
+
+      <TeamDesktopTableShell
+        canReset={canResetFilters}
+        onReset={resetFilters}
+        toolbar={
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+            <div className="min-w-0 xl:w-[22rem]">
+              <TeamTableSearchField
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search by code, name, type, or description"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:w-auto">
+              <div className="min-w-0 xl:w-44">
+                <TeamTableSelectField
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value)}
+                >
+                  <option value="ALL">All statuses</option>
+                  <option value="ACTIVE">Active</option>
+                  <option value="INACTIVE">Inactive</option>
+                  <option value="FROZEN">Frozen</option>
+                  <option value="ARCHIVED">Archived</option>
+                </TeamTableSelectField>
+              </div>
+
+              <div className="min-w-0 xl:w-48">
+                <TeamTableSelectField
+                  value={typeFilter}
+                  onChange={(event) => setTypeFilter(event.target.value)}
+                >
+                  <option value="ALL">All team types</option>
+                  {typeOptions
+                    .filter((option) => option !== "ALL")
+                    .map((option) => (
+                      <option key={option} value={option}>
+                        {formatLabel(option)}
+                      </option>
+                    ))}
+                </TeamTableSelectField>
+              </div>
+            </div>
+          </div>
+        }
+      >
+        <div className="overflow-x-auto overflow-y-visible rounded-2xl">
+          <table className="min-w-[1120px] w-full text-sm">
+            <thead className="bg-slate-50 text-slate-600">
+              <tr>
+                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Team</th>
+                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Type</th>
+                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Status</th>
+                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Members</th>
+                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Created</th>
+                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+                  Description
+                </th>
+                <th className="sticky right-0 bg-slate-50 px-4 py-3 text-left font-semibold whitespace-nowrap shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.14)]">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 bg-white">
+              {loading ? (
                 <tr>
-                  <td className="p-3 text-gray-500" colSpan={8}>
-                    No teams found.
+                  <td className="px-4 py-12 text-center text-sm text-slate-500" colSpan={7}>
+                    Loading teams...
                   </td>
                 </tr>
-              ) : null}
+              ) : filteredTeams.length === 0 ? (
+                <tr>
+                  <td className="px-4 py-12 text-center text-sm text-slate-500" colSpan={7}>
+                    No teams found for the current filters.
+                  </td>
+                </tr>
+              ) : (
+                filteredTeams.map((team) => {
+                  const joinAction = resolveJoinAction(team);
+                  const teamId = Number(team.team_id);
+
+                  return (
+                    <tr key={team.team_id} className="group hover:bg-slate-50/80">
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-slate-900">{team.team_name || "-"}</div>
+                        <div className="mt-0.5 text-xs text-slate-500">
+                          {team.team_code || "No code"}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <AllGroupsBadge value={formatLabel(team.team_type, "Team")} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <AllGroupsBadge value={formatLabel(team.status, "Unknown")} />
+                      </td>
+                      <td className="px-4 py-3 font-medium text-slate-800">
+                        {formatMemberCount(team.active_member_count)}
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {formatShortDate(team.created_at)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="max-w-sm leading-6 text-slate-600">
+                          {team.description || "No description added."}
+                        </p>
+                      </td>
+                      <td className="sticky right-0 bg-white px-4 py-3 shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50/80">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onViewMembers(team)}
+                            disabled={viewBusyTeamId === teamId}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-70"
+                            title="View team members"
+                          >
+                            <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onJoin(team)}
+                            disabled={joinAction.disabled}
+                            title={joinAction.title}
+                            className="rounded-lg border border-[#1754cf]/15 bg-[#1754cf]/8 px-3 py-1.5 text-sm font-semibold text-[#1754cf] transition hover:bg-[#1754cf]/12 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                          >
+                            {joinAction.label}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
-      )}
+      </TeamDesktopTableShell>
 
-      {viewTeam ? (
-        <div
-          className="fixed inset-0 z-50 bg-black/30 p-4 flex items-center justify-center"
-          onClick={closeViewMembers}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="team-members-preview-title"
-        >
-          <div
-            className="w-full max-w-4xl max-h-[85vh] overflow-hidden rounded-xl border bg-white shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-4 py-3 border-b flex items-start justify-between gap-3">
-              <div>
-                <h2 id="team-members-preview-title" className="text-base font-semibold">
-                  Team Members
-                </h2>
-                <p className="text-sm text-gray-600">
-                  {viewTeam.team_name || "-"} ({viewTeam.team_code || "-"})
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeViewMembers}
-                className="px-3 py-1.5 rounded border text-sm"
-              >
-                Close
-              </button>
-            </div>
-
-            {viewMembersError ? (
-              <div className="m-4 p-3 rounded border border-red-300 bg-red-50 text-red-700">
-                {viewMembersError}
-              </div>
-            ) : null}
-
-            {viewMembersLoading ? (
-              <div className="p-4">Loading team members...</div>
-            ) : (
-              <div className="overflow-auto">
-                <table className="min-w-[860px] w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="text-left p-3 border-b">Membership ID</th>
-                      <th className="text-left p-3 border-b">Student ID</th>
-                      <th className="text-left p-3 border-b">Name</th>
-                      <th className="text-left p-3 border-b">Email</th>
-                      <th className="text-left p-3 border-b">Role</th>
-                      <th className="text-left p-3 border-b">Status</th>
-                      <th className="text-left p-3 border-b">Joined</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {viewMembers.map((row) => (
-                      <tr key={row.team_membership_id} className="hover:bg-gray-50">
-                        <td className="p-3 border-b">{row.team_membership_id || "-"}</td>
-                        <td className="p-3 border-b">{row.student_id || "-"}</td>
-                        <td className="p-3 border-b">{row.student_name || "-"}</td>
-                        <td className="p-3 border-b">{row.student_email || "-"}</td>
-                        <td className="p-3 border-b">{row.role || "-"}</td>
-                        <td className="p-3 border-b">{row.status || "-"}</td>
-                        <td className="p-3 border-b">{formatDateTime(row.join_date)}</td>
-                      </tr>
-                    ))}
-
-                    {viewMembers.length === 0 ? (
-                      <tr>
-                        <td className="p-3 text-gray-500" colSpan={7}>
-                          No active members found for this team.
-                        </td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      ) : null}
+      <TeamMembersPreviewModal
+        team={viewTeam}
+        rows={viewMembers}
+        loading={viewMembersLoading}
+        error={viewMembersError}
+        onClose={closeViewMembers}
+        title="Team Members"
+        emptyText="No active members found for this team."
+      />
     </div>
   );
 }

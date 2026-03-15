@@ -6,6 +6,7 @@ import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import {
   formatGroupMeta,
   formatGroupPoints,
+  getGroupLifecycleActionKeys,
   getStatusConfig,
   getTierBadgeClass
 } from "./groupManagement.constants";
@@ -29,9 +30,28 @@ export default function GroupManagementMobileCards({
   return (
     <section className="space-y-4 lg:hidden">
       {groups.map((group) => {
-        const normalizedStatus = String(group?.status || "").toUpperCase();
         const statusConfig = getStatusConfig(group.status);
-        const canFreeze = normalizedStatus === "ACTIVE";
+        const lifecycleActionMap = {
+          activate: {
+            label: "Activate",
+            icon: PlayArrowRoundedIcon,
+            className: "bg-green-50 text-green-600",
+            onClick: () => onActivate(group.group_id)
+          },
+          freeze: {
+            label: "Freeze",
+            icon: AcUnitRoundedIcon,
+            className: "bg-sky-50 text-sky-600",
+            onClick: () => onFreeze(group.group_id)
+          },
+          inactive: {
+            label: "Inactive",
+            icon: DeleteOutlineRoundedIcon,
+            className: "bg-red-50 text-red-600",
+            onClick: () => onDelete(group.group_id)
+          }
+        };
+        const lifecycleActionKeys = getGroupLifecycleActionKeys(group.status);
 
         return (
           <article
@@ -64,6 +84,16 @@ export default function GroupManagementMobileCards({
               </span>
             </div>
 
+            <div className="flex items-start justify-between border-t border-slate-100 py-2 text-xs">
+              <span className="text-slate-500">Leader</span>
+              <div className="text-right">
+                <div className="font-bold text-slate-900">{group.leader_name || "-"}</div>
+                <div className="font-mono text-[10px] text-slate-400">
+                  {group.leader_roll_number || "No roll number"}
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between border-t border-slate-100 py-2 text-xs">
               <span className="text-slate-500">Points</span>
               <span className="font-bold text-slate-900">{formatGroupPoints(group)}</span>
@@ -88,34 +118,22 @@ export default function GroupManagementMobileCards({
                 <span className="text-[8px] font-bold uppercase">Edit</span>
               </button>
 
-              {canFreeze ? (
-                <button
-                  type="button"
-                  onClick={() => onFreeze(group.group_id)}
-                  className="flex flex-col items-center gap-1 rounded-lg bg-sky-50 p-2 text-sky-600"
-                >
-                  <AcUnitRoundedIcon sx={{ fontSize: 16 }} />
-                  <span className="text-[8px] font-bold uppercase">Freeze</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => onActivate(group.group_id)}
-                  className="flex flex-col items-center gap-1 rounded-lg bg-green-50 p-2 text-green-600"
-                >
-                  <PlayArrowRoundedIcon sx={{ fontSize: 16 }} />
-                  <span className="text-[8px] font-bold uppercase">Activate</span>
-                </button>
-              )}
+              {lifecycleActionKeys.map((actionKey) => {
+                const action = lifecycleActionMap[actionKey];
+                const Icon = action.icon;
 
-              <button
-                type="button"
-                onClick={() => onDelete(group.group_id)}
-                className="flex flex-col items-center gap-1 rounded-lg bg-red-50 p-2 text-red-600"
-              >
-                <DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />
-                <span className="text-[8px] font-bold uppercase">Inactive</span>
-              </button>
+                return (
+                  <button
+                    key={actionKey}
+                    type="button"
+                    onClick={action.onClick}
+                    className={`flex flex-col items-center gap-1 rounded-lg p-2 ${action.className}`}
+                  >
+                    <Icon sx={{ fontSize: 16 }} />
+                    <span className="text-[8px] font-bold uppercase">{action.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </article>
         );

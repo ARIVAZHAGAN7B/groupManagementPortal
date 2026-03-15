@@ -668,6 +668,16 @@ const getGroupLeaderboard = async (limit = 30, filters = {}, executor) => {
     values.push(String(filters.tier).toUpperCase());
   }
 
+  const excludedStatuses = Array.isArray(filters?.exclude_statuses)
+    ? filters.exclude_statuses
+        .map((status) => String(status || "").trim().toUpperCase())
+        .filter(Boolean)
+    : [];
+  if (excludedStatuses.length > 0) {
+    clauses.push(`UPPER(g.status) NOT IN (${excludedStatuses.map(() => "?").join(", ")})`);
+    values.push(...excludedStatuses);
+  }
+
   const [rows] = await getExecutor(executor).query(
     `SELECT
        g.group_id,
@@ -712,6 +722,16 @@ const getGroupLeaderboardByPhase = async (startAt, endAt, limit = 30, filters = 
   if (filters?.tier) {
     clauses.push("g.tier = ?");
     values.push(String(filters.tier).toUpperCase());
+  }
+
+  const excludedStatuses = Array.isArray(filters?.exclude_statuses)
+    ? filters.exclude_statuses
+        .map((status) => String(status || "").trim().toUpperCase())
+        .filter(Boolean)
+    : [];
+  if (excludedStatuses.length > 0) {
+    clauses.push(`UPPER(g.status) NOT IN (${excludedStatuses.map(() => "?").join(", ")})`);
+    values.push(...excludedStatuses);
   }
 
   const [rows] = await getExecutor(executor).query(

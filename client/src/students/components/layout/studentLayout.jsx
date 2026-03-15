@@ -14,8 +14,8 @@ const StudentLayout = ({ children }) => {
   }, [location.pathname]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50">
-      <header className="sticky top-0 z-50 h-16 w-full border-b border-slate-200 bg-white">
+    <div className="flex h-screen flex-col overflow-hidden bg-slate-50">
+      <header className="z-50 h-16 w-full shrink-0 border-b border-slate-200 bg-white">
         <div className="flex h-full items-center px-4 lg:px-8">
           <StudentHeader onMenuClick={() => setMobileMenuOpen(true)} />
         </div>
@@ -37,16 +37,14 @@ const StudentLayout = ({ children }) => {
           }`}
           style={{ width: SIDEBAR_W }}
         >
-          <div className="h-full overflow-y-auto">
+          <div className="h-full overflow-y-auto scrollbar-hidden">
             <SideBar onNavigate={() => setMobileMenuOpen(false)} />
           </div>
         </aside>
 
-        <main className="flex-1 min-w-0 overflow-y-auto bg-slate-50 p-4 lg:p-8">
-          <div className="mx-auto w-full max-w-7xl">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:p-6">
-              {children}
-            </div>
+        <main className="flex-1 min-w-0 overflow-y-auto bg-slate-50">
+          <div className="min-h-full w-full">
+            {children}
           </div>
         </main>
       </div>

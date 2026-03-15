@@ -19,7 +19,22 @@ const validateRole = (req, res, next) => {
   next();
 };
 
+const validateRemoveMembership = (req, res, next) => {
+  const reason = String(req.body?.reason || "").trim();
+
+  if (!reason) {
+    return res.status(400).json({ message: "Removal reason is required" });
+  }
+
+  if (reason.length > 500) {
+    return res.status(400).json({ message: "Removal reason must be 500 characters or fewer" });
+  }
+
+  next();
+};
+
 module.exports = {
   validateJoin,
-  validateRole
+  validateRole,
+  validateRemoveMembership
 };

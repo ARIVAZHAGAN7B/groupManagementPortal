@@ -137,7 +137,8 @@ const getAllMemberships = async (_req, res) => {
 const adminLeaveMembership = async (req, res) => {
   try {
     const { membershipId } = req.params;
-    const result = await service.removeMembershipService(membershipId, req.user);
+    const reason = String(req.body?.reason || "").trim();
+    const result = await service.removeMembershipService(membershipId, req.user, reason);
 
     await auditService.logActionSafe({
       req,
@@ -145,7 +146,11 @@ const adminLeaveMembership = async (req, res) => {
       action: "MEMBERSHIP_REMOVED",
       entityType: "MEMBERSHIP",
       entityId: membershipId,
-      details: result
+      reasonCode: "GROUP_MEMBER_REMOVAL",
+      details: {
+        ...result,
+        removal_reason: reason
+      }
     });
 
     res.json({

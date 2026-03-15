@@ -11,7 +11,7 @@ import GroupManagementDesktopTable from "../../components/groups/GroupManagement
 import GroupManagementFilters from "../../components/groups/GroupManagementFilters";
 import GroupManagementHero from "../../components/groups/GroupManagementHero";
 import GroupManagementMobileCards from "../../components/groups/GroupManagementMobileCards";
-import GroupManagementStatsGrid from "../../components/groups/GroupManagementStatsGrid";
+import { GROUP_TIER_OPTIONS } from "../../components/groups/groupManagement.constants";
 
 export default function GroupManagementPage() {
   const nav = useNavigate();
@@ -53,17 +53,7 @@ export default function GroupManagementPage() {
     load();
   }, []);
 
-  const tierOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          (Array.isArray(groups) ? groups : [])
-            .map((group) => String(group?.tier || "").toUpperCase())
-            .filter(Boolean)
-        )
-      ).sort(),
-    [groups]
-  );
+  const tierOptions = GROUP_TIER_OPTIONS;
 
   const statusOptions = useMemo(
     () =>
@@ -182,12 +172,12 @@ export default function GroupManagementPage() {
     <>
       <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-5 font-[Inter] md:px-6">
       <GroupManagementHero
+        filteredCount={filtered.length}
         loading={loading}
         onCreate={() => nav("/groups/new")}
         onRefresh={load}
+        stats={stats}
       />
-
-      <GroupManagementStatsGrid stats={stats} />
 
       <GroupManagementFilters
         filteredCount={filtered.length}

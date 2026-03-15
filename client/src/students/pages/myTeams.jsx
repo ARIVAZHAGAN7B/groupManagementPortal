@@ -1,22 +1,42 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import AllGroupsBadge from "../components/allGroups/AllGroupsBadge";
+import {
+  TeamDesktopTableShell,
+  TeamTableFilterPanel,
+  TeamTableHeaderFilterButton,
+  TeamTableSearchField,
+  TeamTableSelectField
+} from "../components/teams/TeamDesktopTableControls";
+import TeamPageDetailTile from "../components/teams/TeamPageDetailTile";
+import TeamPageFilters from "../components/teams/TeamPageFilters";
+import TeamPageHero from "../components/teams/TeamPageHero";
 import { fetchMyEventGroupMemberships } from "../../service/teams.api";
+import {
+  formatLabel,
+  formatShortDate,
+  getUniqueCount,
+  normalizeValue
+} from "../components/teams/teamPage.utils";
 
-const formatDateTime = (value) => {
-  if (!value) return "-";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toISOString().split("T")[0];
-};
+const inputClassName =
+  "w-full rounded-2xl border border-slate-300 bg-[#f3f4f6] px-4 py-3 text-sm font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#1754cf]/35 focus:ring-2 focus:ring-[#1754cf]/10";
+
+const selectClassName =
+  "w-full rounded-2xl border border-slate-300 bg-[#f3f4f6] px-4 py-3 text-sm font-medium text-slate-700 outline-none transition focus:border-[#1754cf]/35 focus:ring-2 focus:ring-[#1754cf]/10";
 
 export default function MyTeamsPage() {
   const [rows, setRows] = useState([]);
   const [studentId, setStudentId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("ALL");
+  const [eventStatusFilter, setEventStatusFilter] = useState("ALL");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError("");
+
     try {
       const data = await fetchMyEventGroupMemberships({ status: "ACTIVE" });
       setStudentId(data?.student_id || null);
@@ -28,128 +48,425 @@ export default function MyTeamsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const roleCounts = useMemo(() => {
-    return rows.reduce((acc, row) => {
-      const key = String(row.role || "MEMBER").toUpperCase();
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
+    return rows.reduce((accumulator, row) => {
+      const key = normalizeValue(row.role) || "MEMBER";
+      accumulator[key] = (accumulator[key] || 0) + 1;
+      return accumulator;
     }, {});
   }, [rows]);
 
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">My Event Groups</h1>
-          <p className="text-sm text-gray-600">
-            Active event group memberships linked to your student account.
-          </p>
-          {studentId ? (
-            <p className="text-xs text-gray-500 mt-1">Student ID: {studentId}</p>
-          ) : null}
-        </div>
-        <button onClick={load} className="px-3 py-2 rounded border" disabled={loading}>
-          {loading ? "Loading..." : "Refresh"}
-        </button>
-      </div>
+  const uniqueEventCount = useMemo(
+    () => getUniqueCount(rows, (row) => row.event_id || row.event_name),
+    [rows]
+  );
 
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-        <div className="p-3 rounded border bg-gray-50">
-          <div className="text-xs uppercase tracking-wide font-semibold text-gray-500">
-            Active Memberships
-          </div>
-          <div className="text-lg font-semibold">{rows.length}</div>
-        </div>
-        <div className="p-3 rounded border bg-gray-50">
-          <div className="text-xs uppercase tracking-wide font-semibold text-gray-500">CAPTAIN</div>
-          <div className="text-lg font-semibold">{roleCounts.CAPTAIN || 0}</div>
-        </div>
-        <div className="p-3 rounded border bg-gray-50">
-          <div className="text-xs uppercase tracking-wide font-semibold text-gray-500">
-            VICE_CAPTAIN
-          </div>
-          <div className="text-lg font-semibold">{roleCounts.VICE_CAPTAIN || 0}</div>
-        </div>
-        <div className="p-3 rounded border bg-gray-50">
-          <div className="text-xs uppercase tracking-wide font-semibold text-gray-500">
-            MEMBER
-          </div>
-          <div className="text-lg font-semibold">{roleCounts.MEMBER || 0}</div>
-        </div>
-      </div>
+  const leadershipCount = useMemo(
+    () =>
+      rows.filter((row) => ["CAPTAIN", "VICE_CAPTAIN"].includes(normalizeValue(row.role))).length,
+    [rows]
+  );
+
+  const lastJoinedLabel = useMemo(() => {
+    const timestamps = rows
+      .map((row) => new Date(row.join_date).getTime())
+      .filter((value) => Number.isFinite(value));
+
+    if (timestamps.length === 0) return "No join date";
+    return formatShortDate(new Date(Math.max(...timestamps)));
+  }, [rows]);
+
+  const roleOptions = useMemo(() => {
+    return ["ALL", ...new Set(rows.map((row) => normalizeValue(row.role)).filter(Boolean))];
+  }, [rows]);
+
+  const eventStatusOptions = useMemo(() => {
+    return [
+      "ALL",
+      ...new Set(rows.map((row) => normalizeValue(row.event_status)).filter(Boolean))
+    ];
+  }, [rows]);
+
+  const filteredRows = useMemo(() => {
+    const normalizedQuery = String(query || "").trim().toLowerCase();
+
+    return rows.filter((row) => {
+      const matchesQuery =
+        !normalizedQuery ||
+        [
+          row.event_name,
+          row.event_code,
+          row.team_name,
+          row.team_code,
+          row.team_type,
+          row.team_status,
+          row.event_status,
+          row.role,
+          row.status,
+          row.notes
+        ]
+          .map((value) => String(value || "").toLowerCase())
+          .join(" ")
+          .includes(normalizedQuery);
+
+      const matchesRole = roleFilter === "ALL" || normalizeValue(row.role) === roleFilter;
+      const matchesEventStatus =
+        eventStatusFilter === "ALL" || normalizeValue(row.event_status) === eventStatusFilter;
+
+      return matchesQuery && matchesRole && matchesEventStatus;
+    });
+  }, [eventStatusFilter, query, roleFilter, rows]);
+
+  const activeFilters = useMemo(() => {
+    const items = [];
+
+    if (String(query || "").trim()) {
+      items.push(`Search: ${String(query).trim()}`);
+    }
+    if (roleFilter !== "ALL") {
+      items.push(`Role: ${formatLabel(roleFilter)}`);
+    }
+    if (eventStatusFilter !== "ALL") {
+      items.push(`Event Status: ${formatLabel(eventStatusFilter)}`);
+    }
+
+    return items;
+  }, [eventStatusFilter, query, roleFilter]);
+
+  const resetFilters = useCallback(() => {
+    setQuery("");
+    setRoleFilter("ALL");
+    setEventStatusFilter("ALL");
+  }, []);
+  const headerSummary =
+    filteredRows.length !== rows.length
+      ? `Showing ${filteredRows.length} of ${rows.length} memberships`
+      : `${rows.length} active membership${rows.length === 1 ? "" : "s"}`;
+
+  return (
+    <div className="max-w-screen-2xl space-y-3 p-4 md:p-5">
+      <TeamPageHero
+        loading={loading}
+        onRefresh={load}
+        eyebrow="Membership Overview"
+        title="My Event Groups"
+        summary={headerSummary}
+        actionLabel="Refresh memberships"
+        actionBusyLabel="Refreshing..."
+        stats={[
+          {
+            accentClass: "bg-[#1754cf]",
+            detail: "Event groups you currently belong to",
+            label: "Active Memberships",
+            value: rows.length
+          },
+          {
+            accentClass: "bg-emerald-500",
+            detail: "Unique events connected to your memberships",
+            label: "Events Joined",
+            value: uniqueEventCount
+          },
+          {
+            accentClass: "bg-sky-500",
+            detail: `${roleCounts.CAPTAIN || 0} captain and ${roleCounts.VICE_CAPTAIN || 0} vice-captain roles`,
+            label: "Leadership Roles",
+            value: leadershipCount
+          },
+          {
+            accentClass: "bg-slate-400",
+            detail: studentId ? `Student ID ${studentId}` : "Membership activity timeline",
+            label: "Latest Join Date",
+            value: lastJoinedLabel
+          }
+        ]}
+      />
 
       {error ? (
-        <div className="p-3 rounded border border-red-300 bg-red-50 text-red-700">{error}</div>
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          {error}
+        </div>
       ) : null}
 
-      {loading ? (
-        <div className="p-3 border rounded">Loading my event groups...</div>
-      ) : (
-        <div className="overflow-auto border rounded">
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:hidden">
+        <TeamPageFilters
+          className="lg:hidden"
+          activeFilters={activeFilters}
+          canReset={activeFilters.length > 0}
+          itemLabel="memberships"
+          onReset={resetFilters}
+          panelTitle="Filter Memberships"
+          resultCount={filteredRows.length}
+          totalCount={rows.length}
+          withDivider
+        >
+          <label className="block">
+            <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Search
+            </span>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search by event, group, role, or notes"
+              className={inputClassName}
+            />
+          </label>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Role
+              </span>
+              <select
+                value={roleFilter}
+                onChange={(event) => setRoleFilter(event.target.value)}
+                className={selectClassName}
+              >
+                <option value="ALL">All roles</option>
+                {roleOptions
+                  .filter((option) => option !== "ALL")
+                  .map((option) => (
+                    <option key={option} value={option}>
+                      {formatLabel(option)}
+                    </option>
+                  ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Event Status
+              </span>
+              <select
+                value={eventStatusFilter}
+                onChange={(event) => setEventStatusFilter(event.target.value)}
+                className={selectClassName}
+              >
+                <option value="ALL">All event statuses</option>
+                {eventStatusOptions
+                  .filter((option) => option !== "ALL")
+                  .map((option) => (
+                    <option key={option} value={option}>
+                      {formatLabel(option)}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          </div>
+        </TeamPageFilters>
+
+        {loading ? (
+          <div className="px-4 py-12 text-center text-sm text-slate-500">
+            Loading memberships...
+          </div>
+        ) : filteredRows.length === 0 ? (
+          <div className="px-4 py-12 text-center text-sm text-slate-500">
+            No memberships found for the current filters.
+          </div>
+        ) : (
+          <>
+            <div className="space-y-3 p-4 lg:hidden">
+              {filteredRows.map((row) => (
+                <article
+                  key={row.team_membership_id || `${row.team_id}-${row.event_id}-${row.join_date}`}
+                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="truncate text-base font-bold text-slate-900">
+                        {row.team_name || "-"}
+                      </h2>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {row.event_name || "No event"}
+                      </p>
+                    </div>
+                    <AllGroupsBadge value={formatLabel(row.role, "Member")} />
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <AllGroupsBadge value={formatLabel(row.status, "Unknown")} />
+                    <AllGroupsBadge value={formatLabel(row.team_status, "Unknown")} />
+                    <AllGroupsBadge value={formatLabel(row.event_status, "Unknown")} />
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <TeamPageDetailTile
+                      label="Joined"
+                      value={formatShortDate(row.join_date)}
+                    />
+                    <TeamPageDetailTile
+                      label="Type"
+                      value={formatLabel(row.team_type, "Unknown")}
+                    />
+                  </div>
+
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      Notes
+                    </div>
+                    <p className="mt-1 text-sm leading-6 text-slate-600">
+                      {row.notes || "No notes added for this membership."}
+                    </p>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+          </>
+        )}
+      </section>
+
+      <TeamDesktopTableShell canReset={activeFilters.length > 0} onReset={resetFilters}>
+        <div className="overflow-x-auto overflow-y-visible rounded-2xl">
           <table className="min-w-[1100px] w-full text-sm">
-            <thead className="bg-gray-50">
+            <thead className="bg-slate-50 text-slate-600">
               <tr>
-                {/* <th className="text-left p-3 border-b">Membership ID</th> */}
-                <th className="text-left p-3 border-b">Event</th>
-                <th className="text-left p-3 border-b">Event Group</th>
-                <th className="text-left p-3 border-b">Type</th>
-                <th className="text-left p-3 border-b">Event Group Status</th>
-                <th className="text-left p-3 border-b">Event Status</th>
-                <th className="text-left p-3 border-b">My Role</th>
-                <th className="text-left p-3 border-b">Membership Status</th>
-                <th className="text-left p-3 border-b">Join Date</th>
-                <th className="text-left p-3 border-b">Notes</th>
+                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+                  <TeamTableHeaderFilterButton
+                    active={String(query || "").trim().length > 0}
+                    label="Event"
+                    panelWidthClass="w-80"
+                  >
+                    <TeamTableFilterPanel
+                      title="Membership Search"
+                      currentText={String(query || "").trim() || "All memberships"}
+                      helperText="Search by event, group, role, status, or notes."
+                    >
+                      <TeamTableSearchField
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                        placeholder="Event, group, role, or notes"
+                      />
+                    </TeamTableFilterPanel>
+                  </TeamTableHeaderFilterButton>
+                </th>
+                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Group</th>
+                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+                  <TeamTableHeaderFilterButton active={roleFilter !== "ALL"} label="Role">
+                    <TeamTableFilterPanel
+                      title="Role Filter"
+                      currentText={roleFilter === "ALL" ? "All roles" : formatLabel(roleFilter)}
+                      helperText="Limit the table to a specific role assignment."
+                    >
+                      <TeamTableSelectField
+                        value={roleFilter}
+                        onChange={(event) => setRoleFilter(event.target.value)}
+                      >
+                        <option value="ALL">All roles</option>
+                        {roleOptions
+                          .filter((option) => option !== "ALL")
+                          .map((option) => (
+                            <option key={option} value={option}>
+                              {formatLabel(option)}
+                            </option>
+                          ))}
+                      </TeamTableSelectField>
+                    </TeamTableFilterPanel>
+                  </TeamTableHeaderFilterButton>
+                </th>
+                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+                  Membership
+                </th>
+                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+                  Group Status
+                </th>
+                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+                  <TeamTableHeaderFilterButton
+                    active={eventStatusFilter !== "ALL"}
+                    label="Event Status"
+                  >
+                    <TeamTableFilterPanel
+                      title="Event Status Filter"
+                      currentText={
+                        eventStatusFilter === "ALL"
+                          ? "All event statuses"
+                          : formatLabel(eventStatusFilter)
+                      }
+                      helperText="Show only memberships tied to events in a selected status."
+                    >
+                      <TeamTableSelectField
+                        value={eventStatusFilter}
+                        onChange={(event) => setEventStatusFilter(event.target.value)}
+                      >
+                        <option value="ALL">All event statuses</option>
+                        {eventStatusOptions
+                          .filter((option) => option !== "ALL")
+                          .map((option) => (
+                            <option key={option} value={option}>
+                              {formatLabel(option)}
+                            </option>
+                          ))}
+                      </TeamTableSelectField>
+                    </TeamTableFilterPanel>
+                  </TeamTableHeaderFilterButton>
+                </th>
+                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Joined</th>
+                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Notes</th>
               </tr>
             </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.team_membership_id} className="hover:bg-gray-50">
-                  {/* <td className="p-3 border-b">{row.team_membership_id}</td> */}
-                  <td className="p-3 border-b">
-                    {row.event_id ? (
-                      <div>
-                        <div className="font-medium">{row.event_name || "-"}</div>
-                        {/* <div className="text-xs text-gray-500">
-                          {row.event_code || "-"} | ID: {row.event_id}
-                        </div> */}
-                      </div>
-                    ) : (
-                      <span className="text-gray-500">No event</span>
-                    )}
-                  </td>
-                  <td className="p-3 border-b">
-                    <div className="font-medium">{row.team_name || "-"}</div>
-                    {/* <div className="text-xs text-gray-500">
-                      {row.team_code || "-"} | ID: {row.team_id}
-                    </div> */}
-                  </td>
-                  <td className="p-3 border-b">{row.team_type || "-"}</td>
-                  <td className="p-3 border-b">{row.team_status || "-"}</td>
-                  <td className="p-3 border-b">{row.event_status || "-"}</td>
-                  <td className="p-3 border-b">{row.role || "-"}</td>
-                  <td className="p-3 border-b">{row.status || "-"}</td>
-                  <td className="p-3 border-b">{formatDateTime(row.join_date)}</td>
-                  <td className="p-3 border-b">{row.notes || "-"}</td>
-                </tr>
-              ))}
-
-              {rows.length === 0 ? (
+            <tbody className="divide-y divide-slate-200 bg-white">
+              {loading ? (
                 <tr>
-                  <td className="p-3 text-gray-500" colSpan={10}>
-                    No active event group memberships found.
+                  <td className="px-4 py-12 text-center text-sm text-slate-500" colSpan={8}>
+                    Loading memberships...
                   </td>
                 </tr>
-              ) : null}
+              ) : filteredRows.length === 0 ? (
+                <tr>
+                  <td className="px-4 py-12 text-center text-sm text-slate-500" colSpan={8}>
+                    No memberships found for the current filters.
+                  </td>
+                </tr>
+              ) : (
+                filteredRows.map((row) => (
+                  <tr
+                    key={row.team_membership_id || `${row.team_id}-${row.event_id}-${row.join_date}`}
+                    className="hover:bg-slate-50/80"
+                  >
+                    <td className="px-4 py-3">
+                      <div className="font-semibold text-slate-900">{row.event_name || "-"}</div>
+                      <div className="mt-0.5 text-xs text-slate-500">
+                        {row.event_code || "No code"}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="font-semibold text-slate-900">{row.team_name || "-"}</div>
+                      <div className="mt-0.5 text-xs text-slate-500">
+                        {formatLabel(row.team_type, "Unknown")}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <AllGroupsBadge value={formatLabel(row.role, "Member")} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <AllGroupsBadge value={formatLabel(row.status, "Unknown")} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <AllGroupsBadge value={formatLabel(row.team_status, "Unknown")} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <AllGroupsBadge value={formatLabel(row.event_status, "Unknown")} />
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">
+                      {formatShortDate(row.join_date)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="max-w-sm leading-6 text-slate-600">
+                        {row.notes || "No notes added for this membership."}
+                      </p>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
-      )}
+      </TeamDesktopTableShell>
     </div>
   );
 }

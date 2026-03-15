@@ -1,5 +1,24 @@
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
+import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import { inputClass } from "./groupManagement.constants";
+
+function FilterSelect({ children, onChange, value }) {
+  return (
+    <div className="relative min-w-32">
+      <select
+        value={value}
+        onChange={onChange}
+        className={`${inputClass} min-w-32 appearance-none pr-10`}
+      >
+        {children}
+      </select>
+
+      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">
+        <KeyboardArrowDownRoundedIcon sx={{ fontSize: 20 }} />
+      </span>
+    </div>
+  );
+}
 
 export default function GroupManagementFilters({
   filteredCount,
@@ -29,10 +48,9 @@ export default function GroupManagementFilters({
       </div>
 
       <div className="flex w-full items-center gap-3 md:w-auto">
-        <select
+        <FilterSelect
           value={tierFilter}
           onChange={(e) => setTierFilter(e.target.value)}
-          className={`${inputClass} min-w-32`}
         >
           <option value="ALL">All Tiers</option>
           {tierOptions.map((tier) => (
@@ -40,12 +58,11 @@ export default function GroupManagementFilters({
               Tier {tier}
             </option>
           ))}
-        </select>
+        </FilterSelect>
 
-        <select
+        <FilterSelect
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className={`${inputClass} min-w-32`}
         >
           <option value="ALL">All Status</option>
           {statusOptions.map((status) => (
@@ -53,7 +70,7 @@ export default function GroupManagementFilters({
               {status}
             </option>
           ))}
-        </select>
+        </FilterSelect>
 
         <p className="hidden whitespace-nowrap text-xs font-medium text-slate-500 lg:block">
           Showing {filteredCount} of {statsTotal}

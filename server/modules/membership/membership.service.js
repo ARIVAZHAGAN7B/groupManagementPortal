@@ -334,9 +334,14 @@ const adminLeaveMembershipService = async (membershipId) => {
   };
 };
 
-const removeMembershipService = async (membershipId, actorUser) => {
+const removeMembershipService = async (membershipId, actorUser, removalReason) => {
   const membership = await repo.getMembershipById(membershipId);
   if (!membership) throw new Error("Membership not found");
+
+  const normalizedReason = String(removalReason || "").trim();
+  if (!normalizedReason) {
+    throw new Error("Removal reason is required");
+  }
 
   if (membership.status !== "ACTIVE") {
     throw new Error("Membership is already left");
@@ -384,7 +389,8 @@ const removeMembershipService = async (membershipId, actorUser) => {
     student_id: membership.student_id,
     group_id: membership.group_id,
     membership_status: "LEFT",
-    group_status: leaveResult.status
+    group_status: leaveResult.status,
+    removal_reason: normalizedReason
   };
 };
 

@@ -1,7 +1,7 @@
 import { api } from "../lib/api";
 
-export async function fetchGroups() {
-  const { data } = await api.get("/api/groups");
+export async function fetchGroups(params = {}) {
+  const { data } = await api.get("/api/groups", { params });
   return data;
 }
 

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import { API_BASE_URL } from "../../lib/api";
 
 const LoginPage = ({ onLogin }) => {
   const navigate = useNavigate();
@@ -14,15 +15,15 @@ const LoginPage = ({ onLogin }) => {
 
     try {
       const response = await axios.post(
-        "http://localhost:5000/api/auth/login",
+        `${API_BASE_URL}/api/auth/login`,
         { email, password },
         { withCredentials: true }
       );
 
-      const { role, userId } = response.data;
+      const { role, userId, name, sessionExpiresAt } = response.data;
 
       // update App's user state
-      onLogin({ userId, role });
+      onLogin({ userId, role, name, sessionExpiresAt });
 
       // navigate to role dashboard
       if (role === "ADMIN") {

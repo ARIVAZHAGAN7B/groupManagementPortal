@@ -27,7 +27,47 @@ exports.getAllGroups = async () => {
         SELECT COALESCE(SUM(gp.points), 0)
         FROM group_points gp
         WHERE gp.group_id = g.group_id
-      ) AS total_points
+      ) AS total_points,
+      (
+        SELECT s.name
+        FROM memberships m
+        INNER JOIN students s ON s.student_id = m.student_id
+        WHERE m.group_id = g.group_id
+          AND m.status = 'ACTIVE'
+          AND m.role = 'CAPTAIN'
+        ORDER BY m.membership_id ASC
+        LIMIT 1
+      ) AS leader_name,
+      (
+        SELECT s.student_id
+        FROM memberships m
+        INNER JOIN students s ON s.student_id = m.student_id
+        WHERE m.group_id = g.group_id
+          AND m.status = 'ACTIVE'
+          AND m.role = 'CAPTAIN'
+        ORDER BY m.membership_id ASC
+        LIMIT 1
+      ) AS leader_roll_number,
+      (
+        SELECT COALESCE(bph.total_base_points, bp.total_base_points, 0)
+        FROM memberships m
+        INNER JOIN students s ON s.student_id = m.student_id
+        LEFT JOIN base_points bp
+          ON bp.student_id = s.student_id
+        LEFT JOIN (
+          SELECT
+            h.student_id,
+            COALESCE(SUM(h.points), 0) AS total_base_points
+          FROM base_point_history h
+          GROUP BY h.student_id
+        ) bph
+          ON bph.student_id = s.student_id
+        WHERE m.group_id = g.group_id
+          AND m.status = 'ACTIVE'
+          AND m.role = 'CAPTAIN'
+        ORDER BY m.membership_id ASC
+        LIMIT 1
+      ) AS captain_points
     FROM Sgroup g
     ORDER BY g.group_id ASC
   `);
@@ -47,7 +87,47 @@ exports.getGroupById = async (id) => {
          SELECT COALESCE(SUM(gp.points), 0)
          FROM group_points gp
          WHERE gp.group_id = g.group_id
-       ) AS total_points
+       ) AS total_points,
+       (
+         SELECT s.name
+         FROM memberships m
+         INNER JOIN students s ON s.student_id = m.student_id
+         WHERE m.group_id = g.group_id
+           AND m.status = 'ACTIVE'
+           AND m.role = 'CAPTAIN'
+         ORDER BY m.membership_id ASC
+         LIMIT 1
+       ) AS leader_name,
+       (
+         SELECT s.student_id
+         FROM memberships m
+         INNER JOIN students s ON s.student_id = m.student_id
+         WHERE m.group_id = g.group_id
+           AND m.status = 'ACTIVE'
+           AND m.role = 'CAPTAIN'
+         ORDER BY m.membership_id ASC
+         LIMIT 1
+       ) AS leader_roll_number,
+       (
+         SELECT COALESCE(bph.total_base_points, bp.total_base_points, 0)
+         FROM memberships m
+         INNER JOIN students s ON s.student_id = m.student_id
+         LEFT JOIN base_points bp
+           ON bp.student_id = s.student_id
+         LEFT JOIN (
+           SELECT
+             h.student_id,
+             COALESCE(SUM(h.points), 0) AS total_base_points
+           FROM base_point_history h
+           GROUP BY h.student_id
+         ) bph
+           ON bph.student_id = s.student_id
+         WHERE m.group_id = g.group_id
+           AND m.status = 'ACTIVE'
+           AND m.role = 'CAPTAIN'
+         ORDER BY m.membership_id ASC
+         LIMIT 1
+       ) AS captain_points
      FROM Sgroup g
      WHERE g.group_id = ?`,
     [id]

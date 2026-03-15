@@ -5,6 +5,8 @@ export const TIER_BADGE_STYLES = {
   D: "bg-violet-100 text-violet-600"
 };
 
+export const GROUP_TIER_OPTIONS = ["A", "B", "C", "D"];
+
 export const STATUS_BADGE_STYLES = {
   ACTIVE: {
     dot: "bg-green-600",
@@ -31,6 +33,20 @@ export const getTierBadgeClass = (tier) =>
 
 export const getStatusConfig = (status) =>
   STATUS_BADGE_STYLES[String(status || "").toUpperCase()] || STATUS_BADGE_STYLES.INACTIVE;
+
+export const getGroupLifecycleActionKeys = (status) => {
+  const normalizedStatus = String(status || "").toUpperCase();
+
+  if (normalizedStatus === "ACTIVE") {
+    return ["freeze", "inactive"];
+  }
+
+  if (normalizedStatus === "INACTIVE") {
+    return ["activate", "freeze"];
+  }
+
+  return ["activate", "inactive"];
+};
 
 export const getRatioPercent = (value, total) => {
   const safeTotal = Number(total) || 0;

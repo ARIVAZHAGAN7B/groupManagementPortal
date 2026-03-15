@@ -61,6 +61,7 @@ router.delete(
   "/:membershipId",
   authenticate,
   authorize("ADMIN", "SYSTEM_ADMIN", "CAPTAIN"),
+  validation.validateRemoveMembership,
   controller.adminLeaveMembership
 );
 

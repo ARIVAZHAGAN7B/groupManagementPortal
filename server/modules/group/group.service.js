@@ -9,6 +9,19 @@ const toEligibilityStatus = (value) => {
   return "NOT_EVALUATED";
 };
 
+const toExcludedStatusSet = (value) => {
+  if (value === undefined || value === null || value === "") return new Set();
+
+  const values = Array.isArray(value)
+    ? value
+    : String(value)
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+  return new Set(values.map((item) => String(item).toUpperCase()));
+};
+
 const addDiscoveryFields = (group, policy, options = {}) => {
   if (!group) return group;
 
@@ -32,6 +45,11 @@ const addDiscoveryFields = (group, policy, options = {}) => {
   return {
     ...group,
     active_member_count: activeMemberCount,
+    captain_name: group.captain_name || group.leader_name || null,
+    captain_points:
+      group.captain_points === undefined || group.captain_points === null
+        ? null
+        : Number(group.captain_points),
     total_points: Number.isNaN(totalPoints) ? 0 : totalPoints,
     vacancies,
     accepting_applications: acceptingApplications,
@@ -52,12 +70,13 @@ exports.createGroup = async (groupData) => {
   });
 };
 
-exports.getGroups = async () => {
+exports.getGroups = async (options = {}) => {
   const [groups, policy, currentPhase] = await Promise.all([
     groupRepo.getAllGroups(),
     systemConfigService.getOperationalPolicy(),
     phaseRepo.getCurrentPhase().catch(() => null)
   ]);
+  const excludedStatuses = toExcludedStatusSet(options.exclude_status);
 
   let eligibilityByGroupId = new Map();
   if (currentPhase?.phase_id) {
@@ -72,13 +91,15 @@ exports.getGroups = async () => {
     );
   }
 
-  return (groups || []).map((group) =>
-    addDiscoveryFields(group, policy, {
-      currentPhaseId: currentPhase?.phase_id || null,
-      eligibilityStatus:
-        eligibilityByGroupId.get(String(group.group_id)) || "NOT_EVALUATED"
-    })
-  );
+  return (groups || [])
+    .filter((group) => !excludedStatuses.has(String(group?.status || "").toUpperCase()))
+    .map((group) =>
+      addDiscoveryFields(group, policy, {
+        currentPhaseId: currentPhase?.phase_id || null,
+        eligibilityStatus:
+          eligibilityByGroupId.get(String(group.group_id)) || "NOT_EVALUATED"
+      })
+    );
 };
 
 exports.getGroup = async (id) => {

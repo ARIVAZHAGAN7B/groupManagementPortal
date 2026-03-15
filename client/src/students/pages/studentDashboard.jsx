@@ -1,13 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
 import { useAuth } from "../../utils/AuthContext";
 import { fetchMyDashboardSummary } from "../../service/eligibility.api";
 import { getProfile } from "../../service/joinRequests.api";
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [profile, setProfile] = useState(null);
   const [summary, setSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
@@ -50,15 +49,9 @@ const StudentDashboard = () => {
 
   const handleLogout = async () => {
     try {
-      await axios.post(
-        "http://localhost:5000/api/auth/logout",
-        {},
-        { withCredentials: true }
-      );
+      await logout?.();
       // redirect to login page
       navigate("/login");
-      // optionally, you can also reload the page or reset user state
-      window.location.reload(); // ensures App state resets
     } catch (err) {
       console.error("Logout failed:", err);
       alert("Failed to logout. Please try again.");

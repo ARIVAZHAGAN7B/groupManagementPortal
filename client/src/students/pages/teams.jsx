@@ -1,37 +1,41 @@
-import { useEffect, useMemo, useState } from "react";
-import { fetchEvents } from "../../service/events.api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import AddCircleOutlineRoundedIcon from "@mui/icons-material/AddCircleOutlineRounded";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
+import AllGroupsBadge from "../components/allGroups/AllGroupsBadge";
+import {
+  TeamDesktopTableShell,
+  TeamTableFilterPanel,
+  TeamTableHeaderFilterButton,
+  TeamTableSearchField,
+  TeamTableSelectField
+} from "../components/teams/TeamDesktopTableControls";
+import TeamMembersPreviewModal from "../components/teams/TeamMembersPreviewModal";
+import TeamPageDetailTile from "../components/teams/TeamPageDetailTile";
+import TeamPageFilters from "../components/teams/TeamPageFilters";
+import TeamPageHero from "../components/teams/TeamPageHero";
 import {
   createEventGroup,
   fetchEventGroupMemberships,
   fetchEventGroupsByEvent,
   fetchMyEventGroupMemberships
 } from "../../service/teams.api";
+import { fetchEvents } from "../../service/events.api";
 import {
   applyEventJoinRequest,
   getMyEventJoinRequests
 } from "../../service/eventJoinRequests.api";
+import {
+  formatLabel,
+  formatMemberCount,
+  formatShortDate,
+  normalizeValue
+} from "../components/teams/teamPage.utils";
 
-const formatDate = (value) => {
-  if (!value) return "-";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleDateString();
-};
+const inputClassName =
+  "w-full rounded-2xl border border-slate-300 bg-[#f3f4f6] px-4 py-3 text-sm font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#1754cf]/35 focus:ring-2 focus:ring-[#1754cf]/10";
 
-const formatDateTime = (value) => {
-  if (!value) return "-";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toISOString().split("T")[0];
-};
-
-const statusColor = (status) => {
-  const s = String(status || "").toUpperCase();
-  if (s === "APPROVED") return "text-green-700";
-  if (s === "REJECTED") return "text-red-700";
-  if (s === "PENDING") return "text-amber-700";
-  return "text-gray-700";
-};
+const selectClassName =
+  "w-full rounded-2xl border border-slate-300 bg-[#f3f4f6] px-4 py-3 text-sm font-medium text-slate-700 outline-none transition focus:border-[#1754cf]/35 focus:ring-2 focus:ring-[#1754cf]/10";
 
 const EMPTY_TEAM_FORM = {
   team_code: "",
@@ -50,6 +54,8 @@ export default function TeamsPage() {
   const [savingTeam, setSavingTeam] = useState(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [requestStatusFilter, setRequestStatusFilter] = useState("ALL");
   const [busyTeamId, setBusyTeamId] = useState(null);
   const [teamForm, setTeamForm] = useState(EMPTY_TEAM_FORM);
   const [viewTeam, setViewTeam] = useState(null);
@@ -58,9 +64,10 @@ export default function TeamsPage() {
   const [viewMembersError, setViewMembersError] = useState("");
   const [viewBusyTeamId, setViewBusyTeamId] = useState(null);
 
-  const loadBase = async () => {
+  const loadBase = useCallback(async () => {
     setLoading(true);
     setError("");
+
     try {
       const [eventRows, myRes, requestRows] = await Promise.all([
         fetchEvents(),
@@ -74,14 +81,22 @@ export default function TeamsPage() {
       setMyRequests(Array.isArray(requestRows) ? requestRows : []);
 
       setSelectedEventId((prev) => {
-        if (prev && normalizedEvents.some((e) => String(e.event_id) === String(prev))) return prev;
-        const active = normalizedEvents.find(
-          (e) => String(e.status || "").toUpperCase() === "ACTIVE"
+        if (prev && normalizedEvents.some((event) => String(event.event_id) === String(prev))) {
+          return prev;
+        }
+
+        const activeEvent = normalizedEvents.find(
+          (event) => normalizeValue(event.status) === "ACTIVE"
         );
-        return active ? String(active.event_id) : normalizedEvents[0] ? String(normalizedEvents[0].event_id) : "";
+
+        return activeEvent
+          ? String(activeEvent.event_id)
+          : normalizedEvents[0]
+            ? String(normalizedEvents[0].event_id)
+            : "";
       });
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to load events/event groups data");
+      setError(err?.response?.data?.message || "Failed to load events and event groups");
       setEvents([]);
       setMyActiveMemberships([]);
       setMyRequests([]);
@@ -90,15 +105,17 @@ export default function TeamsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadTeamsForEvent = async (eventId) => {
+  const loadTeamsForEvent = useCallback(async (eventId) => {
     if (!eventId) {
       setTeams([]);
       return;
     }
+
     setLoadingTeams(true);
     setError("");
+
     try {
       const rows = await fetchEventGroupsByEvent(eventId);
       setTeams(Array.isArray(rows) ? rows : []);
@@ -108,25 +125,31 @@ export default function TeamsPage() {
     } finally {
       setLoadingTeams(false);
     }
-  };
-
-  useEffect(() => {
-    loadBase();
   }, []);
 
   useEffect(() => {
-    if (!selectedEventId) return;
+    loadBase();
+  }, [loadBase]);
+
+  useEffect(() => {
+    if (!selectedEventId) {
+      setTeams([]);
+      return;
+    }
+
     loadTeamsForEvent(selectedEventId);
-  }, [selectedEventId]);
+  }, [loadTeamsForEvent, selectedEventId]);
 
   const selectedEvent = useMemo(
-    () => events.find((e) => String(e.event_id) === String(selectedEventId)) || null,
+    () => events.find((event) => String(event.event_id) === String(selectedEventId)) || null,
     [events, selectedEventId]
   );
 
   const myActiveMembershipInSelectedEvent = useMemo(
     () =>
-      myActiveMemberships.find((m) => String(m.event_id || "") === String(selectedEventId)) || null,
+      myActiveMemberships.find(
+        (membership) => String(membership.event_id || "") === String(selectedEventId)
+      ) || null,
     [myActiveMemberships, selectedEventId]
   );
 
@@ -137,96 +160,239 @@ export default function TeamsPage() {
 
   const latestRequestByTeamId = useMemo(() => {
     const map = new Map();
+
     for (const row of myRequests) {
       const key = Number(row.team_id);
-      if (!Number.isFinite(key)) continue;
-      if (!map.has(key)) map.set(key, row);
+      if (!Number.isFinite(key) || map.has(key)) continue;
+      map.set(key, row);
     }
+
     return map;
   }, [myRequests]);
 
   const pendingRequestTeamIdSet = useMemo(() => {
     const set = new Set();
+
     for (const row of myRequests) {
-      if (String(row?.status || "").toUpperCase() === "PENDING") {
+      if (normalizeValue(row?.status) === "PENDING") {
         set.add(Number(row.team_id));
       }
     }
+
     return set;
   }, [myRequests]);
 
+  const pendingCountForSelectedEvent = useMemo(
+    () =>
+      myRequests.filter(
+        (request) =>
+          String(request?.event_id || "") === String(selectedEventId) &&
+          normalizeValue(request?.status) === "PENDING"
+      ).length,
+    [myRequests, selectedEventId]
+  );
+
   const filteredTeams = useMemo(() => {
-    const q = String(query || "").trim().toLowerCase();
-    if (!q) return teams;
+    const normalizedQuery = String(query || "").trim().toLowerCase();
+
     return teams.filter((team) => {
-      const latestReq = latestRequestByTeamId.get(Number(team.team_id));
-      const haystack = [
-        team.team_code,
-        team.team_name,
-        team.team_type,
-        team.status,
-        team.description,
-        latestReq?.status
-      ]
-        .map((v) => String(v ?? "").toLowerCase())
-        .join(" ");
-      return haystack.includes(q);
+      const latestRequest = latestRequestByTeamId.get(Number(team.team_id));
+      const requestStatus = myTeamIdSet.has(Number(team.team_id))
+        ? "ACTIVE_MEMBER"
+        : normalizeValue(latestRequest?.status) || "NO_REQUEST";
+
+      const matchesQuery =
+        !normalizedQuery ||
+        [
+          team.team_code,
+          team.team_name,
+          team.status,
+          team.description,
+          latestRequest?.status
+        ]
+          .map((value) => String(value || "").toLowerCase())
+          .join(" ")
+          .includes(normalizedQuery);
+
+      const matchesStatus =
+        statusFilter === "ALL" || normalizeValue(team.status) === statusFilter;
+      const matchesRequestStatus =
+        requestStatusFilter === "ALL" || requestStatus === requestStatusFilter;
+
+      return matchesQuery && matchesStatus && matchesRequestStatus;
     });
-  }, [teams, query, latestRequestByTeamId]);
+  }, [latestRequestByTeamId, myTeamIdSet, query, requestStatusFilter, statusFilter, teams]);
 
-  const onCreateTeam = async (e) => {
-    e.preventDefault();
-    if (!selectedEventId) return;
-    setSavingTeam(true);
-    setError("");
-    try {
-      const payload = {
-        team_code: String(teamForm.team_code || "").trim().toUpperCase(),
-        team_name: String(teamForm.team_name || "").trim(),
-        description: String(teamForm.description || "").trim()
-      };
-      if (!payload.team_code || !payload.team_name) {
-        throw new Error("Event group code and name are required");
+  const activeFilters = useMemo(() => {
+    const items = [];
+
+    if (String(query || "").trim()) {
+      items.push(`Search: ${String(query).trim()}`);
+    }
+    if (statusFilter !== "ALL") {
+      items.push(`Status: ${formatLabel(statusFilter)}`);
+    }
+    if (requestStatusFilter !== "ALL") {
+      items.push(`Request: ${formatLabel(requestStatusFilter)}`);
+    }
+
+    return items;
+  }, [query, requestStatusFilter, statusFilter]);
+
+  const canResetFilters = activeFilters.length > 0;
+  const selectedEventActive = normalizeValue(selectedEvent?.status) === "ACTIVE";
+  const activeEventCount = useMemo(
+    () => events.filter((event) => normalizeValue(event.status) === "ACTIVE").length,
+    [events]
+  );
+  const headerSummary = !selectedEvent
+    ? `${events.length} event${events.length === 1 ? "" : "s"} available`
+    : filteredTeams.length !== teams.length
+      ? `Showing ${filteredTeams.length} of ${teams.length} groups in ${selectedEvent.event_name || selectedEvent.event_code || "the selected event"}`
+      : `${teams.length} groups in ${selectedEvent.event_name || selectedEvent.event_code || "the selected event"}`;
+
+  const resetFilters = useCallback(() => {
+    setQuery("");
+    setStatusFilter("ALL");
+    setRequestStatusFilter("ALL");
+  }, []);
+
+  const onCreateTeam = useCallback(
+    async (event) => {
+      event.preventDefault();
+      if (!selectedEventId) return;
+
+      setSavingTeam(true);
+      setError("");
+
+      try {
+        const payload = {
+          team_code: String(teamForm.team_code || "").trim().toUpperCase(),
+          team_name: String(teamForm.team_name || "").trim(),
+          description: String(teamForm.description || "").trim()
+        };
+
+        if (!payload.team_code || !payload.team_name) {
+          throw new Error("Event group code and name are required");
+        }
+
+        await createEventGroup(selectedEventId, payload);
+        setTeamForm(EMPTY_TEAM_FORM);
+        await Promise.all([loadBase(), loadTeamsForEvent(selectedEventId)]);
+      } catch (err) {
+        setError(err?.response?.data?.message || err?.message || "Failed to create event group");
+      } finally {
+        setSavingTeam(false);
       }
-      await createEventGroup(selectedEventId, payload);
-      setTeamForm(EMPTY_TEAM_FORM);
-      await Promise.all([loadBase(), loadTeamsForEvent(selectedEventId)]);
-    } catch (err) {
-      setError(err?.response?.data?.message || err?.message || "Failed to create event group");
-    } finally {
-      setSavingTeam(false);
-    }
-  };
+    },
+    [loadBase, loadTeamsForEvent, selectedEventId, teamForm]
+  );
 
-  const onRequestJoin = async (team) => {
-    if (!team?.team_id) return;
-    const ok = window.confirm(
-      `Send join request to event group ${team.team_name || team.team_code}?`
-    );
-    if (!ok) return;
+  const resolveJoinAction = useCallback(
+    (team) => {
+      const teamId = Number(team?.team_id);
+      const isJoined = myTeamIdSet.has(teamId);
+      const hasPending = pendingRequestTeamIdSet.has(teamId);
+      const isActiveTeam = normalizeValue(team?.status) === "ACTIVE";
+      const isBusy = busyTeamId === teamId;
 
-    setBusyTeamId(team.team_id);
-    setError("");
-    try {
-      await applyEventJoinRequest(team.team_id);
-      await loadBase();
-      await loadTeamsForEvent(selectedEventId);
-    } catch (err) {
-      setError(err?.response?.data?.message || "Failed to send join request");
-    } finally {
-      setBusyTeamId(null);
-    }
-  };
+      if (isBusy) {
+        return {
+          disabled: true,
+          label: "Sending...",
+          title: "Sending join request"
+        };
+      }
 
-  const closeViewMembers = () => {
+      if (myActiveMembershipInSelectedEvent) {
+        return {
+          disabled: true,
+          label: isJoined ? "Joined" : "Request Join",
+          title: "You already belong to an event group in this event"
+        };
+      }
+
+      if (isJoined) {
+        return {
+          disabled: true,
+          label: "Joined",
+          title: "Already an active member"
+        };
+      }
+
+      if (hasPending) {
+        return {
+          disabled: true,
+          label: "Requested",
+          title: "Request already pending"
+        };
+      }
+
+      if (!selectedEventActive) {
+        return {
+          disabled: true,
+          label: "Request Join",
+          title: "The selected event is not active"
+        };
+      }
+
+      if (!isActiveTeam) {
+        return {
+          disabled: true,
+          label: "Request Join",
+          title: "Only active event groups can accept requests"
+        };
+      }
+
+      return {
+        disabled: false,
+        label: "Request Join",
+        title: "Send join request"
+      };
+    },
+    [
+      busyTeamId,
+      myActiveMembershipInSelectedEvent,
+      myTeamIdSet,
+      pendingRequestTeamIdSet,
+      selectedEventActive
+    ]
+  );
+
+  const onRequestJoin = useCallback(
+    async (team) => {
+      const joinAction = resolveJoinAction(team);
+      if (joinAction.disabled || !team?.team_id) return;
+
+      const ok = window.confirm(
+        `Send join request to event group ${team.team_name || team.team_code}?`
+      );
+      if (!ok) return;
+
+      setBusyTeamId(Number(team.team_id));
+      setError("");
+
+      try {
+        await applyEventJoinRequest(team.team_id);
+        await Promise.all([loadBase(), loadTeamsForEvent(selectedEventId)]);
+      } catch (err) {
+        setError(err?.response?.data?.message || "Failed to send join request");
+      } finally {
+        setBusyTeamId(null);
+      }
+    },
+    [loadBase, loadTeamsForEvent, resolveJoinAction, selectedEventId]
+  );
+
+  const closeViewMembers = useCallback(() => {
     setViewTeam(null);
     setViewMembers([]);
     setViewMembersError("");
     setViewMembersLoading(false);
     setViewBusyTeamId(null);
-  };
+  }, []);
 
-  const onViewMembers = async (team) => {
+  const onViewMembers = useCallback(async (team) => {
     if (!team?.team_id) return;
 
     setViewTeam(team);
@@ -245,350 +411,550 @@ export default function TeamsPage() {
       setViewMembersLoading(false);
       setViewBusyTeamId(null);
     }
-  };
-
-  const pendingCountForSelectedEvent = useMemo(
-    () =>
-      myRequests.filter(
-        (r) =>
-          String(r?.event_id || "") === String(selectedEventId) &&
-          String(r?.status || "").toUpperCase() === "PENDING"
-      ).length,
-    [myRequests, selectedEventId]
-  );
-
-  const selectedEventActive = String(selectedEvent?.status || "").toUpperCase() === "ACTIVE";
+  }, []);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">Event Groups</h1>
-          <p className="text-sm text-gray-600">
-            Select an event, create an event group (you become captain), or request to join one.
-          </p>
-        </div>
-        <button onClick={loadBase} className="px-3 py-2 rounded border" disabled={loading}>
-          {loading ? "Loading..." : "Refresh"}
-        </button>
-      </div>
-
-      <div className="flex flex-col md:flex-row md:items-end gap-3">
-        <div className="w-full md:max-w-lg">
-          <label className="block text-sm font-medium mb-1">Event</label>
-          <select
-            value={selectedEventId}
-            onChange={(e) => setSelectedEventId(e.target.value)}
-            className="w-full border rounded px-3 py-2 bg-white"
-            disabled={loading || events.length === 0}
-          >
-            {events.length === 0 ? <option value="">No events available</option> : null}
-            {events.map((event) => (
-              <option key={event.event_id} value={event.event_id}>
-                {event.event_name} ({event.event_code}) | {event.status}
-              </option>
-            ))}
-          </select>
-        </div>
-        {selectedEvent ? (
-          <div className="text-sm text-gray-600 rounded border bg-gray-50 px-3 py-2">
-            {selectedEvent.event_code} | {formatDate(selectedEvent.start_date)} -{" "}
-            {formatDate(selectedEvent.end_date)} | Status: {selectedEvent.status}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-        <div className="p-3 rounded border bg-gray-50">
-          <div className="text-xs uppercase tracking-wide font-semibold text-gray-500">Events</div>
-          <div className="text-lg font-semibold">{events.length}</div>
-        </div>
-        <div className="p-3 rounded border bg-gray-50">
-          <div className="text-xs uppercase tracking-wide font-semibold text-gray-500">
-            Event Groups (Selected Event)
-          </div>
-          <div className="text-lg font-semibold">{teams.length}</div>
-        </div>
-        <div className="p-3 rounded border bg-gray-50">
-          <div className="text-xs uppercase tracking-wide font-semibold text-gray-500">
-            My Event Group (Selected Event)
-          </div>
-          <div className="text-lg font-semibold">
-            {myActiveMembershipInSelectedEvent ? myActiveMembershipInSelectedEvent.team_code : "-"}
-          </div>
-        </div>
-        <div className="p-3 rounded border bg-gray-50">
-          <div className="text-xs uppercase tracking-wide font-semibold text-gray-500">
-            Pending Requests (Selected Event)
-          </div>
-          <div className="text-lg font-semibold">{pendingCountForSelectedEvent}</div>
-        </div>
-      </div>
-
-      <form onSubmit={onCreateTeam} className="border rounded p-4 bg-white space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-base font-semibold">Create Event Group In Selected Event</h2>
-          {myActiveMembershipInSelectedEvent ? (
-            <span className="text-sm text-amber-700">
-              You already belong to an event group in this event (
-              {myActiveMembershipInSelectedEvent.team_code})
-            </span>
-          ) : null}
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div>
-            <label className="block text-sm font-medium mb-1">Event Group Code</label>
-            <input
-              value={teamForm.team_code}
-              onChange={(e) => setTeamForm((p) => ({ ...p, team_code: e.target.value }))}
-              className="w-full border rounded px-3 py-2"
-              placeholder="EVTTEAM01"
-              maxLength={50}
-              disabled={!selectedEventId || !selectedEventActive || !!myActiveMembershipInSelectedEvent}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Event Group Name</label>
-            <input
-              value={teamForm.team_name}
-              onChange={(e) => setTeamForm((p) => ({ ...p, team_name: e.target.value }))}
-              className="w-full border rounded px-3 py-2"
-              placeholder="Code Crushers"
-              maxLength={120}
-              disabled={!selectedEventId || !selectedEventActive || !!myActiveMembershipInSelectedEvent}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Description</label>
-            <input
-              value={teamForm.description}
-              onChange={(e) => setTeamForm((p) => ({ ...p, description: e.target.value }))}
-              className="w-full border rounded px-3 py-2"
-              placeholder="Optional"
-              maxLength={255}
-              disabled={!selectedEventId || !selectedEventActive || !!myActiveMembershipInSelectedEvent}
-            />
-          </div>
-        </div>
-
-        <button
-          type="submit"
-          disabled={
-            savingTeam ||
-            !selectedEventId ||
-            !selectedEventActive ||
-            !!myActiveMembershipInSelectedEvent
+    <div className="max-w-screen-2xl space-y-3 p-4 md:p-5">
+      <TeamPageHero
+        loading={loading || loadingTeams}
+        onRefresh={loadBase}
+        eyebrow="Event Group Discovery"
+        title="Event Groups"
+        summary={headerSummary}
+        actionLabel="Refresh events"
+        actionBusyLabel="Refreshing..."
+        stats={[
+          {
+            accentClass: "bg-[#1754cf]",
+            detail: `${activeEventCount} active event${activeEventCount === 1 ? "" : "s"} right now`,
+            label: "Events",
+            value: events.length
+          },
+          {
+            accentClass: "bg-emerald-500",
+            detail:
+              filteredTeams.length !== teams.length
+                ? `Visible ${filteredTeams.length} after filters`
+                : "Event groups in the selected event",
+            label: "Groups In Event",
+            value: teams.length
+          },
+          {
+            accentClass: "bg-sky-500",
+            detail: selectedEvent
+              ? `Your active group in ${selectedEvent.event_code || selectedEvent.event_name}`
+              : "Choose an event to track membership",
+            label: "My Event Group",
+            value: myActiveMembershipInSelectedEvent?.team_code || "-"
+          },
+          {
+            accentClass: "bg-slate-400",
+            detail: "Requests still waiting on a decision",
+            label: "Pending Requests",
+            value: pendingCountForSelectedEvent
           }
-          className="px-4 py-2 rounded border"
-        >
-          {savingTeam ? "Creating..." : "Create Event Group (Become Captain)"}
-        </button>
-      </form>
-
-      <div className="flex items-center gap-3">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="w-full max-w-md border rounded px-3 py-2"
-          placeholder="Search event groups in selected event..."
-        />
-      </div>
+        ]}
+      />
 
       {error ? (
-        <div className="p-3 rounded border border-red-300 bg-red-50 text-red-700">{error}</div>
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          {error}
+        </div>
       ) : null}
 
-      {loading || loadingTeams ? (
-        <div className="p-3 border rounded">
-          {loading ? "Loading events..." : "Loading event groups for event..."}
+      <section className="grid gap-4 xl:grid-cols-[1.2fr,1fr]">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-[#1754cf]">
+            Event Context
+          </p>
+          <h2 className="mt-2 text-xl font-bold text-slate-900">Choose your event</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            The group list and create form update based on the event you select here.
+          </p>
+
+          <div className="mt-4">
+            <label className="block">
+              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Event
+              </span>
+              <select
+                value={selectedEventId}
+                onChange={(event) => setSelectedEventId(event.target.value)}
+                className={selectClassName}
+                disabled={loading || events.length === 0}
+              >
+                {events.length === 0 ? <option value="">No events available</option> : null}
+                {events.map((event) => (
+                  <option key={event.event_id} value={event.event_id}>
+                    {event.event_name} ({event.event_code}) | {formatLabel(event.status)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <TeamPageDetailTile
+              label="Selected Event"
+              value={selectedEvent?.event_name || "No event selected"}
+              subtext={selectedEvent?.event_code || "Choose an event to continue"}
+            />
+            <TeamPageDetailTile
+              label="Event Status"
+              value={
+                selectedEvent ? (
+                  <AllGroupsBadge value={formatLabel(selectedEvent.status)} />
+                ) : (
+                  "-"
+                )
+              }
+              subtext={
+                selectedEvent
+                  ? `${formatShortDate(selectedEvent.start_date)} to ${formatShortDate(selectedEvent.end_date)}`
+                  : "No schedule available"
+              }
+            />
+          </div>
+        </div>
+
+        <form
+          onSubmit={onCreateTeam}
+          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+        >
+          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-[#1754cf]">
+            Create Group
+          </p>
+          <div className="mt-2 flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">Start a new event group</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Creating a group makes you the captain for that event group.
+              </p>
+            </div>
+            <div className="rounded-2xl bg-slate-100 p-3 text-slate-700">
+              <AddCircleOutlineRoundedIcon sx={{ fontSize: 24 }} />
+            </div>
+          </div>
+
+          {myActiveMembershipInSelectedEvent ? (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              You already belong to <span className="font-semibold">{myActiveMembershipInSelectedEvent.team_code}</span> in this event.
+            </div>
+          ) : null}
+
+          <div className="mt-4 grid gap-3">
+            <label className="block">
+              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Event Group Code
+              </span>
+              <input
+                value={teamForm.team_code}
+                onChange={(event) =>
+                  setTeamForm((previous) => ({ ...previous, team_code: event.target.value }))
+                }
+                className={inputClassName}
+                placeholder="EVTTEAM01"
+                maxLength={50}
+                disabled={!selectedEventId || !selectedEventActive || !!myActiveMembershipInSelectedEvent}
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Event Group Name
+              </span>
+              <input
+                value={teamForm.team_name}
+                onChange={(event) =>
+                  setTeamForm((previous) => ({ ...previous, team_name: event.target.value }))
+                }
+                className={inputClassName}
+                placeholder="Code Crushers"
+                maxLength={120}
+                disabled={!selectedEventId || !selectedEventActive || !!myActiveMembershipInSelectedEvent}
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Description
+              </span>
+              <textarea
+                value={teamForm.description}
+                onChange={(event) =>
+                  setTeamForm((previous) => ({ ...previous, description: event.target.value }))
+                }
+                className={`${inputClassName} min-h-24 resize-y`}
+                placeholder="Share what your event group is about"
+                maxLength={255}
+                disabled={!selectedEventId || !selectedEventActive || !!myActiveMembershipInSelectedEvent}
+              />
+            </label>
+          </div>
+
+          <button
+            type="submit"
+            disabled={
+              savingTeam ||
+              !selectedEventId ||
+              !selectedEventActive ||
+              !!myActiveMembershipInSelectedEvent
+            }
+            className="mt-4 rounded-lg border border-[#1754cf]/15 bg-[#1754cf]/8 px-4 py-2 text-sm font-semibold text-[#1754cf] transition hover:bg-[#1754cf]/12 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+          >
+            {savingTeam ? "Creating..." : "Create Event Group"}
+          </button>
+        </form>
+      </section>
+
+      {!selectedEventId ? (
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500 shadow-sm">
+          Select an event to view its groups.
         </div>
       ) : (
-        <div className="overflow-auto border rounded">
-          <table className="min-w-[1350px] w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                {/* <th className="text-left p-3 border-b">Team ID</th> */}
-                <th className="text-left p-3 border-b">Code</th>
-                <th className="text-left p-3 border-b">Name</th>
-                <th className="text-left p-3 border-b">Status</th>
-                <th className="text-left p-3 border-b">Members</th>
-                <th className="text-left p-3 border-b">Created</th>
-                <th className="text-left p-3 border-b">My Request Status</th>
-                <th className="text-left p-3 border-b">Request Date</th>
-                <th className="text-left p-3 border-b">Description</th>
-                <th className="text-left p-3 border-b">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTeams.map((team) => {
-                const teamId = Number(team.team_id);
-                const isJoined = myTeamIdSet.has(teamId);
-                const latestReq = latestRequestByTeamId.get(teamId);
-                const hasPending = pendingRequestTeamIdSet.has(teamId);
-                const isActiveTeam = String(team.status || "").toUpperCase() === "ACTIVE";
-                const isBusy = busyTeamId === teamId;
-                const actionDisabled =
-                  isBusy ||
-                  isJoined ||
-                  hasPending ||
-                  !isActiveTeam ||
-                  !selectedEventActive ||
-                  !!myActiveMembershipInSelectedEvent;
+        <>
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:hidden">
+            <TeamPageFilters
+              className="lg:hidden"
+              activeFilters={activeFilters}
+              canReset={canResetFilters}
+              itemLabel="event groups"
+              onReset={resetFilters}
+              panelTitle="Filter Event Groups"
+              resultCount={filteredTeams.length}
+              totalCount={teams.length}
+              withDivider
+            >
+              <label className="block">
+                <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Search
+                </span>
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search by code, name, status, or description"
+                  className={inputClassName}
+                />
+              </label>
 
-                let actionLabel = "Request Join";
-                if (isJoined) actionLabel = "Joined";
-                else if (hasPending) actionLabel = "Requested";
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    Group Status
+                  </span>
+                  <select
+                    value={statusFilter}
+                    onChange={(event) => setStatusFilter(event.target.value)}
+                    className={selectClassName}
+                  >
+                    <option value="ALL">All statuses</option>
+                    <option value="ACTIVE">Active</option>
+                    <option value="INACTIVE">Inactive</option>
+                    <option value="FROZEN">Frozen</option>
+                    <option value="ARCHIVED">Archived</option>
+                  </select>
+                </label>
 
-                return (
-                  <tr key={team.team_id} className="hover:bg-gray-50">
-                    {/* <td className="p-3 border-b">{team.team_id}</td> */}
-                    <td className="p-3 border-b font-semibold">{team.team_code || "-"}</td>
-                    <td className="p-3 border-b">{team.team_name || "-"}</td>
-                    <td className="p-3 border-b">{team.status || "-"}</td>
-                    <td className="p-3 border-b">{Number(team.active_member_count || 0)}</td>
-                    <td className="p-3 border-b">{formatDateTime(team.created_at)}</td>
-                    <td className={`p-3 border-b font-semibold ${statusColor(latestReq?.status)}`}>
-                      {isJoined ? "ACTIVE MEMBER" : latestReq?.status || "-"}
-                    </td>
-                    <td className="p-3 border-b">
-                      {latestReq?.request_date ? formatDateTime(latestReq.request_date) : "-"}
-                    </td>
-                    <td className="p-3 border-b max-w-[280px]">
-                      <div className="truncate" title={team.description || ""}>
-                        {team.description || "-"}
+                <label className="block">
+                  <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    Request State
+                  </span>
+                  <select
+                    value={requestStatusFilter}
+                    onChange={(event) => setRequestStatusFilter(event.target.value)}
+                    className={selectClassName}
+                  >
+                    <option value="ALL">All request states</option>
+                    <option value="ACTIVE_MEMBER">Active member</option>
+                    <option value="PENDING">Pending</option>
+                    <option value="APPROVED">Approved</option>
+                    <option value="REJECTED">Rejected</option>
+                    <option value="NO_REQUEST">No request</option>
+                  </select>
+                </label>
+              </div>
+            </TeamPageFilters>
+
+            {loading || loadingTeams ? (
+              <div className="px-4 py-12 text-center text-sm text-slate-500">
+                {loading ? "Loading events..." : "Loading event groups..."}
+              </div>
+            ) : filteredTeams.length === 0 ? (
+              <div className="px-4 py-12 text-center text-sm text-slate-500">
+                No event groups found for the current event and filters.
+              </div>
+            ) : (
+              <div className="space-y-3 p-4">
+                {filteredTeams.map((team) => {
+                  const joinAction = resolveJoinAction(team);
+                  const teamId = Number(team.team_id);
+                  const latestRequest = latestRequestByTeamId.get(teamId);
+                  const requestStatus = myTeamIdSet.has(teamId)
+                    ? "Active Member"
+                    : latestRequest?.status
+                      ? formatLabel(latestRequest.status)
+                      : "No Request";
+
+                  return (
+                    <article
+                      key={team.team_id}
+                      className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h2 className="truncate text-base font-bold text-slate-900">
+                            {team.team_name || "-"}
+                          </h2>
+                          <p className="mt-0.5 text-xs text-slate-500">{team.team_code || "No code"}</p>
+                        </div>
+                        <AllGroupsBadge value={formatLabel(team.status, "Unknown")} />
                       </div>
-                    </td>
-                    <td className="p-3 border-b">
-                      <div className="flex flex-wrap gap-2">
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <AllGroupsBadge value={requestStatus} />
+                        {selectedEvent ? <AllGroupsBadge value={selectedEvent.event_code || "Event"} /> : null}
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <TeamPageDetailTile
+                          label="Members"
+                          value={formatMemberCount(team.active_member_count)}
+                        />
+                        <TeamPageDetailTile
+                          label="Created"
+                          value={formatShortDate(team.created_at)}
+                        />
+                      </div>
+
+                      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                          Description
+                        </div>
+                        <p className="mt-1 text-sm leading-6 text-slate-600">
+                          {team.description || "No description added."}
+                        </p>
+                      </div>
+
+                      <div className="mt-4 flex items-center gap-2">
                         <button
                           type="button"
                           onClick={() => onViewMembers(team)}
                           disabled={viewBusyTeamId === teamId}
-                          className="px-3 py-1 rounded border bg-white disabled:opacity-60"
-                          title="View active event group members"
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-70"
+                          title="View event group members"
                         >
-                          {viewBusyTeamId === teamId ? "Loading..." : "View"}
+                          <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
                         </button>
                         <button
                           type="button"
                           onClick={() => onRequestJoin(team)}
-                          disabled={actionDisabled}
-                          className="px-3 py-1 rounded border disabled:opacity-60"
-                          title={
-                            myActiveMembershipInSelectedEvent
-                              ? "You already belong to an event group in this event"
-                              : isJoined
-                                ? "Already an active member"
-                                : hasPending
-                                  ? "Request already pending"
-                                  : !selectedEventActive
-                                    ? "Event is not active"
-                                    : !isActiveTeam
-                                      ? "Event group is not active"
-                                      : "Send join request"
-                          }
+                          disabled={joinAction.disabled}
+                          title={joinAction.title}
+                          className="rounded-lg border border-[#1754cf]/15 bg-[#1754cf]/8 px-3.5 py-2 text-sm font-semibold text-[#1754cf] transition hover:bg-[#1754cf]/12 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
                         >
-                          {isBusy ? "Sending..." : actionLabel}
+                          {joinAction.label}
                         </button>
                       </div>
-                    </td>
-                  </tr>
-                );
-              })}
-
-              {filteredTeams.length === 0 ? (
-                <tr>
-                  <td className="p-3 text-gray-500" colSpan={10}>
-                    No event groups found for the selected event.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {viewTeam ? (
-        <div
-          className="fixed inset-0 z-50 bg-black/30 p-4 flex items-center justify-center"
-          onClick={closeViewMembers}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="team-members-preview-title"
-        >
-          <div
-            className="w-full max-w-4xl max-h-[85vh] overflow-hidden rounded-xl border bg-white shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-4 py-3 border-b flex items-start justify-between gap-3">
-              <div>
-                <h2 id="team-members-preview-title" className="text-base font-semibold">
-                  Event Group Members
-                </h2>
-                <p className="text-sm text-gray-600">
-                  {viewTeam.team_name || "-"} ({viewTeam.team_code || "-"}) | Event Group ID:{" "}
-                  {viewTeam.team_id}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeViewMembers}
-                className="px-3 py-1.5 rounded border text-sm"
-              >
-                Close
-              </button>
-            </div>
-
-            {viewMembersError ? (
-              <div className="m-4 p-3 rounded border border-red-300 bg-red-50 text-red-700">
-                {viewMembersError}
-              </div>
-            ) : null}
-
-            {viewMembersLoading ? (
-              <div className="p-4">Loading event group members...</div>
-            ) : (
-              <div className="overflow-auto">
-                <table className="min-w-[860px] w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="text-left p-3 border-b">Membership ID</th>
-                      <th className="text-left p-3 border-b">Student ID</th>
-                      <th className="text-left p-3 border-b">Name</th>
-                      <th className="text-left p-3 border-b">Email</th>
-                      <th className="text-left p-3 border-b">Role</th>
-                      <th className="text-left p-3 border-b">Status</th>
-                      <th className="text-left p-3 border-b">Joined</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {viewMembers.map((row) => (
-                      <tr key={row.team_membership_id} className="hover:bg-gray-50">
-                        <td className="p-3 border-b">{row.team_membership_id || "-"}</td>
-                        <td className="p-3 border-b">{row.student_id || "-"}</td>
-                        <td className="p-3 border-b">{row.student_name || "-"}</td>
-                        <td className="p-3 border-b">{row.student_email || "-"}</td>
-                        <td className="p-3 border-b">{row.role || "-"}</td>
-                        <td className="p-3 border-b">{row.status || "-"}</td>
-                        <td className="p-3 border-b">{formatDateTime(row.join_date)}</td>
-                      </tr>
-                    ))}
-
-                    {viewMembers.length === 0 ? (
-                      <tr>
-                        <td className="p-3 text-gray-500" colSpan={7}>
-                          No active members found for this event group.
-                        </td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
+                    </article>
+                  );
+                })}
               </div>
             )}
-          </div>
-        </div>
-      ) : null}
+          </section>
+
+          <TeamDesktopTableShell canReset={canResetFilters} onReset={resetFilters}>
+            <div className="overflow-x-auto overflow-y-visible rounded-2xl">
+              <table className="min-w-[1220px] w-full text-sm">
+                <thead className="bg-slate-50 text-slate-600">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+                      <TeamTableHeaderFilterButton
+                        active={String(query || "").trim().length > 0}
+                        label="Event Group"
+                        panelWidthClass="w-80"
+                      >
+                        <TeamTableFilterPanel
+                          title="Event Group Filter"
+                          currentText={String(query || "").trim() || "All event groups"}
+                          helperText="Search by code, name, status, or description."
+                        >
+                          <TeamTableSearchField
+                            value={query}
+                            onChange={(event) => setQuery(event.target.value)}
+                            placeholder="Code, name, status, or description"
+                          />
+                        </TeamTableFilterPanel>
+                      </TeamTableHeaderFilterButton>
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+                      <TeamTableHeaderFilterButton active={statusFilter !== "ALL"} label="Status">
+                        <TeamTableFilterPanel
+                          title="Status Filter"
+                          currentText={
+                            statusFilter === "ALL" ? "All statuses" : formatLabel(statusFilter)
+                          }
+                          helperText="Show only event groups in a specific status."
+                        >
+                          <TeamTableSelectField
+                            value={statusFilter}
+                            onChange={(event) => setStatusFilter(event.target.value)}
+                          >
+                            <option value="ALL">All statuses</option>
+                            <option value="ACTIVE">Active</option>
+                            <option value="INACTIVE">Inactive</option>
+                            <option value="FROZEN">Frozen</option>
+                            <option value="ARCHIVED">Archived</option>
+                          </TeamTableSelectField>
+                        </TeamTableFilterPanel>
+                      </TeamTableHeaderFilterButton>
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+                      Members
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+                      Created
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+                      <TeamTableHeaderFilterButton
+                        active={requestStatusFilter !== "ALL"}
+                        label="My Request"
+                      >
+                        <TeamTableFilterPanel
+                          title="Request Filter"
+                          currentText={
+                            requestStatusFilter === "ALL"
+                              ? "All request states"
+                              : formatLabel(requestStatusFilter)
+                          }
+                          helperText="Filter by your membership or join-request state."
+                        >
+                          <TeamTableSelectField
+                            value={requestStatusFilter}
+                            onChange={(event) => setRequestStatusFilter(event.target.value)}
+                          >
+                            <option value="ALL">All request states</option>
+                            <option value="ACTIVE_MEMBER">Active member</option>
+                            <option value="PENDING">Pending</option>
+                            <option value="APPROVED">Approved</option>
+                            <option value="REJECTED">Rejected</option>
+                            <option value="NO_REQUEST">No request</option>
+                          </TeamTableSelectField>
+                        </TeamTableFilterPanel>
+                      </TeamTableHeaderFilterButton>
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+                      Description
+                    </th>
+                    <th className="sticky right-0 bg-slate-50 px-4 py-3 text-left font-semibold whitespace-nowrap shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.14)]">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 bg-white">
+                  {loading || loadingTeams ? (
+                    <tr>
+                      <td className="px-4 py-12 text-center text-sm text-slate-500" colSpan={7}>
+                        {loading ? "Loading events..." : "Loading event groups..."}
+                      </td>
+                    </tr>
+                  ) : filteredTeams.length === 0 ? (
+                    <tr>
+                      <td className="px-4 py-12 text-center text-sm text-slate-500" colSpan={7}>
+                        No event groups found for the current event and filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredTeams.map((team) => {
+                      const joinAction = resolveJoinAction(team);
+                      const teamId = Number(team.team_id);
+                      const latestRequest = latestRequestByTeamId.get(teamId);
+                      const requestStatus = myTeamIdSet.has(teamId)
+                        ? "Active Member"
+                        : latestRequest?.status
+                          ? formatLabel(latestRequest.status)
+                          : "No Request";
+
+                      return (
+                        <tr key={team.team_id} className="group hover:bg-slate-50/80">
+                          <td className="px-4 py-3">
+                            <div className="font-semibold text-slate-900">{team.team_name || "-"}</div>
+                            <div className="mt-0.5 text-xs text-slate-500">
+                              {team.team_code || "No code"}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <AllGroupsBadge value={formatLabel(team.status, "Unknown")} />
+                          </td>
+                          <td className="px-4 py-3 font-medium text-slate-800">
+                            {formatMemberCount(team.active_member_count)}
+                          </td>
+                          <td className="px-4 py-3 text-slate-700">
+                            {formatShortDate(team.created_at)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-col gap-1">
+                              <div>
+                                <AllGroupsBadge value={requestStatus} />
+                              </div>
+                              <div className="text-xs text-slate-500">
+                                {latestRequest?.request_date
+                                  ? `Requested ${formatShortDate(latestRequest.request_date)}`
+                                  : selectedEvent?.event_code || "No request yet"}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <p className="max-w-sm leading-6 text-slate-600">
+                              {team.description || "No description added."}
+                            </p>
+                          </td>
+                          <td className="sticky right-0 bg-white px-4 py-3 shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50/80">
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => onViewMembers(team)}
+                                disabled={viewBusyTeamId === teamId}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-70"
+                                title="View event group members"
+                              >
+                                <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onRequestJoin(team)}
+                                disabled={joinAction.disabled}
+                                title={joinAction.title}
+                                className="rounded-lg border border-[#1754cf]/15 bg-[#1754cf]/8 px-3 py-1.5 text-sm font-semibold text-[#1754cf] transition hover:bg-[#1754cf]/12 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                              >
+                                {joinAction.label}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </TeamDesktopTableShell>
+        </>
+      )}
+
+      <TeamMembersPreviewModal
+        team={viewTeam}
+        rows={viewMembers}
+        loading={viewMembersLoading}
+        error={viewMembersError}
+        onClose={closeViewMembers}
+        title="Event Group Members"
+        subtitle={
+          viewTeam
+            ? `${viewTeam.team_name || "-"} (${viewTeam.team_code || "-"}) | Event Group ID: ${viewTeam.team_id}`
+            : undefined
+        }
+        emptyText="No active members found for this event group."
+      />
     </div>
   );
 }

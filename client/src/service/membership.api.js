@@ -25,8 +25,10 @@ export async function fetchAllMemberships() {
   return data; // array
 }
 
-export async function deleteMembership(membershipId) {
-  const { data } = await api.delete(`/api/membership/${membershipId}`);
+export async function deleteMembership(membershipId, reason) {
+  const { data } = await api.delete(`/api/membership/${membershipId}`, {
+    data: { reason }
+  });
   return data;
 }
 

@@ -1,6 +1,12 @@
 const bcrypt = require("bcrypt");
 const db = require("../config/db");
-const { generateToken } = require("../utils/jwt");
+const { createAuthSession, SESSION_DURATION_MS } = require("../utils/jwt");
+
+const getAuthCookieOptions = () => ({
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "strict"
+});
 
 const login = async (req, res) => {
   const { email, password } = req.body;
@@ -22,25 +28,24 @@ const login = async (req, res) => {
     return res.status(401).json({ message: "Invalid credentials" });
   }
 
-  const token = generateToken(user);
+  const { token, sessionExpiresAt } = createAuthSession(user);
 
   res.cookie("token", token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production", // false in localhost, true in production HTTPS
-    sameSite: "strict",
-    maxAge: 24 * 60 * 60 * 1000
+    ...getAuthCookieOptions(),
+    maxAge: SESSION_DURATION_MS
   });
 
   res.json({
     message: "Login successful",
     role: user.role,
     userId: user.user_id,
-    name: user.name
+    name: user.name,
+    sessionExpiresAt
   });
 };
 
 const logout = (req, res) => {
-  res.clearCookie("token");
+  res.clearCookie("token", getAuthCookieOptions());
   res.json({ message: "Logged out successfully" });
 };
 

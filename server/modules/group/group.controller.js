@@ -40,7 +40,7 @@ exports.createGroup = async (req, res) => {
 
 exports.getGroups = async (req, res) => {
   try {
-    const groups = await groupService.getGroups();
+    const groups = await groupService.getGroups(req.query || {});
     res.json(groups);
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -70,7 +70,7 @@ const StudentSidebar = ({ user }) => {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-3 space-y-1 overflow-y-auto scrollbar-hidden">
           {menuItems.map((item) => (
             <NavLink
               key={item.path}

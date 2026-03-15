@@ -1,11 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import { useNavigate, useParams } from "react-router-dom";
 import { fetchGroupById } from "../../service/groups.api";
-import { fetchGroupMembers, joinGroup } from "../../service/membership.api";
+import { fetchGroupMembers } from "../../service/membership.api";
 import { applyJoinRequest, getStudentIdByUserId } from "../../service/joinRequests.api";
-import { fetchCurrentPhase } from "../../service/phase.api";
+import { fetchAllPhases } from "../../service/phase.api";
 import { fetchGroupEligibilitySummary } from "../../service/eligibility.api";
-import GroupMembersTable from "../../admin/components/membership/GroupMembersTable";
+import { getMissingLeadershipRoles } from "../../shared/components/LeadershipGapChips";
+import StudentGroupHero from "../components/groups/StudentGroupHero";
+import MyGroupEligibilitySection from "../components/myGroup/MyGroupEligibilitySection";
+import MyGroupMembersSection from "../components/myGroup/MyGroupMembersSection";
+import MyGroupBadge from "../components/myGroup/MyGroupBadge";
 
 const GroupDetails = () => {
   const { id } = useParams();
@@ -17,10 +22,14 @@ const GroupDetails = () => {
   const [busy, setBusy] = useState(false);
   const [actionErr, setActionErr] = useState("");
   const [activeTab, setActiveTab] = useState("members");
-  const [eligibility, setEligibility] = useState(null);
+  const [eligibility, setEligibility] = useState([]);
   const [eligibilityLoading, setEligibilityLoading] = useState(false);
   const [eligibilityErr, setEligibilityErr] = useState("");
   const [currentStudentId, setCurrentStudentId] = useState(null);
+  const missingLeadershipRoles = useMemo(
+    () => getMissingLeadershipRoles(members),
+    [members]
+  );
 
   const load = async () => {
     setLoading(true);
@@ -46,7 +55,7 @@ const GroupDetails = () => {
   useEffect(() => {
     load();
     setActiveTab("members");
-    setEligibility(null);
+    setEligibility([]);
     setEligibilityErr("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -71,27 +80,58 @@ const GroupDetails = () => {
     setEligibilityLoading(true);
     setEligibilityErr("");
     try {
-      const phase = await fetchCurrentPhase();
-      if (!phase?.phase_id) {
-        setEligibility({
-          phase_id: null,
-          phase_name: null,
-          earned_points: 0,
-          target_points: null,
-          is_eligible: null
-        });
+      const phases = await fetchAllPhases();
+      const completedPhases = Array.isArray(phases)
+        ? phases
+            .filter((phase) => String(phase?.status || "").toUpperCase() === "COMPLETED")
+            .slice(0, 5)
+        : [];
+
+      if (completedPhases.length === 0) {
+        setEligibility([]);
         return;
       }
 
-      const summary = await fetchGroupEligibilitySummary(phase.phase_id, id);
-      setEligibility(summary || null);
+      const rows = await Promise.all(
+        completedPhases.map(async (phase) => {
+          const baseRow = {
+            phase_id: phase?.phase_id || null,
+            phase_name: phase?.phase_name || null,
+            start_date: phase?.start_date || null,
+            end_date: phase?.end_date || null,
+            tier: group?.tier || null,
+            earned_points: 0,
+            target_points: null,
+            is_eligible: null,
+            eligibility_error: ""
+          };
+
+          try {
+            const summary = await fetchGroupEligibilitySummary(phase.phase_id, id);
+            return {
+              ...baseRow,
+              ...summary
+            };
+          } catch (err) {
+            return {
+              ...baseRow,
+              eligibility_error:
+                err?.response?.data?.message ||
+                err?.response?.data?.error ||
+                "Eligibility unavailable for this phase."
+            };
+          }
+        })
+      );
+
+      setEligibility(rows);
     } catch (e) {
       setEligibilityErr(
         e?.response?.data?.message ||
           e?.response?.data?.error ||
           "Failed to load eligibility"
       );
-      setEligibility(null);
+      setEligibility([]);
     } finally {
       setEligibilityLoading(false);
     }
@@ -120,60 +160,67 @@ const GroupDetails = () => {
   if (err) return <div className="p-6 text-red-700">{err}</div>;
   if (!group) return <div className="p-6">Not found</div>;
 
-  return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Group Details</h1>
-        <div className="flex gap-2">
-          <button
-            onClick={() => nav("/groups")}
-            className="px-3 py-2 rounded border"
-          >
-            Back
-          </button>
-          <button onClick={load} className="px-3 py-2 rounded border">
-            Refresh
-          </button>
-        </div>
-      </div>
+  const memberCount = members.length;
+  const heroActions = (
+    <>
+      <button
+        type="button"
+        onClick={() => nav("/groups")}
+        className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+      >
+        Back
+      </button>
+      <button
+        type="button"
+        onClick={load}
+        className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+      >
+        <RefreshRoundedIcon sx={{ fontSize: 18 }} />
+        Refresh
+      </button>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onJoin}
+        title="Student only (backend enforces)"
+        className="inline-flex items-center rounded-lg border border-[#1754cf] bg-[#1754cf] px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1449b2] disabled:cursor-wait disabled:opacity-70"
+      >
+        {busy ? "Working..." : "Join Group"}
+      </button>
+    </>
+  );
 
-      <div className="border rounded p-4 space-y-2">
-        <div>
-          <span className="font-medium">ID:</span> {group.group_id}
-        </div>
-        <div>
-          <span className="font-medium">Code:</span> {group.group_code}
-        </div>
-        <div>
-          <span className="font-medium">Name:</span> {group.group_name}
-        </div>
-        <div>
-          <span className="font-medium">Tier:</span> {group.tier}
-        </div>
-        <div>
-          <span className="font-medium">Status:</span> {group.status}
-        </div>
-        <div>
-          <span className="font-medium">Active members:</span> {members.length}
-        </div>
-      </div>
+  const heroBadges = (
+    <>
+      <span className="inline-flex items-center rounded-full border border-white/80 bg-white/90 px-3 py-1 text-xs font-semibold text-[#1754cf]">
+        {group.group_code || "No code"}
+      </span>
+      <MyGroupBadge value={`Tier ${group.tier || "-"}`} />
+      <MyGroupBadge value={group.status || "Unknown"} />
+      <span className="inline-flex items-center rounded-full border border-white/80 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700">
+        ID {group.group_id || "-"}
+      </span>
+      <span className="inline-flex items-center rounded-full border border-white/80 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700">
+        {memberCount} Member{memberCount === 1 ? "" : "s"}
+      </span>
+    </>
+  );
+
+  return (
+    <div className="max-w-screen-2xl space-y-4 p-4 md:p-6">
+      <StudentGroupHero
+        actions={heroActions}
+        badges={heroBadges}
+        eyebrow="Group Details"
+        missingLeadershipRoles={missingLeadershipRoles}
+        title={group.group_name || "Group Details"}
+      />
 
       {actionErr ? (
-        <div className="p-3 rounded border border-red-300 bg-red-50 text-red-700">
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
           {actionErr}
         </div>
       ) : null}
-
-      <div className="flex flex-wrap gap-2">
-        <button
-          disabled={busy}
-          onClick={onJoin}
-          className="px-4 py-2 rounded border"
-          title="Student only (backend enforces)"
-        >
-          {busy ? "Working..." : "Join Group"}
-        </button>
-      </div>
 
       <div className="rounded-lg border bg-white">
         <div className="border-b px-3 py-2 flex flex-wrap gap-2">
@@ -205,72 +252,20 @@ const GroupDetails = () => {
           {activeTab === "members" ? (
             <div className="space-y-2">
               <h2 className="text-lg font-semibold">Members</h2>
-              <GroupMembersTable
+              <MyGroupMembersSection
+                currentStudentId={currentStudentId}
                 members={members}
-                highlightStudentId={currentStudentId}
               />
             </div>
           ) : (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Eligibility</h2>
-                <button
-                  type="button"
-                  onClick={loadEligibility}
-                  className="px-3 py-2 rounded border text-sm"
-                  disabled={eligibilityLoading}
-                >
-                  {eligibilityLoading ? "Loading..." : "Refresh Eligibility"}
-                </button>
-              </div>
-
-              {eligibilityErr ? (
-                <div className="p-3 rounded border border-red-300 bg-red-50 text-red-700">
-                  {eligibilityErr}
-                </div>
-              ) : null}
-
-              {eligibilityLoading ? (
-                <div className="p-3 border rounded">Loading eligibility...</div>
-              ) : (
-                <div className="overflow-auto border rounded">
-                  <table className="min-w-[640px] w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="text-left p-3 border-b">Phase</th>
-                        <th className="text-left p-3 border-b">Earned</th>
-                        <th className="text-left p-3 border-b">Target</th>
-                        <th className="text-left p-3 border-b">Eligible</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td className="p-3 border-b break-all">
-                          {eligibility?.phase_name || eligibility?.phase_id || "No active phase"}
-                        </td>
-                        <td className="p-3 border-b">{eligibility?.earned_points ?? 0}</td>
-                        <td className="p-3 border-b">{eligibility?.target_points ?? "Not set"}</td>
-                        <td
-                          className={`p-3 border-b font-semibold ${
-                            eligibility?.is_eligible === true
-                              ? "text-green-700"
-                              : eligibility?.is_eligible === false
-                                ? "text-red-700"
-                                : "text-gray-700"
-                          }`}
-                        >
-                          {eligibility?.is_eligible === true
-                            ? "Yes"
-                            : eligibility?.is_eligible === false
-                              ? "No"
-                              : "Not available"}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+            <MyGroupEligibilitySection
+              description="Last 5 completed phase eligibility with target progress and final status."
+              eligibility={eligibility}
+              eligibilityErr={eligibilityErr}
+              eligibilityLoading={eligibilityLoading}
+              emptyMessage="No completed phases are available yet."
+              onRefresh={loadEligibility}
+            />
           )}
         </div>
       </div>

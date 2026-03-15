@@ -1,60 +1,132 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
+import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import { fetchGroupById } from "../../../service/groups.api";
 import { useAuth } from "../../../utils/AuthContext";
+
 import {
   fetchGroupMembers,
-  joinGroup,
-  leaveGroup,
 } from "../../../service/membership.api";
+
 import GroupMembersTable from "../../components/membership/GroupMembersTable";
+
 import {
   getPendingRequestsByGroup,
   decideJoinRequest,
 } from "../../../service/joinRequests.api";
+
 import {
   getPendingLeadershipRequestsByGroup,
   decideLeadershipRoleRequest,
 } from "../../../service/leadershipRequests.api";
 
-const BADGE_STYLES = {
-  ACTIVE: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  INACTIVE: "border-slate-200 bg-slate-100 text-slate-600",
+import {
+  formatGroupPoints,
+  getStatusConfig,
+  getTierBadgeClass,
+} from "../../components/groups/groupManagement.constants";
+
+const REQUEST_BADGE_STYLES = {
   PENDING: "border-amber-200 bg-amber-50 text-amber-700",
   APPROVED: "border-emerald-200 bg-emerald-50 text-emerald-700",
   REJECTED: "border-red-200 bg-red-50 text-red-700",
-  A: "border-blue-200 bg-blue-50 text-blue-700",
-  B: "border-violet-200 bg-violet-50 text-violet-700",
-  C: "border-amber-200 bg-amber-50 text-amber-700",
-  D: "border-slate-200 bg-slate-100 text-slate-700",
-  CAPTAIN: "border-blue-200 bg-blue-50 text-blue-700",
+};
+
+const ROLE_BADGE_STYLES = {
+  CAPTAIN: "border-amber-300 bg-amber-50 text-amber-800",
   VICE_CAPTAIN: "border-violet-200 bg-violet-50 text-violet-700",
-  STRATEGIST: "border-indigo-200 bg-indigo-50 text-indigo-700",
-  MANAGER: "border-amber-200 bg-amber-50 text-amber-700",
+  STRATEGIST: "border-blue-200 bg-blue-50 text-blue-700",
+  MANAGER: "border-emerald-200 bg-emerald-50 text-emerald-700",
   MEMBER: "border-slate-200 bg-slate-100 text-slate-700",
 };
 
 const LEADERSHIP_ROLES = ["CAPTAIN", "VICE_CAPTAIN", "STRATEGIST", "MANAGER"];
+const LEADERSHIP_ROLE_SHORT_LABELS = {
+  CAPTAIN: "C",
+  VICE_CAPTAIN: "VC",
+  STRATEGIST: "SRT",
+  MANAGER: "MGR",
+};
+const badgeBaseClass =
+  "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold";
 
-const titleFont = { fontFamily: "\"Georgia\", \"Times New Roman\", serif" };
-
-const Badge = ({ value }) => {
+const RoleBadge = ({ value }) => {
   const text = String(value || "-");
   const key = text.toUpperCase();
-  const cls = BADGE_STYLES[key] || "border-slate-200 bg-slate-100 text-slate-600";
+  const cls = ROLE_BADGE_STYLES[key] || "border-slate-200 bg-slate-100 text-slate-600";
+  return <span className={`${badgeBaseClass} ${cls}`}>{text}</span>;
+};
+
+const RequestStatusBadge = ({ value }) => {
+  const text = String(value || "-");
+  const key = text.toUpperCase();
+  const cls = REQUEST_BADGE_STYLES[key] || "border-slate-200 bg-slate-100 text-slate-600";
+  return <span className={`${badgeBaseClass} ${cls}`}>{text}</span>;
+};
+
+const TierBadge = ({ value }) => (
+  <span className={`${badgeBaseClass} ${getTierBadgeClass(value)}`}>
+    Tier {String(value || "-").toUpperCase()}
+  </span>
+);
+
+const StatusBadge = ({ value }) => {
+  const config = getStatusConfig(value);
+
   return (
-    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${cls}`}>
-      {text}
+    <span className={`inline-flex items-center gap-2 text-sm font-bold ${config.text}`}>
+      <span className={`h-2 w-2 rounded-full ${config.dot}`} />
+      {config.label}
     </span>
   );
 };
 
-const StatCard = ({ label, value, extra = null }) => (
-  <div className="rounded-xl border border-slate-200 bg-white p-4">
-    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">{label}</p>
-    <div className="mt-2 text-base font-semibold text-slate-900">{value}</div>
-    {extra ? <div className="mt-1 text-xs text-slate-500">{extra}</div> : null}
-  </div>
+const LeadershipGapChips = ({ roles }) => {
+  if (!Array.isArray(roles) || roles.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {roles.map((role) => {
+        const normalizedRole = String(role || "").toUpperCase();
+
+        return (
+          <div
+            key={normalizedRole}
+            title={normalizedRole.replace("_", " ")}
+            className="relative inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border-2 border-red-600 bg-white text-[9px] font-extrabold tracking-[0.02em] text-black-700"
+          >
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute left-[-6px] right-[-6px] top-1/2 z-0 h-[2px] -translate-y-1/2 -rotate-[28deg] bg-red-600"
+            />
+            <span className="relative z-10">
+              {LEADERSHIP_ROLE_SHORT_LABELS[normalizedRole] || normalizedRole}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const SectionCard = ({ action, children, count, countClassName, title }) => (
+  <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div className="flex flex-col gap-3 border-b border-slate-200 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center gap-2">
+        <h2 className="text-lg font-bold text-slate-900">{title}</h2>
+        {typeof count === "number" ? (
+          <span
+            className={`inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-bold ${countClassName || "bg-slate-100 text-slate-700"}`}
+          >
+            {count}
+          </span>
+        ) : null}
+      </div>
+      {action}
+    </div>
+    <div className="p-4 md:p-6">{children}</div>
+  </section>
 );
 
 const formatDateTime = (value) => {
@@ -77,7 +149,6 @@ export default function GroupDetailsPage() {
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [busy, setBusy] = useState(false);
   const [actionErr, setActionErr] = useState("");
 
   const [pendingLoading, setPendingLoading] = useState(false);
@@ -160,32 +231,6 @@ export default function GroupDetailsPage() {
     loadPending();
     loadPendingLeadership();
   }, [id]);
-
-  const onJoin = async () => {
-    setBusy(true);
-    setActionErr("");
-    try {
-      await joinGroup(id);
-      await Promise.all([loadAll(), loadPending(), loadPendingLeadership()]);
-    } catch (e) {
-      setActionErr(e?.response?.data?.message || "Join failed");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const onLeave = async () => {
-    setBusy(true);
-    setActionErr("");
-    try {
-      await leaveGroup(id);
-      await Promise.all([loadAll(), loadPending(), loadPendingLeadership()]);
-    } catch (e) {
-      setActionErr(e?.response?.data?.message || "Leave failed");
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const isAdminLike = useMemo(
     () => ["ADMIN", "SYSTEM_ADMIN"].includes(String(user?.role || "").toUpperCase()),
@@ -300,68 +345,95 @@ export default function GroupDetailsPage() {
   };
 
   if (loading) {
-    return <div className="p-8 text-sm text-slate-500">Loading group details...</div>;
+    return (
+      <div className="mx-auto w-full max-w-7xl px-4 py-5 font-[Inter] md:px-6">
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500 shadow-sm">
+          Loading group details...
+        </div>
+      </div>
+    );
   }
 
   if (err) {
     return (
-      <div className="m-6 rounded-xl border border-red-200 bg-red-50 p-8 text-sm text-red-700">
-        {err}
+      <div className="mx-auto w-full max-w-7xl px-4 py-5 font-[Inter] md:px-6">
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-sm text-red-700 shadow-sm">
+          {err}
+        </div>
       </div>
     );
   }
 
   if (!group) {
-    return <div className="p-8 text-sm text-slate-500">Group not found.</div>;
+    return (
+      <div className="mx-auto w-full max-w-7xl px-4 py-5 font-[Inter] md:px-6">
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500 shadow-sm">
+          Group not found.
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-5 px-4 py-5 md:px-6">
-      <section className="rounded-2xl border border-slate-200 bg-gradient-to-r from-[#f6f9ff] via-[#f2f6ff] to-[#eaf1ff] p-5 shadow-[0_20px_35px_-30px_rgba(15,23,42,0.9)] md:p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+    <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-5 font-[Inter] md:px-6">
+      <section className="relative overflow-hidden rounded-2xl border border-[#1754cf]/10 bg-[#1754cf]/5 p-8">
+        <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-3xl">
+            <span className="mb-2 block text-xs font-bold uppercase tracking-[0.24em] text-[#1754cf]">
               Group Workspace
-            </p>
-            <h1 className="mt-1 text-3xl text-slate-900" style={titleFont}>
-              Group Details
-            </h1>
-            <p className="mt-2 text-sm text-slate-600">
-              {group.group_code} - ID {group.group_id}
-            </p>
+            </span>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Group Details</h1>
+            <p className="mt-2 text-xl font-bold text-slate-900">{group.group_name || "-"}</p>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/90 px-3 py-1 text-xs font-semibold text-[#1754cf]">
+                {group.group_code || "No code"}
+              </span>
+              <TierBadge value={group.tier} />
+              <span className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1">
+                <StatusBadge value={group.status} />
+              </span>
+              <span className="inline-flex items-center rounded-full border border-white/80 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700">
+                {members.length} Active
+              </span>
+              <span className="inline-flex items-center rounded-full border border-white/80 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700">
+                {formatGroupPoints(group)} Points
+              </span>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => nav("/groups")}
-              className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-            >
-              Back to Groups
-            </button>
-            <button
-              onClick={() => {
-                loadAll();
-                loadPending();
-                loadPendingLeadership();
-              }}
-              className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-            >
-              Refresh
-            </button>
+          <div className="flex flex-col items-start gap-4 lg:items-end">
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => nav("/groups")}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                <ArrowBackRoundedIcon sx={{ fontSize: 18 }} />
+                Back to Groups
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  loadAll();
+                  loadPending();
+                  loadPendingLeadership();
+                }}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                <RefreshRoundedIcon sx={{ fontSize: 18 }} />
+                Refresh
+              </button>
+            </div>
+
+            {missingLeadershipRoles.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5 lg:justify-end">
+                <LeadershipGapChips roles={missingLeadershipRoles} />
+              </div>
+            ) : null}
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
-          <StatCard label="Group Name" value={group.group_name || "-"} />
-          <StatCard label="Active Members" value={members.length} />
-          <StatCard label="Tier" value={<Badge value={group.tier} />} />
-          <StatCard label="Status" value={<Badge value={group.status} />} />
-          <StatCard
-            label="Leadership Gaps"
-            value={missingLeadershipRoles.length === 0 ? "None" : missingLeadershipRoles.join(", ")}
-            extra={missingLeadershipRoles.length === 0 ? "All leadership roles assigned" : "Assign missing roles"}
-          />
-        </div>
+        <div className="absolute -bottom-10 -right-10 h-48 w-48 rounded-full bg-[#1754cf]/10 blur-3xl" />
       </section>
 
       {actionErr ? (
@@ -370,48 +442,27 @@ export default function GroupDetailsPage() {
         </div>
       ) : null}
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_16px_30px_-28px_rgba(15,23,42,0.9)]">
-        <div className="flex flex-wrap gap-2">
-          <button
-            disabled={busy}
-            onClick={onJoin}
-            className="rounded-xl border border-[#7d95d8] bg-[#e9efff] px-4 py-2 text-sm font-semibold text-[#23366f] transition hover:bg-[#dbe5ff] disabled:opacity-60"
-            title="Student only (backend enforces)"
-          >
-            {busy ? "Working..." : "Join Group"}
-          </button>
-          <button
-            disabled={busy}
-            onClick={onLeave}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
-            title="Student/Captain only (backend enforces)"
-          >
-            {busy ? "Working..." : "Leave Group"}
-          </button>
-        </div>
-      </section>
-
       {showLeadershipPendingSection && isAdminLike ? (
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_16px_30px_-28px_rgba(15,23,42,0.9)] md:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold text-slate-900">Pending Leadership Requests</h2>
-              <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#e9efff] px-1.5 py-0.5 text-[11px] font-bold text-[#23366f]">
-                {pendingLeadershipRequests.length}
-              </span>
-            </div>
+        <SectionCard
+          title="Pending Leadership Requests"
+          count={pendingLeadershipRequests.length}
+          countClassName="bg-[#e9efff] text-[#23366f]"
+          action={
             <button
+              type="button"
               onClick={loadPendingLeadership}
               disabled={pendingLeadershipLoading}
-              className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-60"
             >
-              {pendingLeadershipLoading ? "Loading..." : "Reload"}
+              <RefreshRoundedIcon sx={{ fontSize: 18 }} />
+              {pendingLeadershipLoading ? "Loading..." : "Refresh"}
             </button>
-          </div>
+          }
+        >
 
           {(missingLeadershipRoles.length === LEADERSHIP_ROLES.length || allStudentsAreMembers) ? (
-            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              This group currently has no active leadership role. Students can request leadership roles and admin can validate them here.
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+              No active leadership role assigned.
             </div>
           ) : null}
 
@@ -423,13 +474,13 @@ export default function GroupDetailsPage() {
 
           <div className="mt-4 space-y-3 md:hidden">
             {pendingLeadershipRequests.map((r) => (
-              <article key={r.leadership_request_id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <article key={r.leadership_request_id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="text-xs font-semibold text-slate-700">{r.student_name || "-"}</p>
+                    <p className="text-sm font-semibold text-slate-800">{r.student_name || "-"}</p>
                     <p className="text-xs text-slate-500">{r.student_id}</p>
                   </div>
-                  <Badge value={r.requested_role} />
+                  <RoleBadge value={r.requested_role} />
                 </div>
                 <p className="mt-2 text-xs text-slate-500">{formatDateTime(r.request_date)}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -460,7 +511,7 @@ export default function GroupDetailsPage() {
           <div className="mt-4 hidden overflow-auto rounded-xl border border-slate-200 md:block">
             <table className="min-w-[980px] w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50">
+                <tr className="border-b border-slate-200 bg-slate-50 text-slate-500">
                   {[
                     "Request ID",
                     "Student ID",
@@ -488,8 +539,8 @@ export default function GroupDetailsPage() {
                       <div className="font-medium text-slate-700">{r.student_name || "-"}</div>
                       <div>{r.student_email || "-"}</div>
                     </td>
-                    <td className="px-4 py-3"><Badge value={r.requested_role} /></td>
-                    <td className="px-4 py-3"><Badge value={r.current_membership_role || "-"} /></td>
+                    <td className="px-4 py-3"><RoleBadge value={r.requested_role} /></td>
+                    <td className="px-4 py-3"><RoleBadge value={r.current_membership_role || "-"} /></td>
                     <td className="px-4 py-3 text-xs text-slate-500">{formatDateTime(r.request_date)}</td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2">
@@ -521,48 +572,48 @@ export default function GroupDetailsPage() {
               </tbody>
             </table>
           </div>
-        </section>
+        </SectionCard>
       ) : null}
 
       {showPendingSection ? (
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_16px_30px_-28px_rgba(15,23,42,0.9)] md:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold text-slate-900">Pending Join Requests</h2>
-              <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#fff3d8] px-1.5 py-0.5 text-[11px] font-bold text-[#8a6200]">
-                {pending.length}
-              </span>
-            </div>
+        <SectionCard
+          title="Pending Join Requests"
+          count={pending.length}
+          countClassName="bg-[#fff3d8] text-[#8a6200]"
+          action={
             <button
+              type="button"
               onClick={loadPending}
               disabled={pendingLoading}
-              className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-60"
             >
-              {pendingLoading ? "Loading..." : "Reload"}
+              <RefreshRoundedIcon sx={{ fontSize: 18 }} />
+              {pendingLoading ? "Loading..." : "Refresh"}
             </button>
-          </div>
+          }
+        >
 
           {pendingErr ? (
-            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {pendingErr}
             </div>
           ) : null}
 
           {isAdminLike && missingLeadershipRoles.length > 0 && pending.length > 0 ? (
             <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-              Missing leadership roles: <span className="font-semibold">{missingLeadershipRoles.join(", ")}</span>. Approve and assign roles where needed.
+              Missing roles: <span className="font-semibold">{missingLeadershipRoles.join(", ")}</span>
             </div>
           ) : null}
 
           <div className="mt-4 space-y-3 md:hidden">
             {pending.map((r) => (
-              <article key={r.request_id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <article key={r.request_id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="text-xs text-slate-500">Request #{r.request_id}</p>
                     <p className="text-sm font-semibold text-slate-800">{r.student_id}</p>
                   </div>
-                  <Badge value={r.status} />
+                  <RequestStatusBadge value={r.status} />
                 </div>
                 <p className="mt-2 text-xs text-slate-500">{formatDateTime(r.request_date)}</p>
                 <div className="mt-2 flex gap-2">
@@ -593,7 +644,7 @@ export default function GroupDetailsPage() {
           <div className="mt-4 hidden overflow-auto rounded-xl border border-slate-200 md:block">
             <table className="min-w-[860px] w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50">
+                <tr className="border-b border-slate-200 bg-slate-50 text-slate-500">
                   {["Request ID", "Student ID", "Request Date", "Status", "Actions"].map((h) => (
                     <th
                       key={h}
@@ -610,7 +661,7 @@ export default function GroupDetailsPage() {
                     <td className="px-4 py-3 font-mono text-xs text-slate-500">{r.request_id}</td>
                     <td className="px-4 py-3 text-sm font-medium text-slate-700">{r.student_id}</td>
                     <td className="px-4 py-3 text-xs text-slate-500">{formatDateTime(r.request_date)}</td>
-                    <td className="px-4 py-3"><Badge value={r.status} /></td>
+                    <td className="px-4 py-3"><RequestStatusBadge value={r.status} /></td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2">
                         <button
@@ -641,14 +692,15 @@ export default function GroupDetailsPage() {
               </tbody>
             </table>
           </div>
-        </section>
+        </SectionCard>
       ) : null}
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_16px_30px_-28px_rgba(15,23,42,0.9)] md:p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900">Members</h2>
+      <SectionCard
+        title="Members"
+        action={
           <span className="text-xs font-medium text-slate-500">{members.length} active</span>
-        </div>
+        }
+      >
         <GroupMembersTable
           members={members}
           canEditRole={["CAPTAIN", "ADMIN", "SYSTEM_ADMIN"].includes(String(user?.role || "").toUpperCase())}
@@ -656,8 +708,9 @@ export default function GroupDetailsPage() {
           onChanged={loadAll}
           highlightStudentId={highlightStudentId}
           highlightMembershipId={highlightMembershipId}
+          showMembershipId={false}
         />
-      </section>
+      </SectionCard>
     </div>
   );
 }

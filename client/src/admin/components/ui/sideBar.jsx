@@ -7,40 +7,50 @@ import { useAuth } from "../../../utils/AuthContext";
 
 const menuSections = [
   {
-    title: "Core Functionalities",
+    title: "Overview",
     items: [
-      { name: "Dashboard", path: "/", icon: Icons.Dashboard, end: true },
-      { name: "Group", path: "/groups", icon: Icons.CreateGroup },
-      { name: "Event Management", path: "/event-management", icon: Icons.EventManagement },
-      { name: "Base Points", path: "/base-points", icon: Icons.Leaderboard }
+      { name: "Dashboard", path: "/", icon: Icons.Dashboard, end: true }
     ]
   },
   {
-    title: "Configurations",
+    title: "Group Services",
+    items: [
+      { name: "Group Management", path: "/groups", icon: Icons.CreateGroup },
+      { name: "Group Memberships", path: "/membership-management", icon: Icons.MembershipManagement },
+      { name: "Eligibility", path: "/eligibility", icon: Icons.Leaderboard },
+      { name: "Leadership Requests", path: "/leadership-management", icon: Icons.Notifications },
+      { name: "Tier Changes", path: "/tier-management", icon: Icons.Leaderboard }
+    ]
+  },
+  {
+    title: "Phase Services",
     items: [
       { name: "Phase Configuration", path: "/phase-configuration", icon: Icons.PhaseConfiguration },
       { name: "Change Day", path: "/change-day-management", icon: Icons.PhaseConfiguration },
       { name: "Incubation Configuration", path: "/incubation-configuration", icon: Icons.IncubationConfiguration },
+      { name: "Base Points", path: "/base-points", icon: Icons.Leaderboard }
+    ]
+  },
+  {
+    title: "Team Services",
+    items: [
+      { name: "Team Management", path: "/team-management", icon: Icons.TeamManagement },
+      { name: "Team Memberships", path: "/team-membership-management", icon: Icons.MembershipManagement },
       { name: "Team Targets", path: "/team-target-management", icon: Icons.Leaderboard }
     ]
   },
   {
-    title: "Managements",
+    title: "Event Services",
     items: [
-      { name: "Membership Management", path: "/membership-management", icon: Icons.MembershipManagement },
-      { name: "Student Management", path: "/student-management", icon: Icons.StudentManagement },
-      { name: "Team Management", path: "/team-management", icon: Icons.TeamManagement },
-      { name: "Event Group Management", path: "/event-group-management", icon: Icons.EventManagement },
-      { name: "Team Membership", path: "/team-membership-management", icon: Icons.MembershipManagement },
-      { name: "Event Group Requests", path: "/event-join-requests", icon: Icons.EventManagement },
-      { name: "Leadership Management", path: "/leadership-management", icon: Icons.Notifications },
-      { name: "Tier Management", path: "/tier-management", icon: Icons.Leaderboard },
-      { name: "Eligibility", path: "/eligibility", icon: Icons.Leaderboard }
+      { name: "Event Management", path: "/event-management", icon: Icons.EventManagement },
+      { name: "Event Groups", path: "/event-group-management", icon: Icons.EventManagement },
+      { name: "Event Group Requests", path: "/event-join-requests", icon: Icons.EventManagement }
     ]
   },
   {
-    title: "Others",
+    title: "Admin Tools",
     items: [
+      { name: "Student Management", path: "/student-management", icon: Icons.StudentManagement },
       { name: "Audit Logs", path: "/audit-logs", icon: Icons.AuditLogs }
     ]
   }

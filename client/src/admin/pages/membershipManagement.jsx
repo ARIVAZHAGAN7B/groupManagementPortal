@@ -55,6 +55,11 @@ export default function MembershipManagement() {
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [actionBusyId, setActionBusyId] = useState(null);
+  const [removeDialog, setRemoveDialog] = useState({
+    row: null,
+    reason: "",
+    error: ""
+  });
 
   const loadMemberships = async () => {
     setLoading(true);
@@ -83,19 +88,51 @@ export default function MembershipManagement() {
     nav(`/groups/${row.group_id}?${params.toString()}`);
   };
 
-  const onDelete = async (row) => {
+  const openRemoveDialog = (row) => {
+    setRemoveDialog({
+      row,
+      reason: "",
+      error: ""
+    });
+  };
+
+  const closeRemoveDialog = () => {
+    if (actionBusyId !== null) return;
+    setRemoveDialog({
+      row: null,
+      reason: "",
+      error: ""
+    });
+  };
+
+  const onDelete = async () => {
+    const row = removeDialog.row;
     if (!row?.membership_id) return;
-    const ok = window.confirm(
-      `Mark membership for student ${row.student_id} as LEFT?`
-    );
-    if (!ok) return;
+    const reason = String(removeDialog.reason || "").trim();
+    if (!reason) {
+      setRemoveDialog((prev) => ({
+        ...prev,
+        error: "Removal reason is required."
+      }));
+      return;
+    }
+
     setActionBusyId(row.membership_id);
     setError("");
     try {
-      await deleteMembership(row.membership_id);
+      await deleteMembership(row.membership_id, reason);
+      setRemoveDialog({
+        row: null,
+        reason: "",
+        error: ""
+      });
       await loadMemberships();
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to mark membership as left");
+      const message = err?.response?.data?.message || "Failed to mark membership as left";
+      setRemoveDialog((prev) => ({
+        ...prev,
+        error: message
+      }));
     } finally {
       setActionBusyId(null);
     }
@@ -122,6 +159,98 @@ export default function MembershipManagement() {
 
   return (
     <div className="p-6 space-y-5 max-w-screen-xl">
+      {removeDialog.row ? (
+        <div
+          className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-900/45 px-4"
+          onClick={closeRemoveDialog}
+        >
+          <div
+            className="w-[min(92vw,480px)] rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-lg font-bold text-gray-900">Remove Membership</p>
+                <p className="mt-1 text-sm text-gray-600">
+                  Provide a reason for removing{" "}
+                  <span className="font-semibold text-gray-900">
+                    {removeDialog.row.student_name || removeDialog.row.student_id || "this member"}
+                  </span>{" "}
+                  from the group.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeRemoveDialog}
+                disabled={actionBusyId !== null}
+                className="rounded-md border border-gray-200 px-2.5 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+              <div className="font-medium text-gray-900">
+                {removeDialog.row.student_name || "—"}
+              </div>
+              <div className="mt-1 text-xs font-mono text-gray-500">
+                {removeDialog.row.student_id || "—"}
+              </div>
+              <div className="mt-1 text-xs text-gray-500">
+                Group: {removeDialog.row.group_name || "—"}
+              </div>
+            </div>
+
+            <label className="mt-4 block text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
+              Removal Reason
+            </label>
+            <textarea
+              value={removeDialog.reason}
+              onChange={(e) =>
+                setRemoveDialog((prev) => ({
+                  ...prev,
+                  reason: e.target.value,
+                  error: ""
+                }))
+              }
+              disabled={actionBusyId !== null}
+              rows={4}
+              maxLength={500}
+              placeholder="Explain why this membership is being removed."
+              className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:ring-2 focus:ring-blue-200 disabled:opacity-60"
+            />
+            <div className="mt-2 flex items-center justify-between text-xs text-gray-400">
+              <span>Required for audit trail.</span>
+              <span>{String(removeDialog.reason || "").length}/500</span>
+            </div>
+
+            {removeDialog.error ? (
+              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
+                {removeDialog.error}
+              </div>
+            ) : null}
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeRemoveDialog}
+                disabled={actionBusyId !== null}
+                className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={onDelete}
+                disabled={actionBusyId !== null || !String(removeDialog.reason || "").trim()}
+                className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-60"
+              >
+                {actionBusyId !== null ? "Removing..." : "Remove Membership"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -210,7 +339,7 @@ export default function MembershipManagement() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => onDelete(row)}
+                        onClick={() => openRemoveDialog(row)}
                         disabled={
                           String(row.membership_status).toUpperCase() !== "ACTIVE" ||
                           actionBusyId === row.membership_id

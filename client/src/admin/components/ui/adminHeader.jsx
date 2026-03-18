@@ -251,8 +251,11 @@ const AdminHeader = ({ onMenuClick }) => {
 
   const initials = getInitials(userName);
   const leadershipAttentionCount = Number(leadershipNotifications?.total_attention_count) || 0;
-  const groupsWithoutLeadershipCount =
-    Number(leadershipNotifications?.groups_without_leadership_count) || 0;
+  const groupsWithMissingLeadershipCount =
+    Number(
+      leadershipNotifications?.groups_with_missing_leadership_count ??
+        leadershipNotifications?.groups_without_leadership_count
+    ) || 0;
   const pendingLeadershipRequestCount =
     Number(leadershipNotifications?.pending_request_count) || 0;
 
@@ -318,7 +321,7 @@ const AdminHeader = ({ onMenuClick }) => {
         {leadershipAttentionCount > 0 && (
           <div
             className="hidden lg:flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-[11px] font-semibold text-red-700"
-            title={`Groups without leaders: ${groupsWithoutLeadershipCount}. Pending leadership requests: ${pendingLeadershipRequestCount}.`}
+            title={`Groups with missing leadership roles: ${groupsWithMissingLeadershipCount}. Pending leadership requests: ${pendingLeadershipRequestCount}.`}
           >
             <span>Leadership Alerts</span>
             <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-[10px] font-bold text-white">

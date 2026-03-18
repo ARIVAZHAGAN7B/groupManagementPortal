@@ -7,6 +7,8 @@ const groupRepo = require("../group/group.repository");
 
 const ADMIN_ROLES = ["ADMIN", "SYSTEM_ADMIN"];
 const TIERS = ["D", "C", "B", "A"];
+const CHANGE_ACTIONS = ["PROMOTE", "DEMOTE"];
+const GROUP_STATUSES = ["ACTIVE", "INACTIVE", "FROZEN"];
 
 const toBoolOrNull = (value) => {
   if (value === true || value === 1) return true;
@@ -40,6 +42,31 @@ const normalizeTier = (value) => {
   return tier;
 };
 
+const normalizeGroupStatus = (value) => {
+  const status = String(value || "")
+    .trim()
+    .toUpperCase();
+  if (!GROUP_STATUSES.includes(status)) return "INACTIVE";
+  return status;
+};
+
+const normalizeChangeAction = (value, { required = false } = {}) => {
+  const action = String(value || "")
+    .trim()
+    .toUpperCase();
+
+  if (!action) {
+    if (required) throw new Error("change_action is required");
+    return null;
+  }
+
+  if (!CHANGE_ACTIONS.includes(action)) {
+    throw new Error("change_action must be PROMOTE or DEMOTE");
+  }
+
+  return action;
+};
+
 const getNextTier = (tier) => {
   const idx = TIERS.indexOf(tier);
   if (idx < 0) return tier;
@@ -50,6 +77,12 @@ const getPrevTier = (tier) => {
   const idx = TIERS.indexOf(tier);
   if (idx < 0) return tier;
   return TIERS[Math.max(idx - 1, 0)];
+};
+
+const getTierForAction = (tier, action) => {
+  if (action === "PROMOTE") return getNextTier(tier);
+  if (action === "DEMOTE") return getPrevTier(tier);
+  return tier;
 };
 
 const sortPhasesAsc = (rows = []) =>
@@ -81,60 +114,35 @@ const getPhaseContext = async (phaseId) => {
 
 const buildRecommendation = ({
   currentTier,
+  groupStatus,
   lastPhaseEligible,
-  previousPhaseEligible
+  requestedAction
 }) => {
   const normalizedTier = normalizeTier(currentTier);
+  const normalizedStatus = normalizeGroupStatus(groupStatus);
   const lastEligible = toBoolOrNull(lastPhaseEligible);
-  const prevEligible = toBoolOrNull(previousPhaseEligible);
+  const selectedAction = normalizeChangeAction(requestedAction);
 
-  if (lastEligible === true) {
-    const targetTier = getNextTier(normalizedTier);
-    if (targetTier === normalizedTier) {
-      return {
-        change_action: "SAME",
-        recommended_tier: normalizedTier,
-        rule_code: "LAST_PHASE_ELIGIBLE_TOP_TIER"
-      };
-    }
+  if (normalizedStatus !== "ACTIVE") {
     return {
-      change_action: "PROMOTE",
-      recommended_tier: targetTier,
-      rule_code: "LAST_PHASE_ELIGIBLE_PROMOTE"
+      change_action: "DEMOTE",
+      recommended_tier: getPrevTier(normalizedTier),
+      rule_code: `${normalizedStatus}_AUTO_DEMOTE`,
+      action_locked: true,
+      available_actions: ["DEMOTE"]
     };
   }
 
-  if (lastEligible === false) {
-    if (prevEligible === false) {
-      const targetTier = getPrevTier(normalizedTier);
-      if (targetTier === normalizedTier) {
-        return {
-          change_action: "SAME",
-          recommended_tier: normalizedTier,
-          rule_code: "LAST_TWO_NOT_ELIGIBLE_BOTTOM_TIER"
-        };
-      }
-      return {
-        change_action: "DEMOTE",
-        recommended_tier: targetTier,
-        rule_code: "LAST_TWO_NOT_ELIGIBLE_DEMOTE"
-      };
-    }
-
-    return {
-      change_action: "SAME",
-      recommended_tier: normalizedTier,
-      rule_code:
-        prevEligible === true
-          ? "LAST_PHASE_NOT_ELIGIBLE_PREVIOUS_ELIGIBLE_SAME"
-          : "LAST_PHASE_NOT_ELIGIBLE_PREVIOUS_MISSING_SAME"
-    };
-  }
+  const changeAction = selectedAction || (lastEligible === true ? "PROMOTE" : "DEMOTE");
 
   return {
-    change_action: "SAME",
-    recommended_tier: normalizedTier,
-    rule_code: "LAST_PHASE_ELIGIBILITY_MISSING_SAME"
+    change_action: changeAction,
+    recommended_tier: getTierForAction(normalizedTier, changeAction),
+    rule_code: selectedAction
+      ? `ACTIVE_MANUAL_${changeAction}`
+      : `ACTIVE_DEFAULT_${changeAction}`,
+    action_locked: false,
+    available_actions: CHANGE_ACTIONS
   };
 };
 
@@ -185,8 +193,8 @@ const getPhaseTierChangePreview = async (phaseId, actorUser) => {
 
     const recommendation = buildRecommendation({
       currentTier,
-      lastPhaseEligible,
-      previousPhaseEligible
+      groupStatus: group.status,
+      lastPhaseEligible
     });
 
     const saved = savedByGroup.get(String(group.group_id)) || null;
@@ -218,7 +226,7 @@ const getPhaseTierChangePreview = async (phaseId, actorUser) => {
     };
   });
 
-  const actionRank = { PROMOTE: 0, DEMOTE: 1, SAME: 2 };
+  const actionRank = { PROMOTE: 0, DEMOTE: 1 };
   rows.sort((a, b) => {
     const aRank = actionRank[a.change_action] ?? 9;
     const bRank = actionRank[b.change_action] ?? 9;
@@ -247,7 +255,7 @@ const getPhaseTierChangePreview = async (phaseId, actorUser) => {
   };
 };
 
-const computeSingleGroupPreviewTx = async (conn, phaseId, groupId) => {
+const computeSingleGroupPreviewTx = async (conn, phaseId, groupId, options = {}) => {
   const { phase, previousPhase } = await getPhaseContext(phaseId);
 
   // Backfill missing eligibility for historical phases before deriving decisions.
@@ -294,8 +302,9 @@ const computeSingleGroupPreviewTx = async (conn, phaseId, groupId) => {
   const currentTier = normalizeTier(group.tier);
   const recommendation = buildRecommendation({
     currentTier,
+    groupStatus: group.status,
     lastPhaseEligible,
-    previousPhaseEligible
+    requestedAction: options.change_action
   });
 
   return {
@@ -309,7 +318,7 @@ const computeSingleGroupPreviewTx = async (conn, phaseId, groupId) => {
   };
 };
 
-const applyPhaseTierChange = async (phaseId, groupId, actorUser) => {
+const applyPhaseTierChange = async (phaseId, groupId, actorUser, payload = {}) => {
   const numericGroupId = Number(groupId);
   if (!Number.isInteger(numericGroupId) || numericGroupId <= 0) {
     throw new Error("group_id must be a positive integer");
@@ -320,15 +329,13 @@ const applyPhaseTierChange = async (phaseId, groupId, actorUser) => {
     await conn.beginTransaction();
 
     const adminId = await ensureAdminActor(conn, actorUser);
-    const preview = await computeSingleGroupPreviewTx(conn, phaseId, numericGroupId);
+    const preview = await computeSingleGroupPreviewTx(conn, phaseId, numericGroupId, {
+      change_action: payload?.change_action
+    });
 
     const existing = await repo.findByPhaseAndGroupTx(conn, phaseId, numericGroupId);
     if (existing) {
       throw new Error("team_change_tier already exists for this phase and group");
-    }
-
-    if (String(preview.group.status || "").toUpperCase() === "FROZEN") {
-      throw new Error("Cannot apply tier change for a frozen group");
     }
 
     if (preview.recommended_tier !== preview.current_tier) {

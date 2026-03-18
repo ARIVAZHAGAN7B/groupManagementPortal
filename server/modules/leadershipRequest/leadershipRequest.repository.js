@@ -122,7 +122,7 @@ const countPendingRequests = async () => {
   return Number(row?.count) || 0;
 };
 
-const listGroupsWithoutLeadership = async (limit = 10) => {
+const listGroupsWithMissingLeadership = async (limit = 10) => {
   const safeLimit = Math.max(1, Math.min(Number(limit) || 10, 50));
   const [rows] = await db.query(
     `SELECT
@@ -131,19 +131,26 @@ const listGroupsWithoutLeadership = async (limit = 10) => {
        g.group_name,
        g.status,
        COALESCE(ms.active_member_count, 0) AS active_member_count,
-       COALESCE(ms.active_leadership_count, 0) AS active_leadership_count,
+       COALESCE(ms.captain_count, 0) AS captain_count,
+       COALESCE(ms.vice_captain_count, 0) AS vice_captain_count,
+       COALESCE(ms.strategist_count, 0) AS strategist_count,
+       COALESCE(ms.manager_count, 0) AS manager_count,
+       (
+         CASE WHEN COALESCE(ms.captain_count, 0) = 0 THEN 1 ELSE 0 END +
+         CASE WHEN COALESCE(ms.vice_captain_count, 0) = 0 THEN 1 ELSE 0 END +
+         CASE WHEN COALESCE(ms.strategist_count, 0) = 0 THEN 1 ELSE 0 END +
+         CASE WHEN COALESCE(ms.manager_count, 0) = 0 THEN 1 ELSE 0 END
+       ) AS missing_role_count,
        COALESCE(pr.pending_request_count, 0) AS pending_request_count
      FROM Sgroup g
      LEFT JOIN (
        SELECT
          m.group_id,
          COUNT(*) AS active_member_count,
-         SUM(
-           CASE
-             WHEN m.role IN ('CAPTAIN','VICE_CAPTAIN','STRATEGIST','MANAGER') THEN 1
-             ELSE 0
-           END
-         ) AS active_leadership_count
+         SUM(CASE WHEN m.role = 'CAPTAIN' THEN 1 ELSE 0 END) AS captain_count,
+         SUM(CASE WHEN m.role = 'VICE_CAPTAIN' THEN 1 ELSE 0 END) AS vice_captain_count,
+         SUM(CASE WHEN m.role = 'STRATEGIST' THEN 1 ELSE 0 END) AS strategist_count,
+         SUM(CASE WHEN m.role = 'MANAGER' THEN 1 ELSE 0 END) AS manager_count
        FROM memberships m
        WHERE m.status='ACTIVE'
        GROUP BY m.group_id
@@ -157,8 +164,14 @@ const listGroupsWithoutLeadership = async (limit = 10) => {
      ) pr
        ON pr.group_id = g.group_id
      WHERE COALESCE(ms.active_member_count, 0) > 0
-       AND COALESCE(ms.active_leadership_count, 0) = 0
+       AND (
+         COALESCE(ms.captain_count, 0) = 0 OR
+         COALESCE(ms.vice_captain_count, 0) = 0 OR
+         COALESCE(ms.strategist_count, 0) = 0 OR
+         COALESCE(ms.manager_count, 0) = 0
+       )
      ORDER BY
+       missing_role_count DESC,
        COALESCE(pr.pending_request_count, 0) DESC,
        COALESCE(ms.active_member_count, 0) DESC,
        g.group_id ASC
@@ -168,7 +181,7 @@ const listGroupsWithoutLeadership = async (limit = 10) => {
   return rows;
 };
 
-const countGroupsWithoutLeadership = async () => {
+const countGroupsWithMissingLeadership = async () => {
   const [[row]] = await db.query(
     `SELECT COUNT(*) AS count
      FROM (
@@ -177,12 +190,11 @@ const countGroupsWithoutLeadership = async () => {
        FROM memberships m
        WHERE m.status='ACTIVE'
        GROUP BY m.group_id
-       HAVING SUM(
-         CASE
-           WHEN m.role IN ('CAPTAIN','VICE_CAPTAIN','STRATEGIST','MANAGER') THEN 1
-           ELSE 0
-         END
-       ) = 0
+       HAVING
+         SUM(CASE WHEN m.role = 'CAPTAIN' THEN 1 ELSE 0 END) = 0 OR
+         SUM(CASE WHEN m.role = 'VICE_CAPTAIN' THEN 1 ELSE 0 END) = 0 OR
+         SUM(CASE WHEN m.role = 'STRATEGIST' THEN 1 ELSE 0 END) = 0 OR
+         SUM(CASE WHEN m.role = 'MANAGER' THEN 1 ELSE 0 END) = 0
      ) t`
   );
   return Number(row?.count) || 0;
@@ -197,6 +209,6 @@ module.exports = {
   findAllPending,
   findByStudent,
   countPendingRequests,
-  listGroupsWithoutLeadership,
-  countGroupsWithoutLeadership
+  listGroupsWithMissingLeadership,
+  countGroupsWithMissingLeadership
 };

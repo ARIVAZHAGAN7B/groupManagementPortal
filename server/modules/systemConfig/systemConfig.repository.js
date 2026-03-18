@@ -32,6 +32,18 @@ const ensureSchema = async () => {
         )
       `);
 
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS holidays (
+          holiday_id INT PRIMARY KEY AUTO_INCREMENT,
+          holiday_date DATE NOT NULL UNIQUE,
+          holiday_name VARCHAR(150) NOT NULL,
+          description TEXT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            ON UPDATE CURRENT_TIMESTAMP
+        )
+      `);
+
       try {
         await db.query(
           `ALTER TABLE memberships ADD COLUMN incubation_end_date DATETIME NULL`
@@ -98,10 +110,77 @@ const upsertSettings = async (entries = [], executor) => {
   }
 };
 
+const getAllHolidays = async () => {
+  await ensureSchema();
+  const [rows] = await db.query(
+    `SELECT holiday_id, DATE_FORMAT(holiday_date, '%Y-%m-%d') AS holiday_date, holiday_name, description, created_at, updated_at
+     FROM holidays
+     ORDER BY holiday_date ASC, holiday_name ASC`
+  );
+  return rows;
+};
+
+const getHolidayById = async (holidayId) => {
+  await ensureSchema();
+  const [rows] = await db.query(
+    `SELECT holiday_id, DATE_FORMAT(holiday_date, '%Y-%m-%d') AS holiday_date, holiday_name, description, created_at, updated_at
+     FROM holidays
+     WHERE holiday_id = ?
+     LIMIT 1`,
+    [holidayId]
+  );
+  return rows[0] || null;
+};
+
+const getHolidayByDate = async (holidayDate) => {
+  await ensureSchema();
+  const [rows] = await db.query(
+    `SELECT holiday_id, DATE_FORMAT(holiday_date, '%Y-%m-%d') AS holiday_date, holiday_name, description, created_at, updated_at
+     FROM holidays
+     WHERE holiday_date = ?
+     LIMIT 1`,
+    [holidayDate]
+  );
+  return rows[0] || null;
+};
+
+const createHoliday = async ({ holiday_date, holiday_name, description }) => {
+  await ensureSchema();
+  const [result] = await db.query(
+    `INSERT INTO holidays (holiday_date, holiday_name, description)
+     VALUES (?, ?, ?)`,
+    [holiday_date, holiday_name, description || null]
+  );
+  return getHolidayById(result.insertId);
+};
+
+const updateHoliday = async (holidayId, { holiday_date, holiday_name, description }) => {
+  await ensureSchema();
+  await db.query(
+    `UPDATE holidays
+     SET holiday_date = ?, holiday_name = ?, description = ?
+     WHERE holiday_id = ?`,
+    [holiday_date, holiday_name, description || null, holidayId]
+  );
+  return getHolidayById(holidayId);
+};
+
+const deleteHoliday = async (holidayId) => {
+  await ensureSchema();
+  const [result] = await db.query(`DELETE FROM holidays WHERE holiday_id = ?`, [holidayId]);
+  return result.affectedRows > 0;
+};
+
 module.exports = {
   DEFAULT_SETTINGS,
   ensureSchema,
   getAllSettings,
   getSettingsByKeys,
-  upsertSettings
+  upsertSettings,
+  getAllHolidays,
+  getHolidayById,
+  getHolidayByDate,
+  createHoliday,
+  updateHoliday,
+  deleteHoliday
 };

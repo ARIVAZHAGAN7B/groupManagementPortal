@@ -15,7 +15,8 @@ const applyPhaseTierChange = async (req, res) => {
     const result = await service.applyPhaseTierChange(
       req.params.phase_id,
       req.params.group_id,
-      req.user
+      req.user,
+      req.body || {}
     );
 
     await auditService.logActionSafe({
@@ -47,4 +48,3 @@ module.exports = {
   applyPhaseTierChange,
   getPhaseWiseTeamChangeTier
 };
-

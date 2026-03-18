@@ -16,6 +16,7 @@ import {
   attachPhaseDetails,
   collectPhaseGroups,
   defaultTargets,
+  formatPhaseDateRange,
   getIndividualTargetInput,
   mapTargetInputs,
   mergeCurrentPhaseState
@@ -247,6 +248,31 @@ export default function PhaseConfiguration() {
     );
   }, [form, targets, individualTarget, workingDaysLoading]);
 
+  const configuredTargetCount = useMemo(() => {
+    const groupTargets = targets.filter(
+      (row) => String(row?.group_target ?? "").trim() !== ""
+    ).length;
+
+    return groupTargets + (String(individualTarget || "").trim() ? 1 : 0);
+  }, [targets, individualTarget]);
+
+  const headerStats = useMemo(
+    () => ({
+      activePhaseLabel: phase?.phase_name || phase?.phase_id || "No active phase",
+      activePhaseDetail: phase?.phase_id ? formatPhaseDateRange(phase) : "Create your next phase",
+      statusLabel: String(phase?.status || "inactive").toUpperCase(),
+      statusDetail:
+        phase?.total_working_days || phase?.total_working_days === 0
+          ? `${phase.total_working_days} working days`
+          : "No schedule configured",
+      targetLabel: `${configuredTargetCount}/5`,
+      targetDetail: "4 group tiers + 1 individual target",
+      archiveLabel: additionalInactivePhases.length,
+      archiveDetail: `${recentPhases.length} recent phase${recentPhases.length === 1 ? "" : "s"} shown`
+    }),
+    [additionalInactivePhases.length, configuredTargetCount, phase, recentPhases.length]
+  );
+
   const onCreatePhase = async (e) => {
     e.preventDefault();
     if (!canCreate) return;
@@ -353,15 +379,18 @@ export default function PhaseConfiguration() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-500 shadow-sm">
-        Loading phase configuration...
+      <div className="mx-auto w-full max-w-7xl px-4 py-5 md:px-6">
+        <div className="flex min-h-[240px] items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-500 shadow-sm">
+          Loading phase configuration...
+        </div>
       </div>
     );
   }
 
   return (
-    <section className="space-y-8 font-[Inter] text-slate-900">
+    <section className="mx-auto w-full max-w-7xl space-y-6 px-4 py-5 font-[Inter] text-slate-900 md:px-6">
       <PhaseConfigurationPageHeader
+        stats={headerStats}
         loading={loading}
         onRefresh={loadPhaseConfiguration}
       />
@@ -369,7 +398,7 @@ export default function PhaseConfiguration() {
       {error ? <StatusBanner tone="error" message={error} /> : null}
       {success ? <StatusBanner tone="success" message={success} /> : null}
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <PhaseConfigurationCreateCard
           canCreate={canCreate}
           createLoading={createLoading}

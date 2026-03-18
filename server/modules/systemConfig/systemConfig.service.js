@@ -9,6 +9,8 @@ const KNOWN_KEYS = [
   "enforce_change_day_for_leave"
 ];
 
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 const toSettingsMap = (rows = []) => {
   const map = new Map();
   for (const row of rows) {
@@ -33,6 +35,58 @@ const parsePositiveInt = (value, fieldName, min = 0, max = 3650) => {
   }
   return n;
 };
+
+const parseDateOnly = (value, fieldName = "holiday_date") => {
+  const normalized = String(value || "").trim();
+  if (!DATE_ONLY_RE.test(normalized)) {
+    throw new Error(`${fieldName} must be in YYYY-MM-DD format`);
+  }
+  return normalized;
+};
+
+const parseRequiredText = (value, fieldName, maxLength = 150) => {
+  const normalized = String(value || "").trim();
+  if (!normalized) {
+    throw new Error(`${fieldName} is required`);
+  }
+  if (normalized.length > maxLength) {
+    throw new Error(`${fieldName} must be ${maxLength} characters or fewer`);
+  }
+  return normalized;
+};
+
+const parseOptionalText = (value, fieldName, maxLength = 500) => {
+  if (value === undefined || value === null) return null;
+  const normalized = String(value).trim();
+  if (!normalized) return null;
+  if (normalized.length > maxLength) {
+    throw new Error(`${fieldName} must be ${maxLength} characters or fewer`);
+  }
+  return normalized;
+};
+
+const normalizeHolidayDate = (value) => {
+  if (!value) return null;
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  const normalized = String(value).trim();
+  const matched = normalized.match(/\d{4}-\d{2}-\d{2}/);
+  return matched ? matched[0] : normalized;
+};
+
+const normalizeHolidayRow = (row) => ({
+  ...row,
+  holiday_date: normalizeHolidayDate(row?.holiday_date)
+});
+
+const isDuplicateHolidayError = (error) =>
+  error?.code === "ER_DUP_ENTRY" || /duplicate/i.test(String(error?.message || ""));
 
 const normalizePolicyPayload = (payload = {}, current) => {
   const minGroupMembers = payload.min_group_members ?? current.min_group_members;
@@ -166,9 +220,90 @@ const updateIncubationConfig = async (payload = {}) => {
   return getIncubationConfig();
 };
 
+const listHolidays = async () => {
+  const rows = await repo.getAllHolidays();
+  return rows.map(normalizeHolidayRow);
+};
+
+const getHolidayById = async (holidayId) => {
+  const parsedHolidayId = parsePositiveInt(holidayId, "holiday_id", 1, 1000000000);
+  const holiday = await repo.getHolidayById(parsedHolidayId);
+  if (!holiday) {
+    throw new Error("Holiday not found");
+  }
+
+  return normalizeHolidayRow(holiday);
+};
+
+const createHoliday = async (payload = {}) => {
+  const holiday = {
+    holiday_date: parseDateOnly(payload.holiday_date),
+    holiday_name: parseRequiredText(payload.holiday_name, "holiday_name", 150),
+    description: parseOptionalText(payload.description, "description", 500)
+  };
+
+  try {
+    const created = await repo.createHoliday(holiday);
+    return normalizeHolidayRow(created);
+  } catch (error) {
+    if (isDuplicateHolidayError(error)) {
+      throw new Error(`A holiday already exists for ${holiday.holiday_date}`);
+    }
+    throw error;
+  }
+};
+
+const updateHoliday = async (holidayId, payload = {}) => {
+  const parsedHolidayId = parsePositiveInt(holidayId, "holiday_id", 1, 1000000000);
+  const existing = await repo.getHolidayById(parsedHolidayId);
+  if (!existing) {
+    throw new Error("Holiday not found");
+  }
+
+  const holiday = {
+    holiday_date: parseDateOnly(payload.holiday_date ?? existing.holiday_date),
+    holiday_name: parseRequiredText(
+      payload.holiday_name ?? existing.holiday_name,
+      "holiday_name",
+      150
+    ),
+    description: parseOptionalText(
+      payload.description ?? existing.description,
+      "description",
+      500
+    )
+  };
+
+  try {
+    const updated = await repo.updateHoliday(parsedHolidayId, holiday);
+    return normalizeHolidayRow(updated);
+  } catch (error) {
+    if (isDuplicateHolidayError(error)) {
+      throw new Error(`A holiday already exists for ${holiday.holiday_date}`);
+    }
+    throw error;
+  }
+};
+
+const deleteHoliday = async (holidayId) => {
+  const parsedHolidayId = parsePositiveInt(holidayId, "holiday_id", 1, 1000000000);
+  const existing = await repo.getHolidayById(parsedHolidayId);
+  if (!existing) {
+    throw new Error("Holiday not found");
+  }
+
+  await repo.deleteHoliday(parsedHolidayId);
+  return normalizeHolidayRow(existing);
+};
+
 module.exports = {
   getOperationalPolicy,
   updateOperationalPolicy,
   getIncubationConfig,
-  updateIncubationConfig
+  updateIncubationConfig,
+  listHolidays,
+  getHolidayById,
+  createHoliday,
+  updateHoliday,
+  deleteHoliday
 };

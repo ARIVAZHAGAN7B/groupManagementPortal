@@ -138,7 +138,11 @@ const updateTeamMember = async (req, res) => {
 
 const leaveTeamMember = async (req, res) => {
   try {
-    const row = await teamService.leaveTeamMember(req.params.membershipId, req.body);
+    const row = await teamService.leaveTeamMember(
+      req.params.membershipId,
+      req.body,
+      req.user || null
+    );
     res.json({
       message: "Team membership marked as left",
       data: row

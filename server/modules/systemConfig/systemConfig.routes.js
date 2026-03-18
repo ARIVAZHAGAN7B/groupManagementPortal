@@ -14,4 +14,10 @@ router.put("/policy", controller.updatePolicy);
 router.get("/incubation", controller.getIncubation);
 router.put("/incubation", controller.updateIncubation);
 
+router.get("/holidays", controller.listHolidays);
+router.get("/holidays/:id", controller.getHolidayById);
+router.post("/holidays", controller.createHoliday);
+router.put("/holidays/:id", controller.updateHoliday);
+router.delete("/holidays/:id", controller.deleteHoliday);
+
 module.exports = router;

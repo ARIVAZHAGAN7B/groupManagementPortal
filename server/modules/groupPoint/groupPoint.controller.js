@@ -49,7 +49,7 @@ const getGroupPointTotal = async (req, res) => {
     const data = await service.getGroupPointTotal(req.query || {});
     res.json(data);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    res.status(400).json({ message: error.message });/*  */
   }
 };
 

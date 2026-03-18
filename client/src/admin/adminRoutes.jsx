@@ -9,6 +9,8 @@ import ChangeDayManagement from "./pages/changeDayManagement";
 import IncubationConfiguration from "./pages/IncubationConfiguration";
 import MembershipManagement from "./pages/membershipManagement";
 import PhaseConfiguration from "./pages/phaseConfiguration";
+import SettingsPage from "./pages/settingsPage";
+import HolidayManagement from "./pages/holidayManagement";
 import StudentManagement from "./pages/studentManagement";
 import BasePointsManagement from "./pages/basePointsManagement";
 import TeamManagement from "./pages/teamManagement";
@@ -18,6 +20,7 @@ import EligibilityManagement from "./pages/eligibilityManagement";
 import EventJoinRequestManagement from "./pages/eventJoinRequestManagement";
 import LeadershipRequestManagement from "./pages/leadershipRequestManagement";
 import TierChangeRequestManagement from "./pages/tierChangeRequestManagement";
+import EventDetailsPage from "./pages/events/EventDetailsPage";
 import AdminLayout from "./components/layout/adminLayout";
 import GroupManagementPage from "./pages/groups/GroupManagementPage";
 import CreateGroupPage from "./pages/groups/CreateGroupPage";
@@ -36,9 +39,12 @@ const AdminRoutes = () => {
       <Route path="/groups/:id" element={<GroupDetailsPage />} />
       <Route path="/groups/:id/edit" element={<EditGroupPage />} />
       <Route path="/event-management" element={<EventManagement />} />
+      <Route path="/event-management/:id" element={<EventDetailsPage />} />
       <Route path="/group-management" element={<GroupManagement />} />
       <Route path="/change-day-management" element={<ChangeDayManagement />} />
+      <Route path="/settings" element={<SettingsPage />} />
       <Route path="/incubation-configuration" element={<IncubationConfiguration />} />
+      <Route path="/holiday-management" element={<HolidayManagement />} />
       <Route path="/membership-management" element={<MembershipManagement />} />
       <Route path="/phase-configuration" element={<PhaseConfiguration />} />
       <Route path="/eligibility" element={<EligibilityManagement />} />

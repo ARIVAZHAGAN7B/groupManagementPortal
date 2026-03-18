@@ -3,6 +3,7 @@ const repo = require("./team.repository");
 const eventRepo = require("../event/event.repository");
 
 const TEAM_TYPES = ["TEAM", "HUB", "SECTION", "EVENT"];
+const ADMIN_CREATABLE_TEAM_TYPES = ["TEAM", "HUB"];
 const TEAM_STATUSES = ["ACTIVE", "INACTIVE", "FROZEN", "ARCHIVED"];
 const TEAM_MEMBERSHIP_STATUSES = ["ACTIVE", "LEFT"];
 const EVENT_GROUP_MEMBERSHIP_ROLES = ["CAPTAIN", "VICE_CAPTAIN", "MEMBER"];
@@ -41,6 +42,35 @@ const normalizeOptionalTeamType = (value, fieldName = "team_type") => {
   return normalized;
 };
 
+const enforceAdminCreatableTeamType = (teamType) => {
+  if (!ADMIN_CREATABLE_TEAM_TYPES.includes(teamType)) {
+    throw new Error("Admin can only create TEAM or HUB records from Team Management");
+  }
+};
+
+const enforceAdminManagedTeamTypeTransition = (existingType, nextType) => {
+  const current = normalizeText(existingType).toUpperCase();
+  const requested = normalizeText(nextType).toUpperCase();
+
+  if (current === "EVENT") {
+    if (requested !== "EVENT") {
+      throw new Error("Event groups must remain EVENT type");
+    }
+    return;
+  }
+
+  if (current === "SECTION") {
+    if (requested !== "SECTION") {
+      throw new Error("Legacy SECTION records cannot change type from Team Management");
+    }
+    return;
+  }
+
+  if (!ADMIN_CREATABLE_TEAM_TYPES.includes(requested)) {
+    throw new Error("Admin can only save TEAM or HUB records from Team Management");
+  }
+};
+
 const normalizeTeamStatus = (value) => {
   const normalized = normalizeText(value).toUpperCase() || "ACTIVE";
   if (!TEAM_STATUSES.includes(normalized)) {
@@ -66,6 +96,61 @@ const normalizeEventId = (value) => {
     throw new Error("event_id must be a positive integer");
   }
   return parsed;
+};
+
+const getEventDateValue = (source, primaryField, fallbackField = null) => {
+  const primary = source?.[primaryField];
+  if (primary !== undefined && primary !== null && primary !== "") return primary;
+  if (fallbackField) return source?.[fallbackField];
+  return null;
+};
+
+const getStartOfDay = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 0, 0, 0, 0);
+};
+
+const getEndOfDay = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 23, 59, 59, 999);
+};
+
+const ensureEventRegistrationWindowOpen = (eventLike) => {
+  if (!eventLike) return;
+
+  const registrationStart = getStartOfDay(
+    getEventDateValue(eventLike, "registration_start_date", "event_registration_start_date")
+  );
+  const registrationEnd = getEndOfDay(
+    getEventDateValue(eventLike, "registration_end_date", "event_registration_end_date")
+  );
+  const now = new Date();
+
+  if (registrationStart && now < registrationStart) {
+    throw new Error("Registration has not opened for this event yet");
+  }
+
+  if (registrationEnd && now > registrationEnd) {
+    throw new Error("Registration is closed for this event");
+  }
+};
+
+const ensureEventTeamCapacity = (teamLike) => {
+  if (!teamLike) return;
+
+  const maxMembers = Number(
+    getEventDateValue(teamLike, "max_members", "event_max_members")
+  );
+  if (!Number.isInteger(maxMembers) || maxMembers <= 0) return;
+
+  const activeMemberCount = Number(teamLike.active_member_count) || 0;
+  if (activeMemberCount >= maxMembers) {
+    throw new Error(`This event group already has the maximum of ${maxMembers} members`);
+  }
 };
 
 const normalizePayload = (payload = {}) => {
@@ -189,6 +274,8 @@ const createTeam = async (payload, actorUserId = null) => {
     status: payload?.status || "ACTIVE"
   });
 
+  enforceAdminCreatableTeamType(normalized.team_type);
+
   if (normalized.event_id !== undefined && normalized.event_id !== null) {
     await ensureEventExists(normalized.event_id);
   }
@@ -222,7 +309,8 @@ const createTeamInEventByStudent = async (eventId, payload, actorUserId) => {
   try {
     await conn.beginTransaction();
 
-    await ensureEventActive(normalized.event_id, conn);
+    const event = await ensureEventActive(normalized.event_id, conn);
+    ensureEventRegistrationWindowOpen(event);
     await ensureNoActiveEventTeamMembership(student.student_id, normalized.event_id, conn);
     await ensureUniqueTeamCode(normalized.team_code);
 
@@ -307,6 +395,8 @@ const updateTeam = async (teamId, payload) => {
       payload?.description !== undefined ? payload.description : existing.description
   });
 
+  enforceAdminManagedTeamTypeTransition(existing.team_type, normalized.team_type);
+
   if (normalized.event_id !== undefined && normalized.event_id !== null) {
     await ensureEventExists(normalized.event_id);
   }
@@ -371,6 +461,8 @@ const addTeamMember = async (teamId, payload = {}, actorUserId = null) => {
   if (team.event_id) {
     const event = await ensureEventActive(team.event_id);
     if (!event) throw new Error("Event not found");
+    ensureEventRegistrationWindowOpen(event);
+    ensureEventTeamCapacity(team);
   }
 
   const studentId = normalizeText(payload.student_id);
@@ -451,15 +543,47 @@ const updateTeamMember = async (membershipId, payload = {}) => {
   return row ? mapMembershipRow(row) : null;
 };
 
-const leaveTeamMember = async (membershipId, payload = {}) => {
+const leaveTeamMember = async (membershipId, payload = {}, actorUser = null) => {
   const membership = await repo.getTeamMembershipById(membershipId);
   if (!membership) throw new Error("Team membership not found");
   if (String(membership.status).toUpperCase() !== "ACTIVE") {
     throw new Error("Team membership is already left");
   }
 
+  const actorRole = String(actorUser?.role || "").toUpperCase();
+  const actorUserId = actorUser?.userId || null;
+
+  if (!actorUserId || !actorRole) {
+    throw new Error("Unauthorized");
+  }
+
+  if (!["ADMIN", "SYSTEM_ADMIN"].includes(actorRole)) {
+    const actorStudent = await repo.getStudentByUserId(actorUserId);
+    if (!actorStudent) throw new Error("Student not found");
+
+    const isSelfLeave = String(actorStudent.student_id) === String(membership.student_id);
+    if (!isSelfLeave) {
+      const actorMembership = await repo.findActiveTeamMembershipByTeamAndStudent(
+        Number(membership.team_id),
+        actorStudent.student_id
+      );
+
+      const canCaptainRemove =
+        actorRole === "CAPTAIN" &&
+        actorMembership &&
+        String(actorMembership.role || "").toUpperCase() === "CAPTAIN";
+
+      if (!canCaptainRemove) {
+        throw new Error("Only admin or team captain can remove memberships");
+      }
+    }
+  }
+
   await repo.leaveTeamMembership(membershipId, {
-    notes: payload.notes !== undefined ? normalizeNotes(payload.notes) : null
+    notes:
+      payload?.notes !== undefined && payload?.notes !== null
+        ? normalizeNotes(payload.notes)
+        : null
   });
 
   const row = await repo.getTeamMembershipById(membershipId);

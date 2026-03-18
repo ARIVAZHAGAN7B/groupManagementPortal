@@ -8,10 +8,15 @@ import {
   decideJoinRequest,
   getPendingRequestsByGroup
 } from "../../service/joinRequests.api";
+import {
+  applyLeadershipRoleRequest,
+  getMyLeadershipRoleRequests
+} from "../../service/leadershipRequests.api";
 import { fetchAllPhases } from "../../service/phase.api";
 import { fetchGroupEligibilitySummary } from "../../service/eligibility.api";
 import MyGroupEligibilitySection from "../components/myGroup/MyGroupEligibilitySection";
 import MyGroupHero from "../components/myGroup/MyGroupHero";
+import MyGroupLeadershipSection from "../components/myGroup/MyGroupLeadershipSection";
 import MyGroupMembersSection from "../components/myGroup/MyGroupMembersSection";
 import MyGroupRequestsSection from "../components/myGroup/MyGroupRequestsSection";
 import MyGroupTabs from "../components/myGroup/MyGroupTabs";
@@ -30,11 +35,35 @@ const MyGroup = () => {
   const [eligibility, setEligibility] = useState([]);
   const [eligibilityLoading, setEligibilityLoading] = useState(false);
   const [eligibilityErr, setEligibilityErr] = useState("");
+  const [leadershipRequests, setLeadershipRequests] = useState([]);
+  const [leadershipLoading, setLeadershipLoading] = useState(false);
+  const [leadershipErr, setLeadershipErr] = useState("");
+  const [leadershipSubmitting, setLeadershipSubmitting] = useState(false);
+  const [leadershipForm, setLeadershipForm] = useState({
+    requested_role: "",
+    request_reason: ""
+  });
 
-  const isCaptain = String(data?.role || "").toUpperCase() === "CAPTAIN";
+  const currentRole = String(data?.role || "").toUpperCase();
+  const isCaptain = currentRole === "CAPTAIN";
   const missingLeadershipRoles = useMemo(
     () => getMissingLeadershipRoles(members),
     [members]
+  );
+  const canRequestLeadershipRole = currentRole === "MEMBER";
+  const currentGroupLeadershipRequests = useMemo(
+    () =>
+      leadershipRequests.filter(
+        (row) => String(row?.group_id) === String(data?.group_id)
+      ),
+    [data?.group_id, leadershipRequests]
+  );
+  const pendingLeadershipRequest = useMemo(
+    () =>
+      currentGroupLeadershipRequests.find(
+        (row) => String(row?.status || "").toUpperCase() === "PENDING"
+      ) || null,
+    [currentGroupLeadershipRequests]
   );
 
   const load = useCallback(async () => {
@@ -51,6 +80,8 @@ const MyGroup = () => {
         setPending([]);
         setEligibility([]);
         setEligibilityErr("");
+        setLeadershipRequests([]);
+        setLeadershipErr("");
         return;
       }
 
@@ -137,16 +168,72 @@ const MyGroup = () => {
     }
   }, [data?.group_id]);
 
+  const loadLeadershipRequests = useCallback(async () => {
+    if (!data?.group_id) {
+      setLeadershipRequests([]);
+      setLeadershipErr("");
+      return;
+    }
+
+    setLeadershipLoading(true);
+    setLeadershipErr("");
+
+    try {
+      const rows = await getMyLeadershipRoleRequests();
+      const nextRows = Array.isArray(rows)
+        ? rows.filter((row) => String(row?.group_id) === String(data.group_id))
+        : [];
+
+      setLeadershipRequests(nextRows);
+    } catch (err) {
+      setLeadershipErr(
+        err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          "Failed to load leadership requests."
+      );
+      setLeadershipRequests([]);
+    } finally {
+      setLeadershipLoading(false);
+    }
+  }, [data?.group_id]);
+
   useEffect(() => {
     if (activeTab !== "eligibility" || !data?.group_id) return;
     loadEligibility();
   }, [activeTab, data?.group_id, loadEligibility]);
 
   useEffect(() => {
+    if (activeTab !== "leadership" || !data?.group_id) return;
+    loadLeadershipRequests();
+  }, [activeTab, data?.group_id, loadLeadershipRequests]);
+
+  useEffect(() => {
     if (!isCaptain && activeTab === "requests") {
       setActiveTab("members");
     }
   }, [activeTab, isCaptain]);
+
+  useEffect(() => {
+    if (!canRequestLeadershipRole && currentGroupLeadershipRequests.length === 0 && activeTab === "leadership") {
+      setActiveTab("members");
+    }
+  }, [activeTab, canRequestLeadershipRole, currentGroupLeadershipRequests.length]);
+
+  useEffect(() => {
+    setLeadershipForm((prev) => {
+      if (
+        prev.requested_role &&
+        missingLeadershipRoles.includes(String(prev.requested_role).toUpperCase())
+      ) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        requested_role: missingLeadershipRoles[0] || ""
+      };
+    });
+  }, [missingLeadershipRoles]);
 
   const onLeave = async () => {
     if (!data?.group_id) return;
@@ -184,13 +271,82 @@ const MyGroup = () => {
     }
   };
 
+  const updateLeadershipForm = (field, value) => {
+    setLeadershipForm((prev) => ({
+      ...prev,
+      [field]: value
+    }));
+    setLeadershipErr("");
+    setActionErr("");
+  };
+
+  const onLeadershipSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!data?.group_id || !canRequestLeadershipRole) return;
+
+    const requestedRole = String(leadershipForm.requested_role || "")
+      .trim()
+      .toUpperCase();
+
+    if (!requestedRole) {
+      setLeadershipErr("Select an open leadership role.");
+      return;
+    }
+
+    setLeadershipSubmitting(true);
+    setLeadershipErr("");
+    setActionErr("");
+
+    try {
+      await applyLeadershipRoleRequest({
+        group_id: data.group_id,
+        requested_role: requestedRole,
+        request_reason: String(leadershipForm.request_reason || "").trim()
+      });
+
+      setLeadershipForm({
+        requested_role: missingLeadershipRoles[0] || "",
+        request_reason: ""
+      });
+
+      await Promise.all([loadLeadershipRequests(), load()]);
+      setActiveTab("leadership");
+    } catch (err) {
+      setLeadershipErr(
+        err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          "Failed to submit leadership request."
+      );
+    } finally {
+      setLeadershipSubmitting(false);
+    }
+  };
+
   const tabs = useMemo(
     () => [
       { key: "members", label: "Members", count: members.length },
       { key: "eligibility", label: "Eligibility", count: null },
+      ...(canRequestLeadershipRole || currentGroupLeadershipRequests.length > 0
+        ? [
+            {
+              key: "leadership",
+              label: "Leadership",
+              count: currentGroupLeadershipRequests.filter(
+                (row) => String(row?.status || "").toUpperCase() === "PENDING"
+              ).length
+            }
+          ]
+        : []),
       ...(isCaptain ? [{ key: "requests", label: "Join Requests", count: pending.length }] : [])
     ],
-    [isCaptain, members.length, pending.length]
+    [
+      canRequestLeadershipRole,
+      currentGroupLeadershipRequests,
+      isCaptain,
+      members.length,
+      pending.length
+    ]
   );
 
   if (loading && !data) {
@@ -261,6 +417,21 @@ const MyGroup = () => {
               eligibilityErr={eligibilityErr}
               eligibilityLoading={eligibilityLoading}
               onRefresh={loadEligibility}
+            />
+          ) : activeTab === "leadership" ? (
+            <MyGroupLeadershipSection
+              canRequest={canRequestLeadershipRole}
+              currentRole={currentRole}
+              form={leadershipForm}
+              loading={leadershipLoading}
+              missingRoles={missingLeadershipRoles}
+              onRefresh={loadLeadershipRequests}
+              onSubmit={onLeadershipSubmit}
+              onUpdateForm={updateLeadershipForm}
+              pendingRequest={pendingLeadershipRequest}
+              requests={currentGroupLeadershipRequests}
+              submitError={leadershipErr}
+              submitting={leadershipSubmitting}
             />
           ) : (
             <MyGroupRequestsSection

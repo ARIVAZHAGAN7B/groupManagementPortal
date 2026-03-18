@@ -10,8 +10,10 @@ export async function fetchPhaseWiseTeamChangeTier(phaseId) {
   return data;
 }
 
-export async function applyTeamChangeTier(phaseId, groupId) {
-  const { data } = await api.post(`/api/team-change-tier/phases/${phaseId}/groups/${groupId}/apply`);
+export async function applyTeamChangeTier(phaseId, groupId, payload = {}) {
+  const { data } = await api.post(
+    `/api/team-change-tier/phases/${phaseId}/groups/${groupId}/apply`,
+    payload
+  );
   return data;
 }
-

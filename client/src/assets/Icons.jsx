@@ -7,6 +7,7 @@ import HowToRegIcon from "@mui/icons-material/HowToReg";
 import SchoolIcon from "@mui/icons-material/School";
 import HubIcon from "@mui/icons-material/Hub";
 import EventIcon from "@mui/icons-material/Event";
+import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import SettingsIcon from "@mui/icons-material/Settings";
 import ScienceIcon from "@mui/icons-material/Science";
 
@@ -27,6 +28,7 @@ const Icons = {
   EventManagement: EventIcon,
   PhaseConfiguration: SettingsIcon,
   IncubationConfiguration: ScienceIcon,
+  HolidayManagement: CalendarMonthIcon,
 
   // header/footer extras (MUST exist)
   School: SchoolIcon,

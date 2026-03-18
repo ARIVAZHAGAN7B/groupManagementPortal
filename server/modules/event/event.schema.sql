@@ -4,8 +4,14 @@ CREATE TABLE IF NOT EXISTS events (
   event_id INT NOT NULL AUTO_INCREMENT,
   event_code VARCHAR(50) NOT NULL,
   event_name VARCHAR(150) NOT NULL,
+  location VARCHAR(255) NULL,
+  registration_link VARCHAR(500) NULL,
   start_date DATE NULL,
   end_date DATE NULL,
+  registration_start_date DATE NULL,
+  registration_end_date DATE NULL,
+  min_members INT NULL,
+  max_members INT NULL,
   status ENUM('ACTIVE','CLOSED','INACTIVE','ARCHIVED') NOT NULL DEFAULT 'ACTIVE',
   description TEXT NULL,
   created_by VARCHAR(36) NULL,
@@ -14,7 +20,8 @@ CREATE TABLE IF NOT EXISTS events (
   PRIMARY KEY (event_id),
   UNIQUE KEY uq_events_code (event_code),
   KEY idx_events_status (status),
-  KEY idx_events_dates (start_date, end_date)
+  KEY idx_events_dates (start_date, end_date),
+  KEY idx_events_registration_dates (registration_start_date, registration_end_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- If teams table already exists from previous setup, run this migration manually:

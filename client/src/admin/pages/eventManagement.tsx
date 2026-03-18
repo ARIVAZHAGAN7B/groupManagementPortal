@@ -1,5 +1,8 @@
+import EditRoundedIcon from "@mui/icons-material/EditRounded";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   activateEvent,
   archiveEvent,
@@ -7,63 +10,145 @@ import {
   createEvent,
   deleteEvent,
   fetchEvents,
-  updateEvent,
+  updateEvent
 } from "../../service/events.api";
 
-const EMPTY_FORM = {
+type EventRow = {
+  created_at?: string | null;
+  description?: string | null;
+  end_date?: string | null;
+  event_code?: string | null;
+  event_id: number;
+  event_name?: string | null;
+  location?: string | null;
+  max_members?: number | null;
+  min_members?: number | null;
+  registration_end_date?: string | null;
+  registration_link?: string | null;
+  registration_start_date?: string | null;
+  start_date?: string | null;
+  status?: string | null;
+  team_count?: number | null;
+  updated_at?: string | null;
+};
+
+type EventFormState = {
+  description: string;
+  end_date: string;
+  event_code: string;
+  event_name: string;
+  location: string;
+  max_members: string;
+  min_members: string;
+  registration_end_date: string;
+  registration_link: string;
+  registration_start_date: string;
+  start_date: string;
+  status: string;
+};
+
+const EMPTY_FORM: EventFormState = {
   event_code: "",
   event_name: "",
+  location: "",
+  registration_link: "",
   start_date: "",
   end_date: "",
+  registration_start_date: "",
+  registration_end_date: "",
+  min_members: "",
+  max_members: "",
   status: "ACTIVE",
-  description: "",
+  description: ""
 };
 
 const EVENT_STATUSES = ["ACTIVE", "CLOSED", "INACTIVE", "ARCHIVED"];
 
-const formatDate = (value: any): string => {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleDateString();
-};
+const inputCls =
+  "w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 placeholder-gray-400 transition focus:outline-none focus:ring-2 focus:ring-blue-200";
+const labelCls = "mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500";
 
 const STATUS_STYLES: Record<string, string> = {
-  ACTIVE:   "bg-emerald-50 text-emerald-700 border-emerald-200",
-  CLOSED:   "bg-gray-100 text-gray-600 border-gray-200",
+  ACTIVE: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  CLOSED: "bg-gray-100 text-gray-600 border-gray-200",
   INACTIVE: "bg-gray-100 text-gray-400 border-gray-200",
-  ARCHIVED: "bg-amber-50 text-amber-700 border-amber-200",
+  ARCHIVED: "bg-amber-50 text-amber-700 border-amber-200"
 };
 
-const Badge = ({ value, map }: { value: string | null | undefined; map: Record<string, string> }) => {
-  if (!value) return <span className="text-gray-300 text-xs">—</span>;
+const formatDate = (value: string | null | undefined): string => {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return parsed.toLocaleDateString();
+};
+
+const formatDateRange = (start: string | null | undefined, end: string | null | undefined) => {
+  const values = [formatDate(start), formatDate(end)].filter((value) => value && value !== "-");
+  return values.length > 0 ? values.join(" to ") : "-";
+};
+
+const formatMemberRange = (minValue: number | null | undefined, maxValue: number | null | undefined) => {
+  const minMembers = Number(minValue);
+  const maxMembers = Number(maxValue);
+  const hasMin = Number.isInteger(minMembers) && minMembers > 0;
+  const hasMax = Number.isInteger(maxMembers) && maxMembers > 0;
+
+  if (hasMin && hasMax) return `${minMembers} - ${maxMembers}`;
+  if (hasMin) return `Min ${minMembers}`;
+  if (hasMax) return `Max ${maxMembers}`;
+  return "-";
+};
+
+const Badge = ({
+  value,
+  map
+}: {
+  value: string | null | undefined;
+  map: Record<string, string>;
+}) => {
+  if (!value) return <span className="text-xs text-gray-300">-</span>;
   const cls = map[String(value).toUpperCase()] ?? "bg-gray-100 text-gray-600 border-gray-200";
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[11px] font-semibold ${cls}`}>
+    <span
+      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold ${cls}`}
+    >
       {value}
     </span>
   );
 };
 
-const StatCard = ({ label, value, accent }: { label: string; value: number; accent?: string }) => (
+const StatCard = ({
+  accent,
+  label,
+  value
+}: {
+  accent?: string;
+  label: string;
+  value: number;
+}) => (
   <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-    <p className="text-[10.5px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{label}</p>
+    <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-wider text-gray-400">
+      {label}
+    </p>
     <p className={`text-xl font-bold ${accent ?? "text-gray-800"}`}>{value}</p>
   </div>
 );
 
-const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 transition bg-white";
-const labelCls = "block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1";
+const toInputDate = (value: string | null | undefined) => (value ? String(value).slice(0, 10) : "");
+
+const toInputNumber = (value: number | null | undefined) =>
+  value === null || value === undefined ? "" : String(value);
 
 export default function EventManagement() {
-  const [rows, setRows] = useState<any[]>([]);
+  const navigate = useNavigate();
+  const [rows, setRows] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
   const [actionBusyId, setActionBusyId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState<EventFormState>(EMPTY_FORM);
 
   const loadEvents = async () => {
     setLoading(true);
@@ -79,35 +164,50 @@ export default function EventManagement() {
     }
   };
 
-  useEffect(() => { loadEvents(); }, []);
+  useEffect(() => {
+    loadEvents();
+  }, []);
 
-  const resetForm = () => { setEditingId(null); setForm(EMPTY_FORM); };
-
-  const onChangeField = (key: keyof typeof EMPTY_FORM, value: string) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
+  const resetForm = () => {
+    setEditingId(null);
+    setForm(EMPTY_FORM);
   };
 
-  const onSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  const onChangeField = (key: keyof EventFormState, value: string) => {
+    setForm((previous) => ({ ...previous, [key]: value }));
+  };
+
+  const onSubmit = async (event: FormEvent) => {
+    event.preventDefault();
     setSaving(true);
     setError("");
+
     try {
       const payload = {
         event_code: String(form.event_code || "").trim().toUpperCase(),
         event_name: String(form.event_name || "").trim(),
+        location: String(form.location || "").trim(),
+        registration_link: String(form.registration_link || "").trim(),
         start_date: form.start_date || null,
         end_date: form.end_date || null,
+        registration_start_date: form.registration_start_date || null,
+        registration_end_date: form.registration_end_date || null,
+        min_members: form.min_members ? Number(form.min_members) : null,
+        max_members: form.max_members ? Number(form.max_members) : null,
         status: form.status,
-        description: String(form.description || "").trim(),
+        description: String(form.description || "").trim()
       };
+
       if (!payload.event_code || !payload.event_name) {
         throw new Error("Event code and event name are required");
       }
+
       if (editingId) {
         await updateEvent(editingId, payload);
       } else {
         await createEvent(payload);
       }
+
       resetForm();
       await loadEvents();
     } catch (err: any) {
@@ -117,20 +217,30 @@ export default function EventManagement() {
     }
   };
 
-  const onEdit = (row: any) => {
+  const onEdit = (row: EventRow) => {
     setEditingId(Number(row.event_id));
     setForm({
       event_code: row.event_code || "",
       event_name: row.event_name || "",
-      start_date: row.start_date ? String(row.start_date).slice(0, 10) : "",
-      end_date: row.end_date ? String(row.end_date).slice(0, 10) : "",
+      location: row.location || "",
+      registration_link: row.registration_link || "",
+      start_date: toInputDate(row.start_date),
+      end_date: toInputDate(row.end_date),
+      registration_start_date: toInputDate(row.registration_start_date),
+      registration_end_date: toInputDate(row.registration_end_date),
+      min_members: toInputNumber(row.min_members),
+      max_members: toInputNumber(row.max_members),
       status: row.status || "ACTIVE",
-      description: row.description || "",
+      description: row.description || ""
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const doRowAction = async (eventId: number, action: () => Promise<any>, confirmMessage?: string) => {
+  const doRowAction = async (
+    eventId: number,
+    action: () => Promise<any>,
+    confirmMessage?: string
+  ) => {
     if (confirmMessage && !window.confirm(confirmMessage)) return;
     setActionBusyId(eventId);
     setError("");
@@ -145,196 +255,329 @@ export default function EventManagement() {
   };
 
   const filteredRows = useMemo(() => {
-    const q = String(query || "").trim().toLowerCase();
-    if (!q) return rows;
+    const normalizedQuery = String(query || "").trim().toLowerCase();
+    if (!normalizedQuery) return rows;
+
     return rows.filter((row) =>
-      [row.event_id, row.event_code, row.event_name, row.status, row.description]
-        .map((v) => String(v ?? "").toLowerCase())
+      [
+        row.event_id,
+        row.event_code,
+        row.event_name,
+        row.location,
+        row.registration_link,
+        row.registration_start_date,
+        row.registration_end_date,
+        row.min_members,
+        row.max_members,
+        row.status,
+        row.description
+      ]
+        .map((value) => String(value ?? "").toLowerCase())
         .join(" ")
-        .includes(q)
+        .includes(normalizedQuery)
     );
   }, [rows, query]);
 
   const counts = useMemo(() => {
-    const acc: Record<string, number> = {};
+    const byStatus: Record<string, number> = {};
+    let openRegistration = 0;
+
     for (const row of rows) {
-      const k = String(row?.status || "").toUpperCase();
-      acc[k] = (acc[k] || 0) + 1;
+      const statusKey = String(row.status || "").toUpperCase();
+      byStatus[statusKey] = (byStatus[statusKey] || 0) + 1;
+
+      const now = new Date();
+      const start = row.registration_start_date ? new Date(row.registration_start_date) : null;
+      const end = row.registration_end_date ? new Date(row.registration_end_date) : null;
+      const afterStart =
+        !start || Number.isNaN(start.getTime()) || now >= new Date(start.setHours(0, 0, 0, 0));
+      const beforeEnd =
+        !end || Number.isNaN(end.getTime()) || now <= new Date(end.setHours(23, 59, 59, 999));
+
+      if (afterStart && beforeEnd) {
+        openRegistration += 1;
+      }
     }
-    return { total: rows.length, active: acc.ACTIVE || 0, closed: acc.CLOSED || 0, archived: acc.ARCHIVED || 0 };
+
+    return {
+      total: rows.length,
+      active: byStatus.ACTIVE || 0,
+      openRegistration,
+      archived: byStatus.ARCHIVED || 0
+    };
   }, [rows]);
 
   return (
-    <div className="p-6 space-y-5 max-w-screen-xl">
-
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div className="max-w-screen-xl space-y-5 p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-base font-bold text-gray-900">Event Management</h1>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Create events. Students will create teams inside active events.
+          <p className="mt-0.5 text-xs text-gray-400">
+            Manage event timelines, registration windows, and member limits.
           </p>
         </div>
         <button
+          type="button"
           onClick={loadEvents}
           disabled={loading}
-          className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors w-fit"
+          className="w-fit rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
         >
-          {loading ? "Loading…" : "Refresh"}
+          {loading ? "Loading..." : "Refresh"}
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="Total" value={counts.total} />
         <StatCard label="Active" value={counts.active} accent="text-emerald-600" />
-        <StatCard label="Closed" value={counts.closed} accent="text-gray-500" />
+        <StatCard
+          label="Registration Open"
+          value={counts.openRegistration}
+          accent="text-blue-600"
+        />
         <StatCard label="Archived" value={counts.archived} accent="text-amber-600" />
       </div>
 
-      {/* Form */}
       <form onSubmit={onSubmit} className="rounded-xl border border-gray-100 bg-white p-5 space-y-4">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-bold text-gray-900">
             {editingId ? `Editing Event #${editingId}` : "Create Event"}
           </h2>
-          {editingId && (
+          {editingId ? (
             <button
               type="button"
               onClick={resetForm}
-              className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
             >
               Cancel
             </button>
-          )}
+          ) : null}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
           <div>
             <label className={labelCls}>Event Code</label>
             <input
               value={form.event_code}
-              onChange={(e) => onChangeField("event_code", e.target.value)}
+              onChange={(inputEvent) => onChangeField("event_code", inputEvent.target.value)}
               className={inputCls}
               placeholder="HACK2026"
               maxLength={50}
             />
           </div>
-          <div className="lg:col-span-2">
+
+          <div className="xl:col-span-2">
             <label className={labelCls}>Event Name</label>
             <input
               value={form.event_name}
-              onChange={(e) => onChangeField("event_name", e.target.value)}
+              onChange={(inputEvent) => onChangeField("event_name", inputEvent.target.value)}
               className={inputCls}
               placeholder="Hackathon 2026"
               maxLength={150}
             />
           </div>
+
+          <div>
+            <label className={labelCls}>Location</label>
+            <input
+              value={form.location}
+              onChange={(inputEvent) => onChangeField("location", inputEvent.target.value)}
+              className={inputCls}
+              placeholder="Main Auditorium"
+              maxLength={255}
+            />
+          </div>
+
+          <div>
+            <label className={labelCls}>Registration Link</label>
+            <input
+              value={form.registration_link}
+              onChange={(inputEvent) =>
+                onChangeField("registration_link", inputEvent.target.value)
+              }
+              className={inputCls}
+              placeholder="https://example.com/register"
+              maxLength={500}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           <div>
             <label className={labelCls}>Start Date</label>
             <input
               type="date"
               value={form.start_date}
-              onChange={(e) => onChangeField("start_date", e.target.value)}
+              onChange={(inputEvent) => onChangeField("start_date", inputEvent.target.value)}
               className={inputCls}
             />
           </div>
+
           <div>
             <label className={labelCls}>End Date</label>
             <input
               type="date"
               value={form.end_date}
-              onChange={(e) => onChangeField("end_date", e.target.value)}
+              onChange={(inputEvent) => onChangeField("end_date", inputEvent.target.value)}
+              className={inputCls}
+            />
+          </div>
+
+          <div>
+            <label className={labelCls}>Registration Start</label>
+            <input
+              type="date"
+              value={form.registration_start_date}
+              onChange={(inputEvent) =>
+                onChangeField("registration_start_date", inputEvent.target.value)
+              }
+              className={inputCls}
+            />
+          </div>
+
+          <div>
+            <label className={labelCls}>Registration End</label>
+            <input
+              type="date"
+              value={form.registration_end_date}
+              onChange={(inputEvent) =>
+                onChangeField("registration_end_date", inputEvent.target.value)
+              }
               className={inputCls}
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div>
+            <label className={labelCls}>Min Members</label>
+            <input
+              type="number"
+              min={1}
+              value={form.min_members}
+              onChange={(inputEvent) => onChangeField("min_members", inputEvent.target.value)}
+              className={inputCls}
+              placeholder="3"
+            />
+          </div>
+
+          <div>
+            <label className={labelCls}>Max Members</label>
+            <input
+              type="number"
+              min={1}
+              value={form.max_members}
+              onChange={(inputEvent) => onChangeField("max_members", inputEvent.target.value)}
+              className={inputCls}
+              placeholder="6"
+            />
+          </div>
+
           <div>
             <label className={labelCls}>Status</label>
             <select
               value={form.status}
-              onChange={(e) => onChangeField("status", e.target.value)}
+              onChange={(inputEvent) => onChangeField("status", inputEvent.target.value)}
               className={inputCls}
             >
-              {EVENT_STATUSES.map((s) => (
-                <option key={s} value={s}>{s}</option>
+              {EVENT_STATUSES.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
               ))}
             </select>
           </div>
-          <div>
-            <label className={labelCls}>Description</label>
-            <input
-              value={form.description}
-              onChange={(e) => onChangeField("description", e.target.value)}
-              className={inputCls}
-              placeholder="Short description…"
-              maxLength={500}
-            />
-          </div>
+        </div>
+
+        <div>
+          <label className={labelCls}>Description</label>
+          <textarea
+            value={form.description}
+            onChange={(inputEvent) => onChangeField("description", inputEvent.target.value)}
+            className={`${inputCls} min-h-28 resize-y`}
+            placeholder="Event description for the detail page"
+            maxLength={1000}
+          />
         </div>
 
         <div className="flex gap-2 pt-1">
           <button
             type="submit"
             disabled={saving}
-            className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
           >
-            {saving ? "Saving…" : editingId ? "Update Event" : "Create Event"}
+            {saving ? "Saving..." : editingId ? "Update Event" : "Create Event"}
           </button>
           <button
             type="button"
             onClick={resetForm}
-            className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+            className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
           >
             Reset
           </button>
         </div>
       </form>
 
-      {/* Search */}
       <input
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        className="w-full max-w-sm border border-gray-200 rounded-lg px-3 py-1.5 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 transition"
-        placeholder="Search by code, name, status…"
+        onChange={(inputEvent) => setQuery(inputEvent.target.value)}
+        className="w-full max-w-xl rounded-lg border border-gray-200 px-3 py-2 text-sm placeholder-gray-400 transition focus:outline-none focus:ring-2 focus:ring-blue-200"
+        placeholder="Search by code, name, location, registration, members, or status"
       />
 
-      {/* Error */}
-      {error && (
-        <div className="px-4 py-2.5 rounded-lg border border-red-200 bg-red-50 text-sm text-red-700">
+      {error ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
           {error}
         </div>
-      )}
+      ) : null}
 
-      {/* Table */}
       {loading ? (
-        <div className="py-10 text-center text-sm text-gray-400">Loading events…</div>
+        <div className="py-10 text-center text-sm text-gray-400">Loading events...</div>
       ) : (
         <div className="overflow-auto rounded-xl border border-gray-100">
-          <table className="min-w-[1000px] w-full text-sm">
+          <table className="min-w-[1320px] w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                {["Code", "Name", "Dates", "Status", "Teams", "Description", "Updated", "Actions"].map((h) => (
+              <tr className="border-b border-gray-100 bg-gray-50">
+                {[
+                  "Code",
+                  "Name",
+                  "Location",
+                  "Event Dates",
+                  "Registration",
+                  "Members",
+                  "Status",
+                  "Groups",
+                  "Updated",
+                  "Actions"
+                ].map((header) => (
                   <th
-                    key={h}
-                    className="text-left px-4 py-2.5 text-[10.5px] font-semibold uppercase tracking-wider text-gray-400 whitespace-nowrap"
+                    key={header}
+                    className="whitespace-nowrap px-4 py-2.5 text-left text-[10.5px] font-semibold uppercase tracking-wider text-gray-400"
                   >
-                    {h}
+                    {header}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filteredRows.map((row) => {
-                const busy = actionBusyId === Number(row.event_id);
+                const eventId = Number(row.event_id);
+                const busy = actionBusyId === eventId;
+
                 return (
-                  <tr key={row.event_id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-mono font-semibold text-xs text-gray-700">{row.event_code}</td>
-                    <td className="px-4 py-3 font-medium text-gray-800">{row.event_name}</td>
-                    <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
-                      {formatDate(row.start_date)} – {formatDate(row.end_date)}
+                  <tr key={eventId} className="transition-colors hover:bg-gray-50">
+                    <td className="px-4 py-3 font-mono text-xs font-semibold text-gray-700">
+                      {row.event_code || "-"}
+                    </td>
+                    <td className="px-4 py-3 font-medium text-gray-800">{row.event_name || "-"}</td>
+                    <td className="px-4 py-3 text-xs text-gray-500">{row.location || "-"}</td>
+                    <td className="px-4 py-3 text-xs text-gray-500">
+                      {formatDateRange(row.start_date, row.end_date)}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-500">
+                      {formatDateRange(row.registration_start_date, row.registration_end_date)}
+                    </td>
+                    <td className="px-4 py-3 text-xs font-semibold text-gray-600">
+                      {formatMemberRange(row.min_members, row.max_members)}
                     </td>
                     <td className="px-4 py-3">
                       <Badge value={row.status} map={STATUS_STYLES} />
@@ -342,55 +585,71 @@ export default function EventManagement() {
                     <td className="px-4 py-3 text-xs font-semibold text-gray-600 tabular-nums">
                       {Number(row.team_count || 0)}
                     </td>
-                    <td className="px-4 py-3 max-w-[260px]">
-                      <p className="truncate text-xs text-gray-500" title={row.description || ""}>
-                        {row.description || "—"}
-                      </p>
-                    </td>
                     <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
                       {formatDate(row.updated_at)}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5 flex-wrap">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/event-management/${eventId}`)}
+                          title={`View ${row.event_name || "event"}`}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#1754cf]/15 bg-[#1754cf]/8 text-[#1754cf] transition hover:bg-[#1754cf]/12"
+                        >
+                          <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
+                        </button>
                         <button
                           type="button"
                           onClick={() => onEdit(row)}
                           disabled={busy}
-                          className="px-2.5 py-1 rounded-md border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-40"
                         >
+                          <EditRoundedIcon sx={{ fontSize: 16 }} />
                           Edit
                         </button>
                         <button
                           type="button"
-                          onClick={() => doRowAction(Number(row.event_id), () => activateEvent(row.event_id))}
+                          onClick={() => doRowAction(eventId, () => activateEvent(eventId))}
                           disabled={busy || row.status === "ACTIVE"}
-                          className="px-2.5 py-1 rounded-md border border-emerald-200 bg-emerald-50 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           Activate
                         </button>
                         <button
                           type="button"
-                          onClick={() => doRowAction(Number(row.event_id), () => closeEvent(row.event_id))}
+                          onClick={() => doRowAction(eventId, () => closeEvent(eventId))}
                           disabled={busy || row.status === "CLOSED"}
-                          className="px-2.5 py-1 rounded-md border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           Close
                         </button>
                         <button
                           type="button"
-                          onClick={() => doRowAction(Number(row.event_id), () => archiveEvent(row.event_id), `Archive event ${row.event_code}?`)}
+                          onClick={() =>
+                            doRowAction(
+                              eventId,
+                              () => archiveEvent(eventId),
+                              `Archive event ${row.event_code}?`
+                            )
+                          }
                           disabled={busy || row.status === "ARCHIVED"}
-                          className="px-2.5 py-1 rounded-md border border-amber-200 bg-amber-50 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           Archive
                         </button>
                         <button
                           type="button"
-                          onClick={() => doRowAction(Number(row.event_id), () => deleteEvent(row.event_id), `Set event ${row.event_code} to INACTIVE?`)}
+                          onClick={() =>
+                            doRowAction(
+                              eventId,
+                              () => deleteEvent(eventId),
+                              `Set event ${row.event_code} to INACTIVE?`
+                            )
+                          }
                           disabled={busy || row.status === "INACTIVE"}
-                          className="px-2.5 py-1 rounded-md border border-red-200 bg-red-50 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          className="rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
                         >
-                          {busy ? "…" : "Delete"}
+                          {busy ? "..." : "Delete"}
                         </button>
                       </div>
                     </td>
@@ -398,13 +657,13 @@ export default function EventManagement() {
                 );
               })}
 
-              {filteredRows.length === 0 && (
+              {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-sm text-gray-400">
+                  <td colSpan={10} className="px-4 py-10 text-center text-sm text-gray-400">
                     No events found{query ? ` for "${query}"` : ""}.
                   </td>
                 </tr>
-              )}
+              ) : null}
             </tbody>
           </table>
         </div>

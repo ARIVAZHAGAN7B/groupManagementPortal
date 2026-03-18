@@ -17,8 +17,14 @@ const TEAM_SELECT_WITH_COUNTS = `
     e.event_code,
     e.event_name,
     e.status AS event_status,
+    e.location AS event_location,
+    e.registration_link AS event_registration_link,
     e.start_date AS event_start_date,
     e.end_date AS event_end_date,
+    e.registration_start_date AS event_registration_start_date,
+    e.registration_end_date AS event_registration_end_date,
+    e.min_members AS event_min_members,
+    e.max_members AS event_max_members,
     COALESCE(mc.active_member_count, 0) AS active_member_count
   FROM teams t
   LEFT JOIN events e

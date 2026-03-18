@@ -99,7 +99,7 @@ router.put(
 
 router.delete(
   "/memberships/:membershipId",
-  authorize("ADMIN", "SYSTEM_ADMIN"),
+  authorize("ADMIN", "SYSTEM_ADMIN", "STUDENT", "CAPTAIN"),
   controller.leaveTeamMember
 );
 

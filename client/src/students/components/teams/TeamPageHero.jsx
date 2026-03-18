@@ -23,11 +23,13 @@ export default function TeamPageHero({
   title,
   summary,
   description,
+  actions,
   actionLabel = "Refresh",
   actionBusyLabel = "Refreshing...",
   stats = []
 }) {
   const visibleStats = Array.isArray(stats) ? stats.filter(Boolean) : [];
+  const hasActionArea = Boolean(actions) || Boolean(onRefresh);
 
   return (
     <section className="relative overflow-hidden rounded-2xl border border-[#1754cf]/10 bg-[#1754cf]/5 p-4 md:p-5">
@@ -46,16 +48,22 @@ export default function TeamPageHero({
             ) : null}
           </div>
 
-          {onRefresh ? (
-            <button
-              type="button"
-              onClick={onRefresh}
-              disabled={loading}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-wait disabled:opacity-70"
-            >
-              <RefreshRoundedIcon sx={{ fontSize: 18 }} />
-              {loading ? actionBusyLabel : actionLabel}
-            </button>
+          {hasActionArea ? (
+            <div className="flex flex-wrap items-center gap-3">
+              {actions}
+
+              {onRefresh ? (
+                <button
+                  type="button"
+                  onClick={onRefresh}
+                  disabled={loading}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-wait disabled:opacity-70"
+                >
+                  <RefreshRoundedIcon sx={{ fontSize: 18 }} />
+                  {loading ? actionBusyLabel : actionLabel}
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
 

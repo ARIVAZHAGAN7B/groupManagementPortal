@@ -6,6 +6,44 @@ const ADMIN_ROLES = ["ADMIN", "SYSTEM_ADMIN"];
 const EVENT_MEMBERSHIP_ROLES = ["CAPTAIN", "VICE_CAPTAIN", "MEMBER"];
 const EVENT_LEADERSHIP_ROLES = ["CAPTAIN", "VICE_CAPTAIN"];
 
+const getStartOfDay = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 0, 0, 0, 0);
+};
+
+const getEndOfDay = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 23, 59, 59, 999);
+};
+
+const ensureEventRegistrationWindowOpen = (team) => {
+  const registrationStart = getStartOfDay(team?.event_registration_start_date);
+  const registrationEnd = getEndOfDay(team?.event_registration_end_date);
+  const now = new Date();
+
+  if (registrationStart && now < registrationStart) {
+    throw new Error("Registration has not opened for this event yet");
+  }
+
+  if (registrationEnd && now > registrationEnd) {
+    throw new Error("Registration is closed for this event");
+  }
+};
+
+const ensureEventGroupCapacity = (team) => {
+  const maxMembers = Number(team?.event_max_members);
+  if (!Number.isInteger(maxMembers) || maxMembers <= 0) return;
+
+  const activeMemberCount = Number(team?.active_member_count) || 0;
+  if (activeMemberCount >= maxMembers) {
+    throw new Error(`This event group already has the maximum of ${maxMembers} members`);
+  }
+};
+
 const getStudentIdByUserIdFrom = async (queryable, userId) => {
   const [rows] = await queryable.query(
     "SELECT student_id FROM students WHERE user_id = ? LIMIT 1",
@@ -91,6 +129,8 @@ const ensureTeamCanAcceptRequests = async (executor, teamId) => {
   if (String(team.event_status || "").toUpperCase() !== "ACTIVE") {
     throw new Error("Only ACTIVE events can accept requests");
   }
+  ensureEventRegistrationWindowOpen(team);
+  ensureEventGroupCapacity(team);
   return team;
 };
 

@@ -211,7 +211,7 @@ const applyLeadershipRoleRequest = async (actorUser, payload = {}) => {
       student_id: membership.student_id,
       requested_role: requestedRole,
       leadership_alert_triggered:
-        snapshot.active_member_count > 0 && snapshot.active_leadership_count === 0,
+        snapshot.active_member_count > 0 && snapshot.missing_roles.length > 0,
       missing_roles_at_request_time: snapshot.missing_roles
     };
   } catch (error) {
@@ -237,6 +237,7 @@ const decideLeadershipRoleRequest = async (requestId, status, decisionReason, ac
     const adminId = await ensureAdminActor(conn, actorUser);
 
     const request = await repo.findByIdTx(conn, requestId);
+    
     if (!request) throw new Error("Leadership role request not found");
     if (String(request.status || "").toUpperCase() !== "PENDING") {
       throw new Error("Leadership role request already processed");
@@ -350,17 +351,20 @@ const getMyLeadershipRoleRequests = async (actorUser) => {
 const getAdminNotificationSummary = async (actorUser) => {
   await ensureAdminActor(db, actorUser);
 
-  const [pendingRequestCount, groupsWithoutLeadershipCount, groupsWithoutLeadership] = await Promise.all([
+  const [pendingRequestCount, groupsWithMissingLeadershipCount, groupsWithMissingLeadership] = await Promise.all([
     repo.countPendingRequests(),
-    repo.countGroupsWithoutLeadership(),
-    repo.listGroupsWithoutLeadership(8)
+    repo.countGroupsWithMissingLeadership(),
+    repo.listGroupsWithMissingLeadership(8)
   ]);
 
   return {
     pending_request_count: pendingRequestCount,
-    groups_without_leadership_count: groupsWithoutLeadershipCount,
-    total_attention_count: pendingRequestCount + groupsWithoutLeadershipCount,
-    groups_without_leadership: groupsWithoutLeadership
+    groups_with_missing_leadership_count: groupsWithMissingLeadershipCount,
+    groups_with_missing_leadership: groupsWithMissingLeadership,
+    total_attention_count: pendingRequestCount + groupsWithMissingLeadershipCount,
+    // Backward-compatible aliases for older client callers.
+    groups_without_leadership_count: groupsWithMissingLeadershipCount,
+    groups_without_leadership: groupsWithMissingLeadership
   };
 };
 

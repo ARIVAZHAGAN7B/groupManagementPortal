@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS group_points (
     ON DELETE CASCADE,
   CONSTRAINT fk_group_points_group
     FOREIGN KEY (group_id)
-    REFERENCES Sgroup(group_id)
+    REFERENCES sgroup(group_id)
     ON UPDATE CASCADE
     ON DELETE CASCADE,
   CONSTRAINT fk_group_points_membership

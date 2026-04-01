@@ -910,7 +910,7 @@ const joinGroupService = async (student_id, groupId, role) => {
   await ensureRejoinDeadlineCompliance(student_id);
 
   const [groupRows] = await db.query(
-    "SELECT group_id, status FROM Sgroup WHERE group_id=? LIMIT 1",
+    "SELECT group_id, status FROM sgroup WHERE group_id=? LIMIT 1",
     [groupId]
   );
   const group = groupRows[0];
@@ -1030,7 +1030,7 @@ const updateGroupRankRulesService = async (groupId, payload, actorUser) => {
     await conn.beginTransaction();
 
     const [groupRows] = await conn.query(
-      "SELECT group_id FROM Sgroup WHERE group_id = ? LIMIT 1",
+      "SELECT group_id FROM sgroup WHERE group_id = ? LIMIT 1",
       [Number(groupId)]
     );
     if (groupRows.length === 0) {

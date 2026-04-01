@@ -13,7 +13,7 @@ const findByPhase = async (phaseId, executor) => {
        p.phase_name,
        pp.phase_name AS previous_phase_name
      FROM team_change_tier tct
-     LEFT JOIN Sgroup g ON g.group_id = tct.group_id
+     LEFT JOIN sgroup g ON g.group_id = tct.group_id
      LEFT JOIN phases p ON p.phase_id = tct.phase_id
      LEFT JOIN phases pp ON pp.phase_id = tct.previous_phase_id
      WHERE tct.phase_id = ?
@@ -80,4 +80,3 @@ module.exports = {
   findByPhaseAndGroupTx,
   upsertAppliedChangeTx
 };
-

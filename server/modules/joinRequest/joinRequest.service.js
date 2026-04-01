@@ -165,7 +165,7 @@ exports.decideJoinRequest = async (requestId, status, reason, actorUser, options
       }
 
       const [targetGroupRows] = await conn.query(
-        "SELECT group_id, status FROM Sgroup WHERE group_id=? LIMIT 1 FOR UPDATE",
+        "SELECT group_id, status FROM sgroup WHERE group_id=? LIMIT 1 FOR UPDATE",
         [request.group_id]
       );
       const targetGroup = targetGroupRows[0];
@@ -239,7 +239,7 @@ exports.decideJoinRequest = async (requestId, status, reason, actorUser, options
       );
       const gStatus = resolveGroupStatusByCount(Number(row.count) || 0, policy);
 
-      await conn.query("UPDATE Sgroup SET status=? WHERE group_id=?", [
+      await conn.query("UPDATE sgroup SET status=? WHERE group_id=?", [
         gStatus,
         request.group_id
       ]);

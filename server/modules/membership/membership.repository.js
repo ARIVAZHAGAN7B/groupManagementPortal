@@ -61,7 +61,7 @@ const countGroupMembers = async (groupId) => {
 
 const updateGroupStatus = async (groupId, status) => {
   return db.query(
-    "UPDATE Sgroup SET status=? WHERE group_id=?",
+    "UPDATE sgroup SET status=? WHERE group_id=?",
     [status, groupId]
   );
 };
@@ -589,7 +589,7 @@ const getActiveMembershipWithGroupByStudent = async (studentId) => {
         COALESCE(gpt.lifetime_base_points, 0) + COALESCE(gept.total_points, 0) AS lifetime_total_points,
         COALESCE(mc.member_count, 0) AS member_count
      FROM memberships m
-     JOIN Sgroup g ON g.group_id = m.group_id
+     JOIN sgroup g ON g.group_id = m.group_id
      LEFT JOIN (
        SELECT group_id, COALESCE(SUM(points), 0) AS lifetime_base_points
        FROM group_points
@@ -662,7 +662,7 @@ const getAllMemberships = async (filters = {}, options = {}, executor) => {
       g.status AS group_status
     FROM memberships m
     LEFT JOIN students s ON s.student_id = m.student_id
-    LEFT JOIN Sgroup g ON g.group_id = m.group_id
+    LEFT JOIN sgroup g ON g.group_id = m.group_id
     WHERE ${whereClause}
   `;
   const orderSql = `

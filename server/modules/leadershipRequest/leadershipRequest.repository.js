@@ -125,7 +125,7 @@ const findAllPending = async (filters = {}) => {
      FROM leadership_role_requests lrr
      LEFT JOIN students s ON s.student_id = lrr.student_id
      LEFT JOIN memberships m ON m.membership_id = lrr.membership_id
-     LEFT JOIN Sgroup g ON g.group_id = lrr.group_id
+     LEFT JOIN sgroup g ON g.group_id = lrr.group_id
      WHERE ${where.join(" AND ")}
      ORDER BY lrr.request_date ASC, lrr.leadership_request_id ASC`,
     params
@@ -173,7 +173,7 @@ const listGroupsWithMissingLeadership = async (limit = 10) => {
          CASE WHEN COALESCE(ms.manager_count, 0) = 0 THEN 1 ELSE 0 END
        ) AS missing_role_count,
        COALESCE(pr.pending_request_count, 0) AS pending_request_count
-     FROM Sgroup g
+     FROM sgroup g
      LEFT JOIN (
        SELECT
          m.group_id,

@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS team_change_tier (
     ON DELETE SET NULL,
   CONSTRAINT fk_tct_group
     FOREIGN KEY (group_id)
-    REFERENCES Sgroup(group_id)
+    REFERENCES sgroup(group_id)
     ON UPDATE CASCADE
     ON DELETE RESTRICT,
   CONSTRAINT fk_tct_admin

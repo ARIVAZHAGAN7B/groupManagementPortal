@@ -108,7 +108,7 @@ const resolveActivationStatus = (snapshot, policy) => {
 
 const refreshGroupStatusTx = async (conn, groupId) => {
   const [groupRows] = await conn.query(
-    "SELECT group_id, status FROM Sgroup WHERE group_id=? LIMIT 1 FOR UPDATE",
+    "SELECT group_id, status FROM sgroup WHERE group_id=? LIMIT 1 FOR UPDATE",
     [groupId]
   );
   const group = groupRows[0];
@@ -126,7 +126,7 @@ const refreshGroupStatusTx = async (conn, groupId) => {
   const snapshot = await getLeadershipSnapshotTx(conn, groupId);
   const next = resolveActivationStatus(snapshot, policy);
 
-  await conn.query("UPDATE Sgroup SET status=? WHERE group_id=?", [next.status, groupId]);
+  await conn.query("UPDATE sgroup SET status=? WHERE group_id=?", [next.status, groupId]);
 
   return {
     group_id: Number(groupId),
@@ -157,7 +157,7 @@ const applyLeadershipRoleRequest = async (actorUser, payload = {}) => {
     const [membershipRows] = await conn.query(
       `SELECT m.membership_id, m.student_id, m.group_id, m.role, m.status, g.status AS group_status
        FROM memberships m
-       JOIN Sgroup g ON g.group_id = m.group_id
+       JOIN sgroup g ON g.group_id = m.group_id
        WHERE m.student_id=? AND m.group_id=? AND m.status='ACTIVE'
        LIMIT 1
        FOR UPDATE`,
@@ -273,7 +273,7 @@ const decideLeadershipRoleRequest = async (requestId, status, decisionReason, ac
       }
 
       const [groupRows] = await conn.query(
-        "SELECT group_id, status FROM Sgroup WHERE group_id=? LIMIT 1 FOR UPDATE",
+        "SELECT group_id, status FROM sgroup WHERE group_id=? LIMIT 1 FOR UPDATE",
         [request.group_id]
       );
       const group = groupRows[0];

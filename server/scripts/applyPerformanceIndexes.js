@@ -2,9 +2,9 @@ const db = require("../config/db");
 
 const INDEX_DEFINITIONS = [
   {
-    tableName: "Sgroup",
+    tableName: "sgroup",
     indexName: "idx_sgroup_name_status",
-    ddl: "ALTER TABLE Sgroup ADD KEY idx_sgroup_name_status (group_name, status)"
+    ddl: "ALTER TABLE sgroup ADD KEY idx_sgroup_name_status (group_name, status)"
   },
   {
     tableName: "memberships",

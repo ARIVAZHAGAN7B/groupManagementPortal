@@ -296,7 +296,7 @@ const computeSingleGroupPreviewTx = async (conn, phaseId, groupId, options = {})
 
   const [groupRows] = await conn.query(
     `SELECT g.group_id, g.group_code, g.group_name, g.tier, g.status
-     FROM Sgroup g
+     FROM sgroup g
      WHERE g.group_id=?
      LIMIT 1
      FOR UPDATE`,
@@ -361,7 +361,7 @@ const applyPhaseTierChange = async (phaseId, groupId, actorUser, payload = {}) =
     }
 
     if (preview.recommended_tier !== preview.current_tier) {
-      await conn.query("UPDATE Sgroup SET tier=? WHERE group_id=?", [
+      await conn.query("UPDATE sgroup SET tier=? WHERE group_id=?", [
         preview.recommended_tier,
         numericGroupId
       ]);

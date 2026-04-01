@@ -65,7 +65,7 @@ const getGroupPointById = async (groupPointId, executor) => {
        ON m.membership_id = gp.membership_id
      LEFT JOIN students s
        ON s.student_id = gp.student_id
-     LEFT JOIN Sgroup g
+     LEFT JOIN sgroup g
        ON g.group_id = gp.group_id
      WHERE gp.group_point_id = ?
      LIMIT 1`,
@@ -134,7 +134,7 @@ const listGroupPoints = async (filters = {}, paging = {}, executor) => {
        ON m.membership_id = gp.membership_id
      LEFT JOIN students s
        ON s.student_id = gp.student_id
-     LEFT JOIN Sgroup g
+     LEFT JOIN sgroup g
        ON g.group_id = gp.group_id
      ${whereSql}
      ORDER BY gp.created_at DESC, gp.group_point_id DESC

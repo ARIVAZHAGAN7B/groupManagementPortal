@@ -99,7 +99,7 @@ const applyGroupTierChangeRequest = async (actorUser, payload = {}) => {
     }
 
     const [groupRows] = await conn.query(
-      "SELECT group_id, tier, status FROM Sgroup WHERE group_id=? LIMIT 1 FOR UPDATE",
+      "SELECT group_id, tier, status FROM sgroup WHERE group_id=? LIMIT 1 FOR UPDATE",
       [groupId]
     );
     const group = groupRows[0];
@@ -170,7 +170,7 @@ const decideGroupTierChangeRequest = async (requestId, status, decisionReason, a
 
     if (normalizedStatus === "APPROVED") {
       const [groupRows] = await conn.query(
-        "SELECT group_id, tier, status FROM Sgroup WHERE group_id=? LIMIT 1 FOR UPDATE",
+        "SELECT group_id, tier, status FROM sgroup WHERE group_id=? LIMIT 1 FOR UPDATE",
         [request.group_id]
       );
       const group = groupRows[0];
@@ -190,7 +190,7 @@ const decideGroupTierChangeRequest = async (requestId, status, decisionReason, a
         );
       }
 
-      await conn.query("UPDATE Sgroup SET tier=? WHERE group_id=?", [requestedTier, request.group_id]);
+      await conn.query("UPDATE sgroup SET tier=? WHERE group_id=?", [requestedTier, request.group_id]);
       appliedTier = requestedTier;
     }
 
@@ -271,4 +271,3 @@ module.exports = {
   getMyTierChangeRequests,
   getAdminTierRequestNotifications
 };
-

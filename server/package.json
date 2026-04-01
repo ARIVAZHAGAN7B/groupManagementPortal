@@ -132,6 +132,8 @@
     "wrappy": "^1.0.2"
   },
   "scripts": {
+    "schema:apply": "node scripts/applySchema.js",
+    "admin:bootstrap": "node scripts/bootstrapAdmin.js",
     "indexes:apply": "node scripts/applyPerformanceIndexes.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon server.js"

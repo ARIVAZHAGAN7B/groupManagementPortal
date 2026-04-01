@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS group_eligibility (
   INDEX idx_group_eligibility_phase_group_status (phase_id, group_id, is_eligible),
   CONSTRAINT fk_eligible_group_id
     FOREIGN KEY (group_id)
-    REFERENCES Sgroup(group_id)
+    REFERENCES sgroup(group_id)
     ON UPDATE CASCADE,
   CONSTRAINT fk_group_phase_id
     FOREIGN KEY (phase_id)
@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS group_eligibility_points (
   INDEX idx_group_points_group_multiplier (group_id, is_eligible, multiplier),
   CONSTRAINT fk_group_eligibility_points_group
     FOREIGN KEY (group_id)
-    REFERENCES Sgroup(group_id)
+    REFERENCES sgroup(group_id)
     ON UPDATE CASCADE,
   CONSTRAINT fk_group_eligibility_points_phase
     FOREIGN KEY (phase_id)
@@ -125,7 +125,7 @@ CREATE TABLE IF NOT EXISTS group_eligibility_point_totals (
   last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_group_point_totals_group
     FOREIGN KEY (group_id)
-    REFERENCES Sgroup(group_id)
+    REFERENCES sgroup(group_id)
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 

@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS leadership_role_requests (
     ON DELETE RESTRICT,
   CONSTRAINT fk_lrr_group
     FOREIGN KEY (group_id)
-    REFERENCES Sgroup(group_id)
+    REFERENCES sgroup(group_id)
     ON UPDATE CASCADE
     ON DELETE RESTRICT,
   CONSTRAINT fk_lrr_decision_admin

@@ -15,7 +15,7 @@ const GROUP_OVERVIEW_SELECT = `
     captain.leader_name,
     captain.leader_roll_number,
     COALESCE(captain.captain_points, 0) AS captain_points
-  FROM Sgroup g
+  FROM sgroup g
   LEFT JOIN (
     SELECT group_id, COUNT(*) AS active_member_count
     FROM memberships
@@ -84,7 +84,7 @@ const GROUP_OVERVIEW_SELECT = `
 
 exports.createGroup = async (group) => {
   const sql = `
-    INSERT INTO Sgroup (group_code, group_name, tier, status)
+    INSERT INTO sgroup (group_code, group_name, tier, status)
     VALUES (?, ?, ?, ?)
   `;
   const [result] = await db.query(sql, [
@@ -116,7 +116,7 @@ exports.getGroupById = async (id) => {
 
 exports.updateGroup = async (id, group) => {
   const sql = `
-    UPDATE Sgroup
+    UPDATE sgroup
     SET group_name=?, tier=?, status=?
     WHERE group_id=?
   `;
@@ -131,7 +131,7 @@ exports.updateGroup = async (id, group) => {
 
 exports.deleteGroup = async (id) => {
   const [result] = await db.query(
-    "UPDATE Sgroup SET status='INACTIVE' WHERE group_id=?",
+    "UPDATE sgroup SET status='INACTIVE' WHERE group_id=?",
     [id]
   );
   return result;
@@ -139,7 +139,7 @@ exports.deleteGroup = async (id) => {
 
 exports.activateGroup = async (id) => {
   const [result] = await db.query(
-    "UPDATE Sgroup SET status='ACTIVE' WHERE group_id=?",
+    "UPDATE sgroup SET status='ACTIVE' WHERE group_id=?",
     [id]
   );
   return result;
@@ -147,7 +147,7 @@ exports.activateGroup = async (id) => {
 
 exports.freezeGroup = async (id) => {
   const [result] = await db.query(
-    "UPDATE Sgroup SET status='FROZEN' WHERE group_id=?",
+    "UPDATE sgroup SET status='FROZEN' WHERE group_id=?",
     [id]
   );
   return result;
@@ -163,7 +163,7 @@ exports.getGroupActivationSnapshot = async (groupId) => {
        SUM(CASE WHEN m.status='ACTIVE' AND m.role='VICE_CAPTAIN' THEN 1 ELSE 0 END) AS vice_captain_count,
        SUM(CASE WHEN m.status='ACTIVE' AND m.role='STRATEGIST' THEN 1 ELSE 0 END) AS strategist_count,
        SUM(CASE WHEN m.status='ACTIVE' AND m.role='MANAGER' THEN 1 ELSE 0 END) AS manager_count
-     FROM Sgroup g
+     FROM sgroup g
      LEFT JOIN memberships m
        ON m.group_id = g.group_id
      WHERE g.group_id = ?

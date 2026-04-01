@@ -32,7 +32,7 @@ exports.findById = async (requestId) => {
 exports.findGroupById = async (groupId) => {
   const [rows] = await db.query(
     `SELECT group_id, status
-     FROM Sgroup
+     FROM sgroup
      WHERE group_id=?`,
     [groupId]
   );

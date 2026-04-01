@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS memberships (
     ON DELETE CASCADE,
   CONSTRAINT fk_memberships_group
     FOREIGN KEY (group_id)
-    REFERENCES Sgroup(group_id)
+    REFERENCES sgroup(group_id)
     ON UPDATE CASCADE
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -86,7 +86,7 @@ CREATE TABLE IF NOT EXISTS group_rank_rule_overrides (
   UNIQUE KEY uniq_group_rank_rule_override (group_id, rule_code),
   CONSTRAINT fk_group_rank_rule_override_group
     FOREIGN KEY (group_id)
-    REFERENCES Sgroup(group_id)
+    REFERENCES sgroup(group_id)
     ON UPDATE CASCADE
     ON DELETE CASCADE,
   CONSTRAINT fk_group_rank_rule_override_membership
@@ -129,7 +129,7 @@ CREATE TABLE IF NOT EXISTS group_rank (
     ON UPDATE CASCADE,
   CONSTRAINT fk_group_rank_group
     FOREIGN KEY (group_id)
-    REFERENCES Sgroup(group_id)
+    REFERENCES sgroup(group_id)
     ON UPDATE CASCADE
     ON DELETE CASCADE,
   CONSTRAINT fk_group_rank_membership

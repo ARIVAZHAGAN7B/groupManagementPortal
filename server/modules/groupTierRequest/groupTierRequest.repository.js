@@ -83,7 +83,7 @@ const findAllPending = async () => {
        a.name AS requested_by_admin_name,
        a.email AS requested_by_admin_email
      FROM group_tier_change_requests r
-     LEFT JOIN Sgroup g ON g.group_id = r.group_id
+     LEFT JOIN sgroup g ON g.group_id = r.group_id
      LEFT JOIN students s ON s.student_id = r.requested_by_student_id
      LEFT JOIN admins a ON a.admin_id = r.requested_by_admin_id
      WHERE r.status='PENDING'
@@ -105,7 +105,7 @@ const findPendingByGroup = async (groupId) => {
        a.name AS requested_by_admin_name,
        a.email AS requested_by_admin_email
      FROM group_tier_change_requests r
-     LEFT JOIN Sgroup g ON g.group_id = r.group_id
+     LEFT JOIN sgroup g ON g.group_id = r.group_id
      LEFT JOIN students s ON s.student_id = r.requested_by_student_id
      LEFT JOIN admins a ON a.admin_id = r.requested_by_admin_id
      WHERE r.group_id=? AND r.status='PENDING'
@@ -123,7 +123,7 @@ const findByRequesterStudent = async (studentId) => {
        g.group_name,
        g.status AS group_status
      FROM group_tier_change_requests r
-     LEFT JOIN Sgroup g ON g.group_id = r.group_id
+     LEFT JOIN sgroup g ON g.group_id = r.group_id
      WHERE r.requested_by_student_id=?
      ORDER BY r.request_date DESC, r.tier_change_request_id DESC`,
     [studentId]
@@ -150,4 +150,3 @@ module.exports = {
   findByRequesterStudent,
   countPendingRequests
 };
-

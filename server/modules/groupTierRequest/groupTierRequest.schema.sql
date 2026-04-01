@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS group_tier_change_requests (
   KEY idx_gtcr_requester_admin (requested_by_admin_id, status),
   CONSTRAINT fk_gtcr_group
     FOREIGN KEY (group_id)
-    REFERENCES Sgroup(group_id)
+    REFERENCES sgroup(group_id)
     ON UPDATE CASCADE
     ON DELETE RESTRICT,
   CONSTRAINT fk_gtcr_requested_by_student

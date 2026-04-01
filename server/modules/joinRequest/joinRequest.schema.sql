@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS join_requests (
     ON DELETE CASCADE,
   CONSTRAINT fk_join_requests_group
     FOREIGN KEY (group_id)
-    REFERENCES Sgroup(group_id)
+    REFERENCES sgroup(group_id)
     ON UPDATE CASCADE
     ON DELETE CASCADE,
   CONSTRAINT fk_join_requests_decision_admin

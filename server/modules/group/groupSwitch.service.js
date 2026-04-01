@@ -58,7 +58,7 @@ exports.switchGroup = async (studentId, newGroupId) => {
 
     const [targetGroupRows] = await conn.query(
       `SELECT group_id, status
-       FROM Sgroup
+       FROM sgroup
        WHERE group_id=?
        LIMIT 1
        FOR UPDATE`,
@@ -121,11 +121,11 @@ exports.switchGroup = async (studentId, newGroupId) => {
     const oldCount = Number(oldCountRow?.count) || 0;
     const newCount = Number(newCountRow?.count) || 0;
 
-    await conn.query(`UPDATE Sgroup SET status=? WHERE group_id=?`, [
+    await conn.query(`UPDATE sgroup SET status=? WHERE group_id=?`, [
       resolveGroupStatusByCount(oldCount, policy),
       currentMembership.group_id
     ]);
-    await conn.query(`UPDATE Sgroup SET status=? WHERE group_id=?`, [
+    await conn.query(`UPDATE sgroup SET status=? WHERE group_id=?`, [
       resolveGroupStatusByCount(newCount, policy),
       newGroupId
     ]);

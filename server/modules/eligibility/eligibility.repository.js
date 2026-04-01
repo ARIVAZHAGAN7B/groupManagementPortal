@@ -184,7 +184,7 @@ const getAllStudentsWithActiveGroupAndBasePoints = async (executor) => {
      LEFT JOIN memberships m
        ON m.student_id = s.student_id
       AND m.status = 'ACTIVE'
-     LEFT JOIN Sgroup g
+     LEFT JOIN sgroup g
        ON g.group_id = m.group_id
      ORDER BY s.student_id ASC`
   );
@@ -197,7 +197,7 @@ const getGroupPhasePoints = async (startDate, endDate, executor) => {
        g.group_id,
        g.tier,
        COALESCE(gps.this_phase_group_points, 0) AS this_phase_group_points
-     FROM Sgroup g
+     FROM sgroup g
      LEFT JOIN (
        SELECT
          gp.group_id,
@@ -223,7 +223,7 @@ const getGroupPhaseSnapshot = async (groupId, startDate, endDate, executor) => {
        g.status AS group_status,
        COALESCE(mc.active_member_count, 0) AS active_member_count,
        COALESCE(gps.earned_points, 0) AS earned_points
-     FROM Sgroup g
+     FROM sgroup g
      LEFT JOIN (
        SELECT group_id, COUNT(*) AS active_member_count
        FROM memberships
@@ -403,7 +403,7 @@ const recalculateGroupEligibilityPointTotals = async (groupIds = [], executor) =
        g.group_id,
        COALESCE(SUM(${GROUP_ELIGIBILITY_AWARDED_POINTS_EXPR}), 0) AS total_points,
        NOW()
-     FROM Sgroup g
+     FROM sgroup g
      LEFT JOIN group_eligibility_points gep
        ON gep.group_id = g.group_id
      WHERE g.group_id IN (${placeholders})
@@ -581,7 +581,7 @@ const getGroupEligibility = async (phaseId, filters = {}, executor) => {
      LEFT JOIN group_eligibility_points gep
        ON gep.group_id = ge.group_id
       AND gep.phase_id = ge.phase_id
-     LEFT JOIN Sgroup g ON g.group_id = ge.group_id
+     LEFT JOIN sgroup g ON g.group_id = ge.group_id
      LEFT JOIN phases p ON p.phase_id = ge.phase_id
      WHERE ${clauses.join(" AND ")}
      ORDER BY ge.this_phase_group_points DESC, ge.group_id ASC`,
@@ -620,7 +620,7 @@ const getStudentProfileById = async (studentId, executor) => {
 const getGroupById = async (groupId, executor) => {
   const [rows] = await getExecutor(executor).query(
     `SELECT group_id, group_code, group_name, tier
-     FROM Sgroup
+     FROM sgroup
      WHERE group_id = ?
      LIMIT 1`,
     [groupId]
@@ -753,7 +753,7 @@ const getDashboardGroupStats = async (groupId, executor) => {
        COALESCE(mult.multiplier_12_count, 0) AS multiplier_12_count,
        COALESCE(mult.multiplier_13_count, 0) AS multiplier_13_count,
        COALESCE(mult.multiplier_14_count, 0) AS multiplier_14_count
-     FROM Sgroup g
+     FROM sgroup g
      LEFT JOIN (
        SELECT
          group_id,
@@ -967,7 +967,7 @@ const getStudentPhaseTimeline = async (studentId, executor) => {
          ORDER BY m2.join_date DESC, m2.membership_id DESC
          LIMIT 1
        )
-     LEFT JOIN Sgroup g
+     LEFT JOIN sgroup g
        ON g.group_id = m.group_id
      LEFT JOIN individual_eligibility ie
        ON ie.phase_id = p.phase_id
@@ -1019,7 +1019,7 @@ const getStoredGroupEligibilitySummary = async (phaseId, groupId, executor) => {
        ge.evaluated_at
      FROM group_eligibility ge
      LEFT JOIN phases p ON p.phase_id = ge.phase_id
-     LEFT JOIN Sgroup g ON g.group_id = ge.group_id
+     LEFT JOIN sgroup g ON g.group_id = ge.group_id
      LEFT JOIN (
        SELECT group_id, COUNT(*) AS active_member_count
        FROM memberships
@@ -1075,7 +1075,7 @@ const getIndividualLeaderboard = async (limit = 30, filters = {}, executor) => {
      LEFT JOIN memberships m
        ON m.student_id = s.student_id
       AND m.status = 'ACTIVE'
-     LEFT JOIN Sgroup g ON g.group_id = m.group_id
+     LEFT JOIN sgroup g ON g.group_id = m.group_id
      ${clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""}
      ORDER BY COALESCE(bph.total_base_points, bp.total_base_points, 0) DESC, s.student_id ASC
      LIMIT ?`,
@@ -1111,7 +1111,7 @@ const getIndividualLeaderboardByPhase = async (startAt, endAt, limit = 30, filte
      LEFT JOIN memberships m
        ON m.student_id = s.student_id
       AND m.status = 'ACTIVE'
-     LEFT JOIN Sgroup g ON g.group_id = m.group_id
+     LEFT JOIN sgroup g ON g.group_id = m.group_id
      LEFT JOIN base_point_history h
        ON h.student_id = s.student_id
       AND ${BASE_POINT_ACTIVITY_AT_EXPR} BETWEEN ? AND ?
@@ -1168,7 +1168,7 @@ const getLeaderLeaderboard = async (roles = [], limit = 30, filters = {}, execut
        GROUP BY h.student_id
      ) bph
        ON bph.student_id = s.student_id
-     LEFT JOIN Sgroup g ON g.group_id = m.group_id
+     LEFT JOIN sgroup g ON g.group_id = m.group_id
      WHERE m.status = 'ACTIVE'
        AND m.role IN (${placeholders})
        ${tierClause}
@@ -1217,7 +1217,7 @@ const getLeaderLeaderboardByPhase = async (
        g.tier AS group_tier
      FROM memberships m
      INNER JOIN students s ON s.student_id = m.student_id
-     LEFT JOIN Sgroup g ON g.group_id = m.group_id
+     LEFT JOIN sgroup g ON g.group_id = m.group_id
      LEFT JOIN base_point_history h
        ON h.student_id = s.student_id
       AND ${BASE_POINT_ACTIVITY_AT_EXPR} BETWEEN ? AND ?
@@ -1269,7 +1269,7 @@ const getGroupLeaderboard = async (limit = 30, filters = {}, executor) => {
        g.status AS group_status,
        COALESCE(mc.active_member_count, 0) AS active_member_count,
        COALESCE(gpt.total_base_points, 0) AS total_base_points
-     FROM Sgroup g
+     FROM sgroup g
      LEFT JOIN (
        SELECT group_id, COUNT(*) AS active_member_count
        FROM memberships
@@ -1322,7 +1322,7 @@ const getGroupLeaderboardByPhase = async (startAt, endAt, limit = 30, filters = 
        g.status AS group_status,
        COALESCE(mc.active_member_count, 0) AS active_member_count,
        COALESCE(gpt.total_base_points, 0) AS total_base_points
-     FROM Sgroup g
+     FROM sgroup g
      LEFT JOIN (
        SELECT group_id, COUNT(*) AS active_member_count
        FROM memberships

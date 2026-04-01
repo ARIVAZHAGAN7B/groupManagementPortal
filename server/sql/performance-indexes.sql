@@ -1,7 +1,7 @@
 -- Performance indexes for existing databases.
 -- Apply these after the base tables already exist.
 
-ALTER TABLE Sgroup
+ALTER TABLE sgroup
   ADD KEY idx_sgroup_name_status (group_name, status);
 
 ALTER TABLE memberships

@@ -209,6 +209,16 @@ const getAdminStudentOverview = async (_req, res) => {
   }
 };
 
+const getAdminStudentProfile = async (req, res) => {
+  try {
+    const data = await eligibilityService.getAdminStudentProfile(req.params.student_id);
+    res.json(data);
+  } catch (error) {
+    const statusCode = error.message === "Student not found" ? 404 : 400;
+    res.status(statusCode).json({ message: error.message });
+  }
+};
+
 const getStudentLeaderboards = async (req, res) => {
   try {
     const data = await eligibilityService.getStudentLeaderboards(req.query || {});
@@ -253,6 +263,7 @@ module.exports = {
   getMyIndividualEligibility,
   getMyIndividualEligibilityHistory,
   getAdminStudentOverview,
+  getAdminStudentProfile,
   getStudentLeaderboards,
   getGroupEligibilitySummary,
   getMyDashboardSummary

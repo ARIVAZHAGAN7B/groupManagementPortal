@@ -1,68 +1,16 @@
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import {
+  AdminBadge,
+  AdminIconActionButton,
+  AdminStatusDotBadge,
+  AdminTextActionButton
+} from "../ui/AdminUiPrimitives";
+import {
   formatDateTime,
   getRoleBadgeClass,
   getStatusConfig,
   getTierBadgeClass
 } from "./leadership.constants";
-
-function TierBadge({ tier }) {
-  return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${getTierBadgeClass(tier)}`}
-    >
-      Tier {String(tier || "-").toUpperCase()}
-    </span>
-  );
-}
-
-function StatusBadge({ status }) {
-  const config = getStatusConfig(status);
-
-  return (
-    <span className={`flex items-center gap-1.5 text-[10px] font-bold ${config.text}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${config.dot}`} />
-      {config.label}
-    </span>
-  );
-}
-
-function RoleBadge({ role }) {
-  return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${getRoleBadgeClass(role)}`}
-    >
-      {String(role || "-").replaceAll("_", " ")}
-    </span>
-  );
-}
-
-function ActionIconButton({ className = "", label, onClick, children }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={label}
-      aria-label={label}
-      className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${className}`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function ActionTextButton({ className = "", disabled = false, label, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`w-full whitespace-nowrap rounded-md px-2.5 py-1 text-center text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
-    >
-      {label}
-    </button>
-  );
-}
 
 export default function LeadershipManagementDesktopTable({
   busyRequestId,
@@ -102,10 +50,12 @@ export default function LeadershipManagementDesktopTable({
                       </div>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <TierBadge tier={row.group_tier} />
+                      <AdminBadge className={getTierBadgeClass(row.group_tier)}>
+                        Tier {String(row.group_tier || "-").toUpperCase()}
+                      </AdminBadge>
                     </td>
                     <td className="px-6 py-4">
-                      <StatusBadge status={row.group_status} />
+                      <AdminStatusDotBadge config={getStatusConfig(row.group_status)} />
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm font-medium text-slate-800">{row.student_name || "-"}</div>
@@ -116,7 +66,9 @@ export default function LeadershipManagementDesktopTable({
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <RoleBadge role={row.requested_role} />
+                      <AdminBadge className={getRoleBadgeClass(row.requested_role)}>
+                        {String(row.requested_role || "-").replaceAll("_", " ")}
+                      </AdminBadge>
                       {row.request_reason ? (
                         <div className="mt-1 max-w-[220px] text-[10px] text-slate-400">
                           {row.request_reason}
@@ -124,29 +76,31 @@ export default function LeadershipManagementDesktopTable({
                       ) : null}
                     </td>
                     <td className="px-6 py-4">
-                      <RoleBadge role={row.current_membership_role} />
+                      <AdminBadge className={getRoleBadgeClass(row.current_membership_role)}>
+                        {String(row.current_membership_role || "-").replaceAll("_", " ")}
+                      </AdminBadge>
                     </td>
                     <td className="px-6 py-4 text-xs text-slate-500">
                       {formatDateTime(row.request_date)}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="ml-auto grid grid-cols-[2rem_4.75rem_4.75rem] items-center justify-end gap-2">
-                        <ActionIconButton
+                        <AdminIconActionButton
                           label="Open group"
                           onClick={() => onOpenGroup(row.group_id)}
                           className="hover:bg-slate-100"
                         >
                           <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
-                        </ActionIconButton>
+                        </AdminIconActionButton>
 
-                        <ActionTextButton
+                        <AdminTextActionButton
                           label={isBusy ? "..." : "Approve"}
                           onClick={() => onApprove(row)}
                           disabled={isBusy}
                           className="border border-green-200 bg-green-50 text-green-600 hover:bg-green-100"
                         />
 
-                        <ActionTextButton
+                        <AdminTextActionButton
                           label={isBusy ? "..." : "Reject"}
                           onClick={() => onReject(row)}
                           disabled={isBusy}

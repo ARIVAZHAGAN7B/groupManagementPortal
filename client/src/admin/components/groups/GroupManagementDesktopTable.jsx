@@ -1,32 +1,17 @@
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import {
+  AdminBadge,
+  AdminIconActionButton,
+  AdminStatusDotBadge,
+  AdminTextActionButton
+} from "../ui/AdminUiPrimitives";
+import {
   formatGroupMeta,
   formatGroupPoints,
   getGroupLifecycleActionKeys,
   getStatusConfig,
   getTierBadgeClass
 } from "./groupManagement.constants";
-
-function TierBadge({ tier }) {
-  return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${getTierBadgeClass(tier)}`}
-    >
-      Tier {String(tier || "-").toUpperCase()}
-    </span>
-  );
-}
-
-function StatusBadge({ status }) {
-  const config = getStatusConfig(status);
-
-  return (
-    <span className={`flex items-center gap-1.5 text-[10px] font-bold ${config.text}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${config.dot}`} />
-      {config.label}
-    </span>
-  );
-}
 
 function LeaderCell({ name, rollNumber }) {
   return (
@@ -36,32 +21,6 @@ function LeaderCell({ name, rollNumber }) {
         {rollNumber || "No roll number"}
       </div>
     </div>
-  );
-}
-
-function ActionIconButton({ className = "", label, onClick, children }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={label}
-      aria-label={label}
-      className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${className}`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function ActionTextButton({ className = "", label, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`w-full whitespace-nowrap rounded-md px-2.5 py-1 text-center text-xs font-semibold transition-colors ${className}`}
-    >
-      {label}
-    </button>
   );
 }
 
@@ -126,10 +85,12 @@ export default function GroupManagementDesktopTable({
                       </span>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <TierBadge tier={group.tier} />
+                      <AdminBadge className={getTierBadgeClass(group.tier)}>
+                        Tier {String(group.tier || "-").toUpperCase()}
+                      </AdminBadge>
                     </td>
                     <td className="px-6 py-4">
-                      <StatusBadge status={group.status} />
+                      <AdminStatusDotBadge config={getStatusConfig(group.status)} />
                     </td>
                     <td className="px-6 py-4">
                       <LeaderCell
@@ -139,22 +100,22 @@ export default function GroupManagementDesktopTable({
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="ml-auto grid grid-cols-[2rem_3.75rem_5rem_4.75rem] items-center justify-end gap-2">
-                        <ActionIconButton
+                        <AdminIconActionButton
                           label="View"
                           onClick={() => onView(group.group_id)}
                           className="hover:bg-slate-100"
                         >
                           <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
-                        </ActionIconButton>
+                        </AdminIconActionButton>
 
-                        <ActionTextButton
+                        <AdminTextActionButton
                           label="Edit"
                           onClick={() => onEdit(group.group_id)}
                           className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                         />
 
                         {lifecycleActionKeys.map((actionKey) => (
-                          <ActionTextButton
+                          <AdminTextActionButton
                             key={actionKey}
                             label={lifecycleActionMap[actionKey].label}
                             onClick={lifecycleActionMap[actionKey].onClick}

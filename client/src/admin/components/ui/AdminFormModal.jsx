@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-export default function TeamManagementFormModal({
+export default function AdminFormModal({
   busy = false,
   children,
   onClose,

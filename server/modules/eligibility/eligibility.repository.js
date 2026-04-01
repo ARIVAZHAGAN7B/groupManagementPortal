@@ -4,6 +4,21 @@ const getExecutor = (executor) => executor || db;
 const BASE_POINT_ACTIVITY_AT_EXPR =
   "COALESCE(h.activity_at, TIMESTAMP(h.activity_date, '00:00:00'))";
 const GROUP_POINT_CREATED_AT_EXPR = "gp.created_at";
+const PHASE_END_AT_EXPR = "TIMESTAMP(p.end_date, COALESCE(p.end_time, '23:59:59'))";
+const PHASE_START_AT_EXPR = "TIMESTAMP(p.start_date, COALESCE(p.start_time, '00:00:00'))";
+const PHASE_MEMBERSHIP_REFERENCE_AT_EXPR = `CASE
+  WHEN ${PHASE_END_AT_EXPR} <= NOW() THEN ${PHASE_END_AT_EXPR}
+  WHEN ${PHASE_START_AT_EXPR} <= NOW() THEN NOW()
+  ELSE ${PHASE_START_AT_EXPR}
+END`;
+const INDIVIDUAL_ELIGIBILITY_AWARDED_POINTS_EXPR = `CASE
+  WHEN iep.is_eligible = 1 THEN ROUND(iep.source_base_points * GREATEST(iep.multiplier - 1, 0), 2)
+  ELSE 0
+END`;
+const GROUP_ELIGIBILITY_AWARDED_POINTS_EXPR = `CASE
+  WHEN gep.is_eligible = 1 THEN ROUND(gep.source_group_points * GREATEST(gep.multiplier - 1, 0), 2)
+  ELSE 0
+END`;
 
 const getPhaseById = async (phaseId, executor) => {
   const [rows] = await getExecutor(executor).query(
@@ -188,9 +203,6 @@ const getGroupPhasePoints = async (startDate, endDate, executor) => {
          gp.group_id,
          SUM(gp.points) AS this_phase_group_points
        FROM group_points gp
-       INNER JOIN memberships m
-         ON m.membership_id = gp.membership_id
-        AND m.status = 'ACTIVE'
        WHERE ${GROUP_POINT_CREATED_AT_EXPR} BETWEEN ? AND ?
        GROUP BY gp.group_id
      ) gps
@@ -224,9 +236,6 @@ const getGroupPhaseSnapshot = async (groupId, startDate, endDate, executor) => {
          gp.group_id,
          SUM(gp.points) AS earned_points
        FROM group_points gp
-       INNER JOIN memberships m
-         ON m.membership_id = gp.membership_id
-        AND m.status = 'ACTIVE'
        WHERE ${GROUP_POINT_CREATED_AT_EXPR} BETWEEN ? AND ?
        GROUP BY gp.group_id
      ) gps
@@ -361,7 +370,7 @@ const recalculateIndividualEligibilityPointTotals = async (studentIds = [], exec
       (student_id, total_points, last_updated)
      SELECT
        s.student_id,
-       COALESCE(SUM(iep.awarded_points), 0) AS total_points,
+       COALESCE(SUM(${INDIVIDUAL_ELIGIBILITY_AWARDED_POINTS_EXPR}), 0) AS total_points,
        NOW()
      FROM students s
      LEFT JOIN individual_eligibility_points iep
@@ -392,7 +401,7 @@ const recalculateGroupEligibilityPointTotals = async (groupIds = [], executor) =
       (group_id, total_points, last_updated)
      SELECT
        g.group_id,
-       COALESCE(SUM(gep.awarded_points), 0) AS total_points,
+       COALESCE(SUM(${GROUP_ELIGIBILITY_AWARDED_POINTS_EXPR}), 0) AS total_points,
        NOW()
      FROM Sgroup g
      LEFT JOIN group_eligibility_points gep
@@ -518,7 +527,7 @@ const getIndividualEligibility = async (phaseId, filters = {}, executor) => {
        p.phase_name,
        ie.this_phase_base_points,
        iep.multiplier AS eligibility_multiplier,
-       iep.awarded_points AS eligibility_awarded_points,
+       ${INDIVIDUAL_ELIGIBILITY_AWARDED_POINTS_EXPR} AS eligibility_awarded_points,
        ie.is_eligible,
        ie.reason_code,
        ie.evaluated_at,
@@ -561,7 +570,7 @@ const getGroupEligibility = async (phaseId, filters = {}, executor) => {
        ge.this_phase_group_points,
        COALESCE(gep.applied_tier, g.tier) AS allocation_tier,
        gep.multiplier AS eligibility_multiplier,
-       gep.awarded_points AS eligibility_awarded_points,
+       ${GROUP_ELIGIBILITY_AWARDED_POINTS_EXPR} AS eligibility_awarded_points,
        ge.is_eligible,
        ge.reason_code,
        ge.evaluated_at,
@@ -592,6 +601,17 @@ const getStudentByUserId = async (userId, executor) => {
 const getStudentById = async (studentId, executor) => {
   const [rows] = await getExecutor(executor).query(
     `SELECT student_id FROM students WHERE student_id = ? LIMIT 1`,
+    [studentId]
+  );
+  return rows[0] || null;
+};
+
+const getStudentProfileById = async (studentId, executor) => {
+  const [rows] = await getExecutor(executor).query(
+    `SELECT student_id, name, email, department, year
+     FROM students
+     WHERE student_id = ?
+     LIMIT 1`,
     [studentId]
   );
   return rows[0] || null;
@@ -683,7 +703,14 @@ const getDashboardStudentStats = async (studentId, executor) => {
        GROUP BY h.student_id
      ) bph
        ON bph.student_id = s.student_id
-     LEFT JOIN individual_eligibility_point_totals iept
+     LEFT JOIN (
+       SELECT
+         student_id,
+         COALESCE(SUM(${INDIVIDUAL_ELIGIBILITY_AWARDED_POINTS_EXPR}), 0) AS total_points
+       FROM individual_eligibility_points iep
+       WHERE student_id = ?
+       GROUP BY student_id
+     ) iept
        ON iept.student_id = s.student_id
      LEFT JOIN (
        SELECT
@@ -709,7 +736,7 @@ const getDashboardStudentStats = async (studentId, executor) => {
        ON mult.student_id = s.student_id
      WHERE s.student_id = ?
      LIMIT 1`,
-    [studentId, studentId, studentId, studentId]
+    [studentId, studentId, studentId, studentId, studentId]
   );
 
   return rows[0] || null;
@@ -727,7 +754,14 @@ const getDashboardGroupStats = async (groupId, executor) => {
        COALESCE(mult.multiplier_13_count, 0) AS multiplier_13_count,
        COALESCE(mult.multiplier_14_count, 0) AS multiplier_14_count
      FROM Sgroup g
-     LEFT JOIN group_eligibility_point_totals gept
+     LEFT JOIN (
+       SELECT
+         group_id,
+         COALESCE(SUM(${GROUP_ELIGIBILITY_AWARDED_POINTS_EXPR}), 0) AS total_points
+       FROM group_eligibility_points gep
+       WHERE group_id = ?
+       GROUP BY group_id
+     ) gept
        ON gept.group_id = g.group_id
      LEFT JOIN (
        SELECT
@@ -753,7 +787,7 @@ const getDashboardGroupStats = async (groupId, executor) => {
        ON mult.group_id = g.group_id
      WHERE g.group_id = ?
      LIMIT 1`,
-    [numericGroupId, numericGroupId, numericGroupId]
+    [numericGroupId, numericGroupId, numericGroupId, numericGroupId]
   );
 
   return rows[0] || null;
@@ -795,6 +829,34 @@ const listPhaseIdsMissingPointAllocations = async (limit = 50, executor) => {
   return (rows || []).map((row) => row.phase_id).filter(Boolean);
 };
 
+const listPhaseIdsWithEligibilitySnapshots = async (limit = 1000, executor) => {
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 1000, 1000));
+  const [rows] = await getExecutor(executor).query(
+    `SELECT snapshot_phases.phase_id
+     FROM (
+       SELECT DISTINCT ie.phase_id
+       FROM individual_eligibility ie
+       UNION
+       SELECT DISTINCT ge.phase_id
+       FROM group_eligibility ge
+     ) snapshot_phases
+     INNER JOIN phases p
+       ON p.phase_id = snapshot_phases.phase_id
+     ORDER BY
+       CASE p.status
+         WHEN 'ACTIVE' THEN 0
+         WHEN 'COMPLETED' THEN 1
+         ELSE 2
+       END,
+       p.end_date DESC,
+       p.phase_id DESC
+     LIMIT ?`,
+    [safeLimit]
+  );
+
+  return (rows || []).map((row) => row.phase_id).filter(Boolean);
+};
+
 const getMyIndividualEligibilityHistory = async (studentId, executor) => {
   const [rows] = await getExecutor(executor).query(
     `SELECT
@@ -804,7 +866,7 @@ const getMyIndividualEligibilityHistory = async (studentId, executor) => {
        p.phase_name,
        ie.this_phase_base_points,
        iep.multiplier AS eligibility_multiplier,
-       iep.awarded_points AS eligibility_awarded_points,
+       ${INDIVIDUAL_ELIGIBILITY_AWARDED_POINTS_EXPR} AS eligibility_awarded_points,
        ie.is_eligible,
        ie.reason_code,
        ie.evaluated_at,
@@ -839,6 +901,94 @@ const getMyIndividualEligibilityHistory = async (studentId, executor) => {
   return rows;
 };
 
+const getStudentPhaseTimeline = async (studentId, executor) => {
+  const [rows] = await getExecutor(executor).query(
+    `SELECT
+       p.phase_id,
+       p.phase_name,
+       p.start_date AS phase_start_date,
+       p.end_date AS phase_end_date,
+       p.change_day AS phase_change_day,
+       p.status AS phase_status,
+       ${PHASE_MEMBERSHIP_REFERENCE_AT_EXPR} AS membership_reference_at,
+       m.membership_id,
+       m.group_id,
+       m.role AS membership_role,
+       m.status AS membership_status,
+       m.join_date AS membership_join_date,
+       m.leave_date AS membership_leave_date,
+       g.group_code,
+       g.group_name,
+       g.tier AS group_tier,
+       g.status AS group_status,
+       ie.this_phase_base_points,
+       ie.is_eligible AS individual_is_eligible,
+       ie.reason_code AS individual_reason_code,
+       ie.evaluated_at AS individual_evaluated_at,
+       iep.multiplier AS individual_eligibility_multiplier,
+       ${INDIVIDUAL_ELIGIBILITY_AWARDED_POINTS_EXPR} AS individual_eligibility_awarded_points,
+       COALESCE(
+         (
+           SELECT ipt.target
+           FROM individual_phase_target ipt
+           WHERE ipt.phase_id = p.phase_id
+           ORDER BY ipt.id DESC
+           LIMIT 1
+         ),
+         (
+           SELECT pt.individual_target
+           FROM phase_targets pt
+           WHERE pt.phase_id = p.phase_id
+           LIMIT 1
+         )
+       ) AS individual_target_points,
+       ge.this_phase_group_points,
+       ge.is_eligible AS group_is_eligible,
+       ge.reason_code AS group_reason_code,
+       ge.evaluated_at AS group_evaluated_at,
+       gep.multiplier AS group_eligibility_multiplier,
+       ${GROUP_ELIGIBILITY_AWARDED_POINTS_EXPR} AS group_eligibility_awarded_points,
+       COALESCE(gep.applied_tier, g.tier) AS group_allocation_tier,
+       (
+         SELECT pt.group_target
+         FROM phase_targets pt
+         WHERE pt.phase_id = p.phase_id
+           AND UPPER(pt.tier) = UPPER(COALESCE(gep.applied_tier, g.tier))
+         LIMIT 1
+       ) AS group_target_points
+     FROM phases p
+     LEFT JOIN memberships m
+       ON m.membership_id = (
+         SELECT m2.membership_id
+         FROM memberships m2
+         WHERE m2.student_id = ?
+           AND m2.join_date <= ${PHASE_MEMBERSHIP_REFERENCE_AT_EXPR}
+           AND (m2.leave_date IS NULL OR m2.leave_date > ${PHASE_MEMBERSHIP_REFERENCE_AT_EXPR})
+         ORDER BY m2.join_date DESC, m2.membership_id DESC
+         LIMIT 1
+       )
+     LEFT JOIN Sgroup g
+       ON g.group_id = m.group_id
+     LEFT JOIN individual_eligibility ie
+       ON ie.phase_id = p.phase_id
+      AND ie.student_id = ?
+     LEFT JOIN individual_eligibility_points iep
+       ON iep.phase_id = p.phase_id
+      AND iep.student_id = ?
+     LEFT JOIN group_eligibility ge
+       ON ge.phase_id = p.phase_id
+      AND ge.group_id = m.group_id
+     LEFT JOIN group_eligibility_points gep
+       ON gep.phase_id = p.phase_id
+      AND gep.group_id = m.group_id
+     WHERE ${PHASE_START_AT_EXPR} <= NOW()
+     ORDER BY p.start_date DESC, p.phase_id DESC`,
+    [studentId, studentId, studentId]
+  );
+
+  return rows;
+};
+
 const getStoredGroupEligibilitySummary = async (phaseId, groupId, executor) => {
   const [rows] = await getExecutor(executor).query(
     `SELECT
@@ -863,7 +1013,7 @@ const getStoredGroupEligibilitySummary = async (phaseId, groupId, executor) => {
          LIMIT 1
        ) AS target_points,
        gep.multiplier AS eligibility_multiplier,
-       gep.awarded_points AS eligibility_awarded_points,
+       ${GROUP_ELIGIBILITY_AWARDED_POINTS_EXPR} AS eligibility_awarded_points,
        ge.is_eligible,
        ge.reason_code,
        ge.evaluated_at
@@ -1132,9 +1282,6 @@ const getGroupLeaderboard = async (limit = 30, filters = {}, executor) => {
          gp.group_id,
          SUM(gp.points) AS total_base_points
        FROM group_points gp
-       INNER JOIN memberships m
-         ON m.membership_id = gp.membership_id
-        AND m.status = 'ACTIVE'
        GROUP BY gp.group_id
      ) gpt
        ON gpt.group_id = g.group_id
@@ -1188,9 +1335,6 @@ const getGroupLeaderboardByPhase = async (startAt, endAt, limit = 30, filters = 
          gp.group_id,
          SUM(gp.points) AS total_base_points
        FROM group_points gp
-       INNER JOIN memberships m
-         ON m.membership_id = gp.membership_id
-        AND m.status = 'ACTIVE'
        WHERE ${GROUP_POINT_CREATED_AT_EXPR} BETWEEN ? AND ?
        GROUP BY gp.group_id
      ) gpt
@@ -1228,6 +1372,7 @@ module.exports = {
   getGroupEligibility,
   getStudentByUserId,
   getStudentById,
+  getStudentProfileById,
   getGroupById,
   getStudentEligiblePhaseCount,
   getGroupEligiblePhaseCount,
@@ -1238,8 +1383,10 @@ module.exports = {
   getIndividualEligibilityPointTotal,
   getGroupEligibilityPointTotal,
   getMyIndividualEligibilityHistory,
+  getStudentPhaseTimeline,
   getStoredGroupEligibilitySummary,
   listPhaseIdsMissingPointAllocations,
+  listPhaseIdsWithEligibilitySnapshots,
   getIndividualLeaderboard,
   getIndividualLeaderboardByPhase,
   getLeaderLeaderboard,

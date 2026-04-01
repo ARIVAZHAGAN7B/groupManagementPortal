@@ -31,6 +31,11 @@ const defaultForm = {
   description: ""
 };
 
+const buildCreateForm = () => ({
+  ...defaultForm,
+  holiday_date: todayDateOnly()
+});
+
 const parseDateOnly = (value) => {
   const normalized = String(value || "").trim();
   const matched = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -53,7 +58,7 @@ const formatDate = (value) => {
   });
 };
 
-function HolidayManagementHero({ loading, onRefresh }) {
+function HolidayManagementHero({ loading, onRefresh, onStartCreate }) {
   return (
     <section className="relative overflow-hidden rounded-2xl border border-[#1754cf]/10 bg-[#1754cf]/5 p-4 md:p-5">
       <div className="relative z-10 flex flex-col gap-3">
@@ -72,15 +77,26 @@ function HolidayManagementHero({ loading, onRefresh }) {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-wait disabled:opacity-70"
-          >
-            <RefreshRoundedIcon sx={{ fontSize: 18 }} />
-            {loading ? "Refreshing..." : "Refresh"}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-wait disabled:opacity-70"
+            >
+              <RefreshRoundedIcon sx={{ fontSize: 18 }} />
+              {loading ? "Refreshing..." : "Refresh"}
+            </button>
+
+            <button
+              type="button"
+              onClick={onStartCreate}
+              className="inline-flex items-center gap-2 rounded-lg bg-[#1754cf] px-3.5 py-2 text-sm font-semibold text-white shadow-lg shadow-[#1754cf]/20 transition-opacity hover:opacity-90"
+            >
+              <AddRoundedIcon sx={{ fontSize: 18 }} />
+              Add Holiday
+            </button>
+          </div>
         </div>
 
       </div>
@@ -109,8 +125,25 @@ function HolidayFormModal({
   onCancel,
   onChange,
   onSubmit,
-  open
+  open,
+  submitLabel,
+  title
 }) {
+  useEffect(() => {
+    if (!open || busy) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        onCancel?.();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [busy, onCancel, open]);
+
   if (!open) return null;
 
   return (
@@ -118,7 +151,7 @@ function HolidayFormModal({
       <button
         type="button"
         aria-label="Close holiday editor"
-        onClick={busy ? undefined : onCancel}
+        onClick={busy ? undefined : () => onCancel?.()}
         className="absolute inset-0"
       />
 
@@ -127,7 +160,7 @@ function HolidayFormModal({
           <span className="block text-[11px] font-bold uppercase tracking-[0.22em] text-[#1754cf]">
             Holiday Form
           </span>
-          <h3 className="mt-1 text-lg font-bold tracking-tight text-slate-900">Update holiday</h3>
+          <h3 className="mt-1 text-lg font-bold tracking-tight text-slate-900">{title}</h3>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4 px-6 py-5">
@@ -163,7 +196,7 @@ function HolidayFormModal({
           <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
             <button
               type="button"
-              onClick={onCancel}
+              onClick={() => onCancel?.()}
               disabled={busy}
               className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -176,7 +209,7 @@ function HolidayFormModal({
               className="inline-flex items-center gap-2 rounded-lg bg-[#1754cf] px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-[#1754cf]/20 transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
             >
               <SaveRoundedIcon sx={{ fontSize: 18 }} />
-              {busy ? "Saving..." : "Update Holiday"}
+              {busy ? "Saving..." : submitLabel}
             </button>
           </div>
         </form>
@@ -236,7 +269,8 @@ export default function HolidayManagement() {
   const [modalLoadingId, setModalLoadingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [q, setQ] = useState("");
-  const [form, setForm] = useState(defaultForm);
+  const [form, setForm] = useState(buildCreateForm);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editState, setEditState] = useState({
     open: false,
     holidayId: null,
@@ -292,7 +326,27 @@ export default function HolidayManagement() {
   }, [holidays]);
 
   const resetForm = () => {
-    setForm(defaultForm);
+    setForm(buildCreateForm());
+  };
+
+  const openCreateModal = () => {
+    resetForm();
+    setError("");
+    setSuccess("");
+    setCreateModalOpen(true);
+  };
+
+  const closeCreateModal = () => {
+    if (saving) return;
+    setCreateModalOpen(false);
+    resetForm();
+  };
+
+  const onCreateFieldChange = (field, value) => {
+    setForm((prev) => ({
+      ...prev,
+      [field]: value
+    }));
   };
 
   const onSubmit = async (event) => {
@@ -317,6 +371,7 @@ export default function HolidayManagement() {
       setSuccess("Holiday added.");
 
       await load();
+      setCreateModalOpen(false);
       resetForm();
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to save holiday");
@@ -439,181 +494,134 @@ export default function HolidayManagement() {
 
   return (
     <section className="mx-auto w-full max-w-7xl space-y-6 px-4 py-5 font-[Inter] text-slate-900 md:px-6">
-      <HolidayManagementHero loading={loading} onRefresh={load} stats={stats} />
+      <HolidayManagementHero
+        loading={loading}
+        onRefresh={load}
+        onStartCreate={openCreateModal}
+        stats={stats}
+      />
 
       {error ? <StatusBanner tone="error" message={error} /> : null}
       {success ? <StatusBanner tone="success" message={success} /> : null}
 
-      <div className="grid gap-6 xl:grid-cols-[360px,1fr]">
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
-            <div>
-              <span className="block text-[11px] font-bold uppercase tracking-[0.22em] text-[#1754cf]">
-                Holiday Form
-              </span>
-              <h2 className="mt-1 text-lg font-bold tracking-tight text-slate-900">
-                Add holiday
-              </h2>
-            </div>
+      <section className="space-y-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="relative">
+            <SearchRoundedIcon
+              sx={{ fontSize: 20 }}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              value={q}
+              onChange={(event) => setQ(event.target.value)}
+              className={`${inputClass} pl-10`}
+              placeholder="Search holidays"
+            />
           </div>
+        </div>
 
-          <form onSubmit={onSubmit} className="mt-4 space-y-4">
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-slate-900">Holiday Date</span>
-              <input
-                type="date"
-                className={inputClass}
-                value={form.holiday_date}
-                onChange={(event) =>
-                  setForm((prev) => ({ ...prev, holiday_date: event.target.value }))
-                }
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-slate-900">Holiday Name</span>
-              <input
-                type="text"
-                className={inputClass}
-                value={form.holiday_name}
-                onChange={(event) =>
-                  setForm((prev) => ({ ...prev, holiday_name: event.target.value }))
-                }
-                placeholder="e.g. Republic Day"
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-slate-900">Description</span>
-              <textarea
-                className={`${inputClass} min-h-24 resize-y py-3`}
-                value={form.description}
-                onChange={(event) =>
-                  setForm((prev) => ({ ...prev, description: event.target.value }))
-                }
-                placeholder="Optional note"
-              />
-            </label>
-
-            <button
-              type="submit"
-              disabled={saving}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#1754cf] px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[#1754cf]/20 transition-opacity hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
-            >
-              <AddRoundedIcon sx={{ fontSize: 18 }} />
-              {saving ? "Saving..." : "Add Holiday"}
-            </button>
-          </form>
-        </section>
-
-        <section className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="relative">
-              <SearchRoundedIcon
-                sx={{ fontSize: 20 }}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-              />
-              <input
-                value={q}
-                onChange={(event) => setQ(event.target.value)}
-                className={`${inputClass} pl-10`}
-                placeholder="Search holidays"
-              />
-            </div>
+        {loading ? (
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500 shadow-sm">
+            Loading holidays...
           </div>
-
-          {loading ? (
-            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500 shadow-sm">
-              Loading holidays...
+        ) : filteredHolidays.length === 0 ? (
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500 shadow-sm">
+            No holidays found.
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-4 lg:hidden">
+              {filteredHolidays.map((holiday) => (
+                <HolidayCard
+                  key={holiday.holiday_id}
+                  holiday={holiday}
+                  onDelete={openDeleteModal}
+                  onEdit={openEditModal}
+                  deleteBusy={deletingId === holiday.holiday_id}
+                  editBusy={modalLoadingId === holiday.holiday_id}
+                />
+              ))}
             </div>
-          ) : filteredHolidays.length === 0 ? (
-            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500 shadow-sm">
-              No holidays found.
-            </div>
-          ) : (
-            <>
-              <div className="grid gap-4 lg:hidden">
-                {filteredHolidays.map((holiday) => (
-                  <HolidayCard
-                    key={holiday.holiday_id}
-                    holiday={holiday}
-                    onDelete={openDeleteModal}
-                    onEdit={openEditModal}
-                    deleteBusy={deletingId === holiday.holiday_id}
-                    editBusy={modalLoadingId === holiday.holiday_id}
-                  />
-                ))}
-              </div>
 
-              <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:block">
-                <table className="w-full border-collapse text-left">
-                  <thead className="border-b border-slate-200 bg-slate-50">
-                    <tr>
-                      <th className="px-5 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
-                        Date
-                      </th>
-                      <th className="px-5 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
-                        Holiday
-                      </th>
-                      <th className="px-5 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
-                        Description
-                      </th>
-                      <th className="px-5 py-4 text-right text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
-                        Actions
-                      </th>
+            <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:block">
+              <table className="w-full border-collapse text-left">
+                <thead className="border-b border-slate-200 bg-slate-50">
+                  <tr>
+                    <th className="px-5 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+                      Date
+                    </th>
+                    <th className="px-5 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+                      Holiday
+                    </th>
+                    <th className="px-5 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+                      Description
+                    </th>
+                    <th className="px-5 py-4 text-right text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100">
+                  {filteredHolidays.map((holiday) => (
+                    <tr key={holiday.holiday_id} className="hover:bg-slate-50/80">
+                      <td className="px-5 py-4">
+                        <div className="inline-flex items-center gap-2 rounded-full bg-[#1754cf]/10 px-2.5 py-1 text-xs font-semibold text-[#1754cf]">
+                          <EventAvailableRoundedIcon sx={{ fontSize: 16 }} />
+                          {formatDate(holiday.holiday_date)}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-sm font-semibold text-slate-900">
+                        {holiday.holiday_name}
+                      </td>
+                      <td className="px-5 py-4 text-sm text-slate-600">
+                        {holiday.description || "-"}
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(holiday)}
+                            disabled={
+                              modalLoadingId === holiday.holiday_id ||
+                              deletingId === holiday.holiday_id
+                            }
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-wait disabled:opacity-70"
+                          >
+                            <EditRoundedIcon sx={{ fontSize: 16 }} />
+                            {modalLoadingId === holiday.holiday_id ? "Loading..." : "Edit"}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => openDeleteModal(holiday)}
+                            disabled={deletingId === holiday.holiday_id}
+                            className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition-colors hover:bg-red-100 disabled:cursor-wait disabled:opacity-70"
+                          >
+                            <DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />
+                            Delete
+                          </button>
+                        </div>
+                      </td>
                     </tr>
-                  </thead>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </section>
 
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredHolidays.map((holiday) => (
-                      <tr key={holiday.holiday_id} className="hover:bg-slate-50/80">
-                        <td className="px-5 py-4">
-                          <div className="inline-flex items-center gap-2 rounded-full bg-[#1754cf]/10 px-2.5 py-1 text-xs font-semibold text-[#1754cf]">
-                            <EventAvailableRoundedIcon sx={{ fontSize: 16 }} />
-                            {formatDate(holiday.holiday_date)}
-                          </div>
-                        </td>
-                        <td className="px-5 py-4 text-sm font-semibold text-slate-900">
-                          {holiday.holiday_name}
-                        </td>
-                        <td className="px-5 py-4 text-sm text-slate-600">
-                          {holiday.description || "-"}
-                        </td>
-                        <td className="px-5 py-4">
-                          <div className="flex justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => openEditModal(holiday)}
-                              disabled={
-                                modalLoadingId === holiday.holiday_id ||
-                                deletingId === holiday.holiday_id
-                              }
-                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-wait disabled:opacity-70"
-                            >
-                              <EditRoundedIcon sx={{ fontSize: 16 }} />
-                              {modalLoadingId === holiday.holiday_id ? "Loading..." : "Edit"}
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => openDeleteModal(holiday)}
-                              disabled={deletingId === holiday.holiday_id}
-                              className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition-colors hover:bg-red-100 disabled:cursor-wait disabled:opacity-70"
-                            >
-                              <DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-        </section>
-      </div>
+      <HolidayFormModal
+        busy={saving}
+        form={form}
+        onCancel={closeCreateModal}
+        onChange={onCreateFieldChange}
+        onSubmit={onSubmit}
+        open={createModalOpen}
+        submitLabel="Add Holiday"
+        title="Add holiday"
+      />
 
       <HolidayFormModal
         busy={modalSaving}
@@ -622,6 +630,8 @@ export default function HolidayManagement() {
         onChange={onEditFieldChange}
         onSubmit={onEditSubmit}
         open={editState.open}
+        submitLabel="Update Holiday"
+        title="Update holiday"
       />
 
       <GroupManagementActionModal

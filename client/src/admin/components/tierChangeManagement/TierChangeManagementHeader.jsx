@@ -1,5 +1,8 @@
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import { formatPhaseLabel } from "./tierChangeManagement.utils";
+import AdminWorkspaceHero, {
+  AdminWorkspaceHeroActionButton
+} from "../ui/AdminWorkspaceHero";
 
 export default function TierChangeManagementHeader({
   loadingData,
@@ -10,54 +13,42 @@ export default function TierChangeManagementHeader({
   selectedPhaseId
 }) {
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-[#1754cf]/10 bg-[#1754cf]/5 p-4 md:p-5">
-      <div className="relative z-10 flex flex-col gap-3">
-        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-          <div>
-            <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.24em] text-[#1754cf]">
-              Tier Change Workspace
-            </span>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-                Tier Change Management
-              </h1>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-medium text-slate-500">
-              <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
-                Selected:{" "}
-                {previewMeta.phase ? formatPhaseLabel(previewMeta.phase) : "No phase selected"}
-              </span>
-              <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
-                Previous: {formatPhaseLabel(previewMeta.previous_phase)}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={onRefreshData}
-              disabled={!selectedPhaseId || loadingData}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-wait disabled:opacity-70"
-            >
-              <RefreshRoundedIcon sx={{ fontSize: 18 }} />
-              {loadingData ? "Refreshing..." : "Refresh Data"}
-            </button>
-
-            <button
-              type="button"
-              onClick={onRefreshPhases}
-              disabled={loadingPhases}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#1754cf] px-3.5 py-2 text-sm font-semibold text-white shadow-lg shadow-[#1754cf]/20 transition-opacity hover:opacity-90 disabled:cursor-wait disabled:opacity-70"
-            >
-              <RefreshRoundedIcon sx={{ fontSize: 18 }} />
-              {loadingPhases ? "Refreshing..." : "Refresh Phases"}
-            </button>
-          </div>
+    <AdminWorkspaceHero
+      eyebrow="Tier Change Workspace"
+      title="Tier Change Management"
+      description={
+        <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-medium text-slate-500">
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
+            Selected: {previewMeta.phase ? formatPhaseLabel(previewMeta.phase) : "No phase selected"}
+          </span>
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
+            Previous: {formatPhaseLabel(previewMeta.previous_phase)}
+          </span>
         </div>
-      </div>
+      }
+      actions={
+        <div className="flex flex-wrap items-center gap-2">
+          <AdminWorkspaceHeroActionButton
+            type="button"
+            onClick={onRefreshData}
+            disabled={!selectedPhaseId || loadingData}
+            className="border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+          >
+            <RefreshRoundedIcon sx={{ fontSize: 18 }} />
+            {loadingData ? "Refreshing..." : "Refresh Data"}
+          </AdminWorkspaceHeroActionButton>
 
-      <div className="absolute -bottom-10 -right-10 h-48 w-48 rounded-full bg-[#1754cf]/10 blur-3xl" />
-    </section>
+          <AdminWorkspaceHeroActionButton
+            type="button"
+            onClick={onRefreshPhases}
+            disabled={loadingPhases}
+            className="bg-[#1754cf] text-white shadow-lg shadow-[#1754cf]/20 hover:opacity-90"
+          >
+            <RefreshRoundedIcon sx={{ fontSize: 18 }} />
+            {loadingPhases ? "Refreshing..." : "Refresh Phases"}
+          </AdminWorkspaceHeroActionButton>
+        </div>
+      }
+    />
   );
 }

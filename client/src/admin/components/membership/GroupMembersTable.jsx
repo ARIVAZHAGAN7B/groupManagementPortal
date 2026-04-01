@@ -9,6 +9,7 @@ import {
   PAGE_SIZE_OPTIONS,
   normalizePageSize
 } from "../../../shared/constants/pagination";
+import { AdminBadge, AdminMappedBadge } from "../ui/AdminUiPrimitives";
 
 const ROLES = ["CAPTAIN", "VICE_CAPTAIN", "STRATEGIST", "MANAGER", "MEMBER"];
 const RANK_OPTIONS = [1, 2, 3, 4, 5];
@@ -109,9 +110,14 @@ const HIGHLIGHT_STYLES = {
 };
 
 const RoleBadge = ({ role }) => {
-  const normalized = String(role || "MEMBER").toUpperCase();
-  const cls = ROLE_STYLES[normalized] || "border-slate-200 bg-slate-100 text-slate-700";
-  return <span className={`${badgeClass} ${cls}`}>{normalized.replace("_", " ")}</span>;
+  return (
+    <AdminMappedBadge
+      map={ROLE_STYLES}
+      value={role}
+      fallbackClassName="border-slate-200 bg-slate-100 text-slate-700"
+      className={badgeClass}
+    />
+  );
 };
 
 const getRoleSelectClass = (role) => {
@@ -193,9 +199,9 @@ const getDisplayedBasePoints = (member) => {
 const MemberRankBadge = ({ member, compact = false }) => {
   const badge = getMemberRankBadge(member);
   return (
-    <span className={`${compact ? compactBadgeClass : badgeClass} ${badge.className}`}>
+    <AdminBadge className={`${compact ? compactBadgeClass : badgeClass} ${badge.className}`}>
       {badge.text}
-    </span>
+    </AdminBadge>
   );
 };
 
@@ -523,9 +529,9 @@ export default function GroupMembersTable({
                   className="rounded-lg border border-slate-200 bg-white px-3 py-2"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <span className={`${badgeClass} ${MEMBER_RANK_STYLES[rule.rank]}`}>
+                    <AdminBadge className={`${badgeClass} ${MEMBER_RANK_STYLES[rule.rank]}`}>
                       {rule.label}
-                    </span>
+                    </AdminBadge>
                     <span className="text-[11px] font-semibold text-slate-500">{rule.criteria}</span>
                   </div>
                   <p className="mt-1 text-xs text-slate-600">{rule.summary}</p>
@@ -660,9 +666,9 @@ export default function GroupMembersTable({
                   {MEMBER_RANK_RULES.map((rule) => (
                     <tr key={rule.rank}>
                       <td className="px-3 py-2">
-                        <span className={`${badgeClass} ${MEMBER_RANK_STYLES[rule.rank]}`}>
+                        <AdminBadge className={`${badgeClass} ${MEMBER_RANK_STYLES[rule.rank]}`}>
                           {rule.label}
-                        </span>
+                        </AdminBadge>
                       </td>
                       <td className="px-3 py-2 font-semibold text-slate-700">{rule.criteria}</td>
                       <td className="px-3 py-2 text-slate-600">{rule.summary}</td>

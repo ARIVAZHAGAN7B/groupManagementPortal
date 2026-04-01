@@ -596,7 +596,21 @@ const getActiveMembershipWithGroupByStudent = async (studentId) => {
        GROUP BY group_id
      ) gpt
        ON gpt.group_id = m.group_id
-     LEFT JOIN group_eligibility_point_totals gept
+     LEFT JOIN (
+       SELECT
+         gep.group_id,
+         COALESCE(
+           SUM(
+             CASE
+               WHEN gep.is_eligible = 1 THEN ROUND(gep.source_group_points * GREATEST(gep.multiplier - 1, 0), 2)
+               ELSE 0
+             END
+           ),
+           0
+         ) AS total_points
+       FROM group_eligibility_points gep
+       GROUP BY gep.group_id
+     ) gept
        ON gept.group_id = m.group_id
      LEFT JOIN (
        SELECT group_id, COUNT(*) AS member_count

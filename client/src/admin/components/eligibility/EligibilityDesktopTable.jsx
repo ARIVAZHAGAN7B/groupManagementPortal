@@ -1,5 +1,11 @@
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import {
+  AdminBadge,
+  AdminIconActionButton,
+  AdminStatusDotBadge,
+  AdminTextActionButton
+} from "../ui/AdminUiPrimitives";
+import {
   getAwardValue,
   formatDate,
   getEligibilityStatusConfig,
@@ -10,44 +16,6 @@ import {
   getScoreValue,
   getTierBadgeClass
 } from "./eligibility.constants";
-
-function StatusBadge({ value }) {
-  const config = getEligibilityStatusConfig(value);
-
-  return (
-    <span className={`flex items-center gap-1.5 text-[10px] font-bold ${config.text}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${config.dot}`} />
-      {config.label}
-    </span>
-  );
-}
-
-function ActionTextButton({ className = "", disabled = false, label, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`w-full whitespace-nowrap rounded-md px-1.5 py-1 text-center text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function ActionIconButton({ className = "", label, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={label}
-      aria-label={label}
-      className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${className}`}
-    >
-      <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
-    </button>
-  );
-}
 
 function IndividualTable({
   overrideBusyKey,
@@ -109,14 +77,16 @@ function IndividualTable({
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <StatusBadge value={row.is_eligible} />
+                      <AdminStatusDotBadge config={getEligibilityStatusConfig(row.is_eligible)} />
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <ActionIconButton
+                      <AdminIconActionButton
                         label="View reason"
                         onClick={() => onViewReason("individual", row)}
                         className="mx-auto border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                      />
+                      >
+                        <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
+                      </AdminIconActionButton>
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-500">
                       {formatDate(row.evaluated_at)}
@@ -128,7 +98,7 @@ function IndividualTable({
                         }`}
                       >
                         {overrideOptions.map((option) => (
-                          <ActionTextButton
+                          <AdminTextActionButton
                             key={option.label}
                             label={isBusy ? "Saving..." : option.label}
                             onClick={() => onOverride("individual", row, option.isEligible)}
@@ -201,13 +171,9 @@ function GroupTable({
                       </div>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${getTierBadgeClass(
-                          row.tier
-                        )}`}
-                      >
+                      <AdminBadge className={getTierBadgeClass(row.tier)}>
                         Tier {String(row.tier || "-").toUpperCase()}
-                      </span>
+                      </AdminBadge>
                     </td>
                     <td className="px-6 py-4 text-center">
                       <span className="text-sm font-bold text-slate-900">
@@ -221,14 +187,16 @@ function GroupTable({
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <StatusBadge value={row.is_eligible} />
+                      <AdminStatusDotBadge config={getEligibilityStatusConfig(row.is_eligible)} />
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <ActionIconButton
+                      <AdminIconActionButton
                         label="View reason"
                         onClick={() => onViewReason("group", row)}
                         className="mx-auto border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                      />
+                      >
+                        <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
+                      </AdminIconActionButton>
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-500">
                       {formatDate(row.evaluated_at)}
@@ -240,7 +208,7 @@ function GroupTable({
                         }`}
                       >
                         {overrideOptions.map((option) => (
-                          <ActionTextButton
+                          <AdminTextActionButton
                             key={option.label}
                             label={isBusy ? "Saving..." : option.label}
                             onClick={() => onOverride("group", row, option.isEligible)}

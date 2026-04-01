@@ -15,6 +15,7 @@ const PhaseHistory = lazy(() => import("./pages/phaseHistory"));
 const SettingsPage = lazy(() => import("./pages/settingsPage"));
 const HolidayManagement = lazy(() => import("./pages/holidayManagement"));
 const StudentManagement = lazy(() => import("./pages/studentManagement"));
+const StudentManagementDetail = lazy(() => import("./pages/studentManagementDetail"));
 const BasePointsManagement = lazy(() => import("./pages/basePointsManagement"));
 const TeamManagement = lazy(() => import("./pages/teamManagement"));
 const TeamMembershipManagement = lazy(() => import("./pages/teamMembershipManagement"));
@@ -60,6 +61,7 @@ const AdminRoutes = () => {
           <Route path="/phase-configuration" element={<Navigate to="/phase-history" replace />} />
           <Route path="/eligibility" element={<EligibilityManagement />} />
           <Route path="/student-management" element={<StudentManagement />} />
+          <Route path="/student-management/:studentId" element={<StudentManagementDetail />} />
           <Route path="/base-points" element={<BasePointsManagement />} />
           <Route path="/team-management" element={<TeamManagement scope="TEAM" />} />
           <Route path="/hub-management" element={<TeamManagement scope="HUB" />} />

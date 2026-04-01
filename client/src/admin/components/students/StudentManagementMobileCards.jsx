@@ -1,7 +1,13 @@
 import MailOutlineRoundedIcon from "@mui/icons-material/MailOutlineRounded";
 import SchoolRoundedIcon from "@mui/icons-material/SchoolRounded";
+import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import WorkspacePremiumRoundedIcon from "@mui/icons-material/WorkspacePremiumRounded";
 import StudentManagementBadge from "./StudentManagementBadge";
+import {
+  AdminMobileCard,
+  AdminMobileCardList
+} from "../ui/AdminMobileCards";
+import { AdminTextActionButton } from "../ui/AdminUiPrimitives";
 import {
   formatDate,
   formatNumber,
@@ -14,21 +20,16 @@ import {
   TIER_STYLES
 } from "./studentManagement.constants";
 
-export default function StudentManagementMobileCards({ students }) {
-  if (students.length === 0) {
-    return (
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500 shadow-sm lg:hidden">
-        No students found for current filters.
-      </div>
-    );
-  }
-
+export default function StudentManagementMobileCards({ students, onView }) {
   return (
-    <section className="space-y-4 lg:hidden">
-      {students.map((row) => (
-        <article
+    <AdminMobileCardList
+      items={students}
+      emptyMessage="No students found for current filters."
+      emptyClassName="lg:hidden"
+      renderItem={(row) => (
+        <AdminMobileCard
           key={String(row.student_id)}
-          className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+          className="rounded-2xl"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -100,8 +101,21 @@ export default function StudentManagementMobileCards({ students }) {
               <p className="mt-1 text-sm font-bold text-slate-900">{formatDate(row.join_date)}</p>
             </div>
           </div>
-        </article>
-      ))}
-    </section>
+
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            <AdminTextActionButton
+              label={
+                <span className="inline-flex items-center gap-2">
+                  <VisibilityRoundedIcon sx={{ fontSize: 16 }} />
+                  View Dashboard
+                </span>
+              }
+              onClick={() => onView?.(row.student_id)}
+              className="border border-slate-200 bg-white text-slate-700 hover:border-[#1754cf] hover:text-[#1754cf]"
+            />
+          </div>
+        </AdminMobileCard>
+      )}
+    />
   );
 }

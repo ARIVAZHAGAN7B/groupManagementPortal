@@ -1,24 +1,13 @@
-import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
-import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import {
   MEMBERSHIP_STATUS_OPTIONS,
   inputClass,
   selectClass
 } from "./membershipManagement.constants";
-
-function FilterSelect({ children, onChange, value }) {
-  return (
-    <div className="relative min-w-32">
-      <select value={value} onChange={onChange} className={`${selectClass} min-w-32`}>
-        {children}
-      </select>
-
-      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">
-        <KeyboardArrowDownRoundedIcon sx={{ fontSize: 20 }} />
-      </span>
-    </div>
-  );
-}
+import {
+  AdminFilterBar,
+  AdminFilterSelect,
+  AdminSearchField
+} from "../ui/AdminFilterControls";
 
 export default function MembershipManagementFilters({
   query,
@@ -33,47 +22,56 @@ export default function MembershipManagementFilters({
   yearOptions
 }) {
   return (
-    <section className="flex flex-col items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row">
-      <div className="relative w-full md:flex-1">
-        <SearchRoundedIcon
-          sx={{ fontSize: 20 }}
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-        />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className={`${inputClass} pl-10`}
-          placeholder="Search by student, email, group, role, or status"
-        />
-      </div>
+    <AdminFilterBar>
+      <AdminSearchField
+        value={query}
+        onChangeValue={setQuery}
+        inputClassName={inputClass}
+        placeholder="Search by student, email, group, role, or status"
+      />
 
       <div className="flex w-full flex-wrap items-center gap-3 md:w-auto">
-        <FilterSelect value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+        <AdminFilterSelect
+          value={roleFilter}
+          onChangeValue={setRoleFilter}
+          wrapperClassName="relative min-w-32"
+          selectClassName={`${selectClass} min-w-32`}
+        >
           <option value="ALL">All Roles</option>
           {roleOptions.map((role) => (
             <option key={role} value={role}>
               {role.replaceAll("_", " ")}
             </option>
           ))}
-        </FilterSelect>
+        </AdminFilterSelect>
 
-        <FilterSelect value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}>
+        <AdminFilterSelect
+          value={yearFilter}
+          onChangeValue={setYearFilter}
+          wrapperClassName="relative min-w-32"
+          selectClassName={`${selectClass} min-w-32`}
+        >
           <option value="ALL">All Years</option>
           {yearOptions.map((year) => (
             <option key={year} value={year}>
               Year {year}
             </option>
           ))}
-        </FilterSelect>
+        </AdminFilterSelect>
 
-        <FilterSelect value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+        <AdminFilterSelect
+          value={statusFilter}
+          onChangeValue={setStatusFilter}
+          wrapperClassName="relative min-w-32"
+          selectClassName={`${selectClass} min-w-32`}
+        >
           {MEMBERSHIP_STATUS_OPTIONS.map((status) => (
             <option key={status} value={status}>
               {status}
             </option>
           ))}
-        </FilterSelect>
+        </AdminFilterSelect>
       </div>
-    </section>
+    </AdminFilterBar>
   );
 }

@@ -4,6 +4,12 @@ import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import {
+  AdminMobileCard,
+  AdminMobileCardList,
+  AdminMobileValueRow
+} from "../ui/AdminMobileCards";
+import { AdminStatusDotBadge } from "../ui/AdminUiPrimitives";
+import {
   formatGroupMeta,
   formatGroupPoints,
   getGroupLifecycleActionKeys,
@@ -19,17 +25,11 @@ export default function GroupManagementMobileCards({
   onFreeze,
   onView
 }) {
-  if (groups.length === 0) {
-    return (
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500 shadow-sm">
-        No groups found for current filters.
-      </div>
-    );
-  }
-
   return (
-    <section className="space-y-4 lg:hidden">
-      {groups.map((group) => {
+    <AdminMobileCardList
+      items={groups}
+      emptyMessage="No groups found for current filters."
+      renderItem={(group) => {
         const statusConfig = getStatusConfig(group.status);
         const lifecycleActionMap = {
           activate: {
@@ -54,10 +54,7 @@ export default function GroupManagementMobileCards({
         const lifecycleActionKeys = getGroupLifecycleActionKeys(group.status);
 
         return (
-          <article
-            key={group.group_id}
-            className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-          >
+          <AdminMobileCard key={group.group_id}>
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h4 className="font-bold text-slate-900">{group.group_name}</h4>
@@ -76,28 +73,24 @@ export default function GroupManagementMobileCards({
               </span>
             </div>
 
-            <div className="flex items-center justify-between border-t border-slate-100 py-2 text-xs">
-              <span className="text-slate-500">Status</span>
-              <span className={`flex items-center gap-1 font-bold ${statusConfig.text}`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${statusConfig.dot}`} />
-                {statusConfig.label}
-              </span>
-            </div>
+            <AdminMobileValueRow label="Status">
+              <AdminStatusDotBadge
+                config={statusConfig}
+                gapClassName="gap-1"
+                textClassName="font-bold"
+              />
+            </AdminMobileValueRow>
 
-            <div className="flex items-start justify-between border-t border-slate-100 py-2 text-xs">
-              <span className="text-slate-500">Leader</span>
+            <AdminMobileValueRow label="Leader" align="start">
               <div className="text-right">
                 <div className="font-bold text-slate-900">{group.leader_name || "-"}</div>
                 <div className="font-mono text-[10px] text-slate-400">
                   {group.leader_roll_number || "No roll number"}
                 </div>
               </div>
-            </div>
+            </AdminMobileValueRow>
 
-            <div className="flex items-center justify-between border-t border-slate-100 py-2 text-xs">
-              <span className="text-slate-500">Points</span>
-              <span className="font-bold text-slate-900">{formatGroupPoints(group)}</span>
-            </div>
+            <AdminMobileValueRow label="Points" value={formatGroupPoints(group)} />
 
             <div className="mt-4 grid grid-cols-4 gap-2 border-t border-slate-100 pt-4">
               <button
@@ -135,9 +128,9 @@ export default function GroupManagementMobileCards({
                 );
               })}
             </div>
-          </article>
+          </AdminMobileCard>
         );
-      })}
-    </section>
+      }}
+    />
   );
 }

@@ -1,3 +1,6 @@
+const path = require("path");
+require("dotenv").config({ path: path.resolve(__dirname, ".env") });
+
 const http = require("http");
 const app = require("./app");
 const db = require("./config/db"); // import your MySQL pool
@@ -6,7 +9,6 @@ const { startPhaseFinalizationCron } = require("./jobs/phaseFinalization.cron");
 const { initializeRealtime } = require("./realtime/socket");
 const membershipService = require("./modules/membership/membership.service");
 const eligibilityService = require("./modules/eligibility/eligibility.service");
-require("dotenv").config();
 
 const PORT = process.env.PORT || 5000;
 
@@ -22,9 +24,11 @@ const startServer = async () => {
     void membershipService.syncPendingGroupRankReviews().catch((error) => {
       console.error("Group rank review warmup failed:", error?.message || error);
     });
-    void eligibilityService.backfillMissingEligibilityPointAllocations().catch((error) => {
-      console.error("Eligibility point backfill warmup failed:", error?.message || error);
-    });
+    void eligibilityService
+      .syncStoredEligibilityPointAllocationsForAllPhases()
+      .catch((error) => {
+        console.error("Eligibility point sync warmup failed:", error?.message || error);
+      });
 
     const httpServer = http.createServer(app);
     initializeRealtime(httpServer);

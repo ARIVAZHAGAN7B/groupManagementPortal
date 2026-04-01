@@ -1,32 +1,47 @@
+import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import StudentManagementBadge from "./StudentManagementBadge";
+import { AdminIconActionButton } from "../ui/AdminUiPrimitives";
 import {
   formatDate,
   formatNumber,
   getAcademicMeta,
   getGroupLabel,
-  getGroupMeta,
-  getStatusValue,
-  GROUP_STATUS_STYLES,
   ROLE_STYLES,
   TIER_STYLES
 } from "./studentManagement.constants";
 
-export default function StudentManagementDesktopTable({ students }) {
+const getStudentLabel = (row) => {
+  const name = row?.name || "-";
+  const studentId = row?.student_id ? ` (${row.student_id})` : "";
+  return `${name}${studentId}`;
+};
+
+export default function StudentManagementDesktopTable({ students, onView }) {
   return (
     <section className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:block">
       <div className="overflow-x-auto">
-        <table className="min-w-[1180px] w-full border-collapse text-left">
-          <thead className="bg-slate-50 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-            <tr>
-              <th className="px-6 py-4">Student</th>
-              <th className="px-6 py-4">Academic</th>
-              <th className="px-6 py-4">Group</th>
-              <th className="px-6 py-4 text-center">Tier</th>
-              <th className="px-6 py-4 text-center">Role</th>
-              <th className="px-6 py-4">Status</th>
-              <th className="px-6 py-4 text-right">Base Points</th>
-              <th className="px-6 py-4 text-right">Phase Points</th>
-              <th className="px-6 py-4">Joined</th>
+        <table className="min-w-[1220px] w-full border-collapse text-left">
+          <thead>
+            <tr className="border-b border-slate-200 bg-slate-50">
+              {[
+                "Student",
+                "Email",
+                "Academic",
+                "Group",
+                "Tier",
+                "Role",
+                "Base Points",
+                "Phase Points",
+                "Joined",
+                "View"
+              ].map((header) => (
+                <th
+                  key={header}
+                  className="whitespace-nowrap px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500"
+                >
+                  {header}
+                </th>
+              ))}
             </tr>
           </thead>
 
@@ -35,56 +50,72 @@ export default function StudentManagementDesktopTable({ students }) {
               students.map((row) => (
                 <tr
                   key={String(row.student_id)}
-                  className="transition-colors hover:bg-slate-50"
+                  className="transition-colors hover:bg-slate-50/80"
                 >
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-semibold text-slate-900">{row.name || "-"}</div>
-                    <div className="mt-0.5 font-mono text-[10px] text-[#1754cf]">
-                      {row.student_id}
-                    </div>
-                    <div className="mt-1 text-xs text-slate-500">{row.email || "-"}</div>
+                  <td className="max-w-[200px] px-4 py-3 text-xs font-semibold text-slate-900">
+                    <span className="block truncate whitespace-nowrap" title={getStudentLabel(row)}>
+                      {getStudentLabel(row)}
+                    </span>
                   </td>
 
-                  <td className="px-6 py-4 text-sm text-slate-600">{getAcademicMeta(row)}</td>
-
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-semibold text-slate-900">{getGroupLabel(row)}</div>
-                    <div className="mt-0.5 font-mono text-[10px] text-slate-400">
-                      {getGroupMeta(row)}
-                    </div>
+                  <td className="max-w-[220px] px-4 py-3 text-xs text-slate-600">
+                    <span className="block truncate whitespace-nowrap" title={row.email || "-"}>
+                      {row.email || "-"}
+                    </span>
                   </td>
 
-                  <td className="px-6 py-4 text-center">
+                  <td className="max-w-[190px] px-4 py-3 text-xs text-slate-600">
+                    <span
+                      className="block truncate whitespace-nowrap"
+                      title={getAcademicMeta(row)}
+                    >
+                      {getAcademicMeta(row)}
+                    </span>
+                  </td>
+
+                  <td className="max-w-[180px] px-4 py-3 text-xs font-medium text-slate-700">
+                    <span
+                      className="block truncate whitespace-nowrap"
+                      title={getGroupLabel(row)}
+                    >
+                      {getGroupLabel(row)}
+                    </span>
+                  </td>
+
+                  <td className="whitespace-nowrap px-4 py-3 text-xs">
                     <StudentManagementBadge value={row.group_tier} map={TIER_STYLES} />
                   </td>
 
-                  <td className="px-6 py-4 text-center">
+                  <td className="whitespace-nowrap px-4 py-3 text-xs">
                     <StudentManagementBadge value={row.membership_role} map={ROLE_STYLES} />
                   </td>
 
-                  <td className="px-6 py-4">
-                    <StudentManagementBadge
-                      value={getStatusValue(row)}
-                      map={GROUP_STATUS_STYLES}
-                    />
-                  </td>
-
-                  <td className="px-6 py-4 text-right text-sm font-bold text-slate-900 tabular-nums">
+                  <td className="whitespace-nowrap px-4 py-3 text-xs font-semibold text-slate-900 tabular-nums">
                     {formatNumber(row.total_base_points)}
                   </td>
 
-                  <td className="px-6 py-4 text-right text-sm font-bold text-[#1754cf] tabular-nums">
+                  <td className="whitespace-nowrap px-4 py-3 text-xs font-semibold text-[#1754cf] tabular-nums">
                     {formatNumber(row.this_phase_base_points)}
                   </td>
 
-                  <td className="px-6 py-4 text-xs text-slate-500 whitespace-nowrap">
+                  <td className="whitespace-nowrap px-4 py-3 text-xs font-medium text-slate-600">
                     {formatDate(row.join_date)}
+                  </td>
+
+                  <td className="whitespace-nowrap px-4 py-3 text-right">
+                    <AdminIconActionButton
+                      label={`View ${row.name || row.student_id}`}
+                      onClick={() => onView?.(row.student_id)}
+                      className="rounded-full border border-slate-200 bg-white text-slate-500 hover:border-[#1754cf] hover:text-[#1754cf]"
+                    >
+                      <VisibilityRoundedIcon sx={{ fontSize: 18 }} />
+                    </AdminIconActionButton>
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={9} className="px-6 py-12 text-center text-sm text-slate-500">
+                <td colSpan={10} className="px-6 py-12 text-center text-sm text-slate-500">
                   No students found for current filters.
                 </td>
               </tr>

@@ -7,25 +7,11 @@ import {
   getTeamStatusBadgeClass,
   normalizeTeamMembershipKey
 } from "./teamMembershipManagement.constants";
-
-function Badge({ className, label }) {
-  return (
-    <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold ${className}`}>
-      {label}
-    </span>
-  );
-}
-
-function StatusBadge({ value }) {
-  const config = getMembershipStatusConfig(value);
-
-  return (
-    <span className={`flex items-center gap-1.5 text-[10px] font-bold ${config.text}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${config.dot}`} />
-      {config.label}
-    </span>
-  );
-}
+import {
+  AdminBadge,
+  AdminStatusDotBadge,
+  AdminTextActionButton
+} from "../ui/AdminUiPrimitives";
 
 function RoleSelect({ disabled, membershipId, onChange, teamType, value }) {
   return (
@@ -114,14 +100,15 @@ export default function TeamMembershipManagementDesktopTable({
                     </td>
 
                     <td className="px-6 py-4">
-                      <StatusBadge value={row.status} />
+                      <AdminStatusDotBadge config={getMembershipStatusConfig(row.status)} />
                     </td>
 
                     <td className="px-6 py-4">
-                      <Badge
+                      <AdminBadge
                         className={getTeamStatusBadgeClass(row.team_status)}
-                        label={formatLabel(row.team_status, "Unknown")}
-                      />
+                      >
+                        {formatLabel(row.team_status, "Unknown")}
+                      </AdminBadge>
                     </td>
 
                     <td className="px-6 py-4 text-sm text-slate-600">
@@ -134,22 +121,18 @@ export default function TeamMembershipManagementDesktopTable({
 
                     <td className="px-6 py-4 text-right">
                       <div className="ml-auto grid w-[11rem] grid-cols-2 gap-2">
-                        <button
-                          type="button"
+                        <AdminTextActionButton
                           onClick={() => onSaveRole(row)}
                           disabled={!isActive || busy || selectedRole === currentRole}
+                          label={savingRole ? "Saving..." : "Save Role"}
                           className="w-full whitespace-nowrap rounded-md border border-slate-200 bg-white px-2.5 py-1 text-center text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          {savingRole ? "Saving..." : "Save Role"}
-                        </button>
-                        <button
-                          type="button"
+                        />
+                        <AdminTextActionButton
                           onClick={() => onMarkLeft(row)}
                           disabled={!isActive || busy}
+                          label={leavingMembership ? "Marking..." : "Mark Left"}
                           className="w-full whitespace-nowrap rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-center text-xs font-semibold text-red-600 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          {leavingMembership ? "Marking..." : "Mark Left"}
-                        </button>
+                        />
                       </div>
                     </td>
                   </tr>

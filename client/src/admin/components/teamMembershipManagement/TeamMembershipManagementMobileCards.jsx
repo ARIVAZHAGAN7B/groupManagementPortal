@@ -1,4 +1,13 @@
 import {
+  AdminMobileCard,
+  AdminMobileCardList,
+  AdminMobileValueRow
+} from "../ui/AdminMobileCards";
+import {
+  AdminBadge,
+  AdminStatusDotBadge
+} from "../ui/AdminUiPrimitives";
+import {
   formatDate,
   formatLabel,
   getMembershipStatusConfig,
@@ -7,25 +16,6 @@ import {
   getTeamStatusBadgeClass,
   normalizeTeamMembershipKey
 } from "./teamMembershipManagement.constants";
-
-function Badge({ className, label }) {
-  return (
-    <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold ${className}`}>
-      {label}
-    </span>
-  );
-}
-
-function StatusBadge({ value }) {
-  const config = getMembershipStatusConfig(value);
-
-  return (
-    <span className={`flex items-center gap-1.5 text-[10px] font-bold ${config.text}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${config.dot}`} />
-      {config.label}
-    </span>
-  );
-}
 
 export default function TeamMembershipManagementMobileCards({
   busyAction,
@@ -37,17 +27,11 @@ export default function TeamMembershipManagementMobileCards({
   scopeConfig,
   rows
 }) {
-  if (rows.length === 0) {
-    return (
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500 shadow-sm">
-        {scopeConfig?.emptyState || "No team memberships found for the current filters."}
-      </div>
-    );
-  }
-
   return (
-    <section className="space-y-4 lg:hidden">
-      {rows.map((row) => {
+    <AdminMobileCardList
+      items={rows}
+      emptyMessage={scopeConfig?.emptyState || "No team memberships found for the current filters."}
+      renderItem={(row) => {
         const membershipId = Number(row.team_membership_id);
         const currentRole = normalizeTeamMembershipKey(row.role) || "MEMBER";
         const selectedRole =
@@ -58,10 +42,7 @@ export default function TeamMembershipManagementMobileCards({
         const leavingMembership = busy && busyAction === "leave";
 
         return (
-          <article
-            key={membershipId}
-            className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-          >
+          <AdminMobileCard key={membershipId}>
             <div className="mb-4">
               <div>
                 <h4 className="font-bold text-slate-900">{row.student_name || "-"}</h4>
@@ -71,17 +52,17 @@ export default function TeamMembershipManagementMobileCards({
               </div>
             </div>
 
-            <div className="flex items-start justify-between border-t border-slate-100 py-2 text-xs">
-              <span className="text-slate-500">{scopeConfig?.scopeLabel || "Team"}</span>
+            <AdminMobileValueRow label={scopeConfig?.scopeLabel || "Team"} align="start">
               <div className="text-right">
                 <div className="font-bold text-slate-900">{row.team_name || "-"}</div>
-                <div className="text-[10px] font-mono font-bold text-[#1754cf]">ID {row.team_id || "-"}</div>
+                <div className="text-[10px] font-mono font-bold text-[#1754cf]">
+                  ID {row.team_id || "-"}
+                </div>
               </div>
-            </div>
+            </AdminMobileValueRow>
 
             {scopeConfig?.scope === "EVENT_GROUP" ? (
-              <div className="flex items-start justify-between border-t border-slate-100 py-2 text-xs">
-                <span className="text-slate-500">Event</span>
+              <AdminMobileValueRow label="Event" align="start">
                 <div className="text-right">
                   <div className="font-bold text-slate-900">
                     {row.event_id ? row.event_name || "-" : "Not linked"}
@@ -90,21 +71,24 @@ export default function TeamMembershipManagementMobileCards({
                     {row.event_id ? row.event_code || "No event code" : "Standalone record"}
                   </div>
                 </div>
-              </div>
+              </AdminMobileValueRow>
             ) : null}
 
-            <div className="flex items-start justify-between border-t border-slate-100 py-2 text-xs">
-              <span className="text-slate-500">Individual Status</span>
-              <StatusBadge value={row.status} />
-            </div>
+            <AdminMobileValueRow label="Individual Status" align="start" valueClassName="">
+              <AdminStatusDotBadge config={getMembershipStatusConfig(row.status)} />
+            </AdminMobileValueRow>
 
-            <div className="flex items-start justify-between border-t border-slate-100 py-2 text-xs">
-              <span className="text-slate-500">{scopeConfig?.scopeLabel || "Team"} Status</span>
-              <Badge
+            <AdminMobileValueRow
+              label={`${scopeConfig?.scopeLabel || "Team"} Status`}
+              align="start"
+              valueClassName=""
+            >
+              <AdminBadge
                 className={getTeamStatusBadgeClass(row.team_status)}
-                label={formatLabel(row.team_status, "Unknown")}
-              />
-            </div>
+              >
+                {formatLabel(row.team_status, "Unknown")}
+              </AdminBadge>
+            </AdminMobileValueRow>
 
             <div className="grid grid-cols-2 gap-3 border-t border-slate-100 py-3 text-xs">
               <div>
@@ -153,9 +137,9 @@ export default function TeamMembershipManagementMobileCards({
                 {leavingMembership ? "Marking..." : "Mark Left"}
               </button>
             </div>
-          </article>
+          </AdminMobileCard>
         );
-      })}
-    </section>
+      }}
+    />
   );
 }

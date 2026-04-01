@@ -26,9 +26,6 @@ const GROUP_OVERVIEW_SELECT = `
   LEFT JOIN (
     SELECT gp.group_id, COALESCE(SUM(gp.points), 0) AS total_points
     FROM group_points gp
-    INNER JOIN memberships m
-      ON m.membership_id = gp.membership_id
-     AND m.status = 'ACTIVE'
     GROUP BY gp.group_id
   ) ap
     ON ap.group_id = g.group_id
@@ -39,8 +36,19 @@ const GROUP_OVERVIEW_SELECT = `
   ) lp
     ON lp.group_id = g.group_id
   LEFT JOIN (
-    SELECT group_id, COALESCE(total_points, 0) AS eligibility_bonus_points
-    FROM group_eligibility_point_totals
+    SELECT
+      gep.group_id,
+      COALESCE(
+        SUM(
+          CASE
+            WHEN gep.is_eligible = 1 THEN ROUND(gep.source_group_points * GREATEST(gep.multiplier - 1, 0), 2)
+            ELSE 0
+          END
+        ),
+        0
+      ) AS eligibility_bonus_points
+    FROM group_eligibility_points gep
+    GROUP BY gep.group_id
   ) geb
     ON geb.group_id = g.group_id
   LEFT JOIN (

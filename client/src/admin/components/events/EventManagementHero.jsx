@@ -3,17 +3,25 @@ import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import AdminWorkspaceHero, {
   AdminWorkspaceHeroActionButton
 } from "../ui/AdminWorkspaceHero";
+import { AdminBadge } from "../ui/AdminUiPrimitives";
 
-export default function GroupManagementHero({
+export default function EventManagementHero({
+  editingId,
   loading,
-  onCreate,
   onRefresh,
-  stats
+  onStartCreate
 }) {
   return (
     <AdminWorkspaceHero
-      eyebrow="Group Workspace"
-      title="Group Management"
+      eyebrow="Event Workspace"
+      title="Event Management"
+      titleMeta={
+        editingId ? (
+          <AdminBadge className="border-[#1754cf]/15 bg-white/90 text-[#1754cf]">
+            Editing Event #{editingId}
+          </AdminBadge>
+        ) : null
+      }
       actions={
         <div className="flex flex-wrap items-center gap-2">
           <AdminWorkspaceHeroActionButton
@@ -28,11 +36,11 @@ export default function GroupManagementHero({
 
           <AdminWorkspaceHeroActionButton
             type="button"
-            onClick={onCreate}
+            onClick={onStartCreate}
             className="bg-[#1754cf] text-white shadow-lg shadow-[#1754cf]/20 hover:opacity-90"
           >
             <AddRoundedIcon sx={{ fontSize: 18 }} />
-            Create Group
+            New Event
           </AdminWorkspaceHeroActionButton>
         </div>
       }

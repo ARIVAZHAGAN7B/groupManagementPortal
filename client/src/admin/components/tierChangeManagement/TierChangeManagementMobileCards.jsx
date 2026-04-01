@@ -1,5 +1,9 @@
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import {
+  AdminMobileCard,
+  AdminMobileCardList
+} from "../ui/AdminMobileCards";
+import {
   ActionSelector,
   MobileValueRow,
   StatusBadge,
@@ -21,27 +25,19 @@ export default function TierChangeManagementMobileCards({
   selectedActions,
   selectedPhaseId
 }) {
-  if (rows.length === 0) {
-    return (
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500 shadow-sm lg:hidden">
-        No groups found for current filters.
-      </div>
-    );
-  }
-
   return (
-    <section className="space-y-4 lg:hidden">
-      {rows.map((row) => {
+    <AdminMobileCardList
+      items={rows}
+      emptyMessage="No groups found for current filters."
+      emptyClassName="lg:hidden"
+      renderItem={(row) => {
         const saved = row.team_change_tier || null;
         const busyKey = `${selectedPhaseId}:${row.group_id}`;
         const resolvedAction = getResolvedAction(row, selectedActions);
         const targetTier = getDisplayedTargetTier(row, selectedActions);
 
         return (
-          <article
-            key={row.group_id}
-            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-          >
+          <AdminMobileCard key={row.group_id} className="rounded-2xl">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h4 className="font-bold text-slate-900">{row.group_name || "-"}</h4>
@@ -99,9 +95,9 @@ export default function TierChangeManagementMobileCards({
                 {applyBusyKey === busyKey ? "Applying..." : saved ? "Applied" : "Apply"}
               </button>
             </div>
-          </article>
+          </AdminMobileCard>
         );
-      })}
-    </section>
+      }}
+    />
   );
 }

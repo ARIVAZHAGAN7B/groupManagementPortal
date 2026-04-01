@@ -1,24 +1,9 @@
-import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
-import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import { getGroupOptionLabel, inputClass } from "./leadership.constants";
-
-function FilterSelect({ children, onChange, value }) {
-  return (
-    <div className="relative min-w-32">
-      <select
-        value={value}
-        onChange={onChange}
-        className={`${inputClass} min-w-32 appearance-none pr-10`}
-      >
-        {children}
-      </select>
-
-      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">
-        <KeyboardArrowDownRoundedIcon sx={{ fontSize: 20 }} />
-      </span>
-    </div>
-  );
-}
+import {
+  AdminFilterBar,
+  AdminFilterSelect,
+  AdminSearchField
+} from "../ui/AdminFilterControls";
 
 export default function LeadershipManagementFilters({
   filteredCount,
@@ -33,24 +18,20 @@ export default function LeadershipManagementFilters({
   totalCount
 }) {
   return (
-    <section className="flex flex-col items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row">
-      <div className="relative w-full md:flex-1">
-        <SearchRoundedIcon
-          sx={{ fontSize: 20 }}
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-        />
-        <input
-          value={q}
-          onChange={(event) => setQ(event.target.value)}
-          className={`${inputClass} pl-10`}
-          placeholder="Search by group, student, role, request"
-        />
-      </div>
+    <AdminFilterBar>
+      <AdminSearchField
+        value={q}
+        onChangeValue={setQ}
+        inputClassName={inputClass}
+        placeholder="Search by group, student, role, request"
+      />
 
       <div className="flex w-full items-center gap-3 md:w-auto">
-        <FilterSelect
+        <AdminFilterSelect
           value={groupFilter}
-          onChange={(event) => setGroupFilter(event.target.value)}
+          onChangeValue={setGroupFilter}
+          wrapperClassName="relative min-w-32"
+          selectClassName={`${inputClass} min-w-32 appearance-none pr-10`}
         >
           <option value="">All Groups</option>
           {groups.map((group) => (
@@ -58,11 +39,13 @@ export default function LeadershipManagementFilters({
               {getGroupOptionLabel(group)}
             </option>
           ))}
-        </FilterSelect>
+        </AdminFilterSelect>
 
-        <FilterSelect
+        <AdminFilterSelect
           value={requestedRoleFilter}
-          onChange={(event) => setRequestedRoleFilter(event.target.value)}
+          onChangeValue={setRequestedRoleFilter}
+          wrapperClassName="relative min-w-32"
+          selectClassName={`${inputClass} min-w-32 appearance-none pr-10`}
         >
           <option value="">All Roles</option>
           {requestedRoleOptions.map((role) => (
@@ -70,9 +53,8 @@ export default function LeadershipManagementFilters({
               {role}
             </option>
           ))}
-        </FilterSelect>
-
+        </AdminFilterSelect>
       </div>
-    </section>
+    </AdminFilterBar>
   );
 }

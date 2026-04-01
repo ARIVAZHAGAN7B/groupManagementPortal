@@ -1,4 +1,5 @@
 import { formatDate } from "./teamManagement.constants";
+import { AdminBadge } from "../ui/AdminUiPrimitives";
 
 const formatLabel = (value, fallback = "-") => {
   const normalized = String(value || "")
@@ -14,14 +15,6 @@ const formatLabel = (value, fallback = "-") => {
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join(" ");
 };
-
-function Badge({ label }) {
-  return (
-    <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-700">
-      {label}
-    </span>
-  );
-}
 
 export default function TeamManagementMembersModal({
   error = "",
@@ -104,7 +97,9 @@ export default function TeamManagementMembersModal({
                         {row.student_id || "-"}
                       </p>
                     </div>
-                    <Badge label={formatLabel(row.role, "Member")} />
+                    <AdminBadge className="border-slate-200 bg-slate-100 text-slate-700">
+                      {formatLabel(row.role, "Member")}
+                    </AdminBadge>
                   </div>
 
                   <div className="mt-4 grid gap-3">
@@ -113,7 +108,9 @@ export default function TeamManagementMembersModal({
                         Status
                       </div>
                       <div className="mt-1">
-                        <Badge label={formatLabel(row.status)} />
+                        <AdminBadge className="border-slate-200 bg-slate-100 text-slate-700">
+                          {formatLabel(row.status)}
+                        </AdminBadge>
                       </div>
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
@@ -160,10 +157,14 @@ export default function TeamManagementMembersModal({
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <Badge label={formatLabel(row.role, "Member")} />
+                        <AdminBadge className="border-slate-200 bg-slate-100 text-slate-700">
+                          {formatLabel(row.role, "Member")}
+                        </AdminBadge>
                       </td>
                       <td className="px-4 py-3">
-                        <Badge label={formatLabel(row.status)} />
+                        <AdminBadge className="border-slate-200 bg-slate-100 text-slate-700">
+                          {formatLabel(row.status)}
+                        </AdminBadge>
                       </td>
                       <td className="px-4 py-3 text-slate-700">
                         {formatDate(row.join_date)}

@@ -20,6 +20,11 @@ export async function fetchAdminStudentOverview() {
   return data; // { phase, students }
 }
 
+export async function fetchAdminStudentProfile(studentId) {
+  const { data } = await api.get(`/api/eligibility/admin/student-profile/${studentId}`);
+  return data;
+}
+
 export async function recordStudentBasePoints(payload) {
   return postWithInvalidation("/api/eligibility/base-points", payload, {
     invalidateTags: ELIGIBILITY_INVALIDATION_TAGS

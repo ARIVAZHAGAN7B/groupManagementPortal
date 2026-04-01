@@ -4,31 +4,14 @@ import {
   getStatusConfig,
   getTierBadgeClass
 } from "./groupManagement.constants";
-
-const badgeBaseClass = "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold";
-
-const TierBadge = ({ value }) => (
-  <span className={`${badgeBaseClass} ${getTierBadgeClass(value)}`}>
-    Tier {String(value || "-").toUpperCase()}
-  </span>
-);
-
-const StatusBadge = ({ value }) => {
-  const config = getStatusConfig(value);
-
-  return (
-    <span className={`inline-flex items-center gap-2 text-sm font-bold ${config.text}`}>
-      <span className={`h-2 w-2 rounded-full ${config.dot}`} />
-      {config.label}
-    </span>
-  );
-};
+import { AdminBadge, AdminStatusDotBadge } from "../ui/AdminUiPrimitives";
 
 export default function GroupEditHero({ group, onBack }) {
   const activeMemberCount =
     group?.active_member_count === undefined || group?.active_member_count === null
       ? 0
       : Number(group.active_member_count);
+  const statusConfig = getStatusConfig(group?.status);
 
   return (
     <section className="relative overflow-hidden rounded-2xl border border-[#1754cf]/10 bg-[#1754cf]/5 p-8">
@@ -40,19 +23,30 @@ export default function GroupEditHero({ group, onBack }) {
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Edit Group</h1>
           <p className="mt-2 text-xl font-bold text-slate-900">{group?.group_name || "-"}</p>
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <span className={`${badgeBaseClass} border-white/80 bg-white/90 text-[#1754cf]`}>
+            <AdminBadge className="items-center border-white/80 bg-white/90 px-3 py-1 text-xs font-semibold text-[#1754cf]">
               {group?.group_code || "No code"}
-            </span>
-            <TierBadge value={group?.tier} />
-            <span className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1">
-              <StatusBadge value={group?.status} />
-            </span>
-            <span className={`${badgeBaseClass} border-white/80 bg-white/90 text-slate-700`}>
+            </AdminBadge>
+            <AdminBadge
+              className={`items-center px-3 py-1 text-xs font-semibold ${getTierBadgeClass(
+                group?.tier
+              )}`}
+            >
+              Tier {String(group?.tier || "-").toUpperCase()}
+            </AdminBadge>
+            <AdminBadge className="border-slate-200 bg-white px-3 py-1">
+              <AdminStatusDotBadge
+                config={statusConfig}
+                dotClassName="h-2 w-2"
+                gapClassName="gap-2"
+                textClassName="text-sm font-bold"
+              />
+            </AdminBadge>
+            <AdminBadge className="items-center border-white/80 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700">
               {Number.isNaN(activeMemberCount) ? 0 : activeMemberCount} Active
-            </span>
-            <span className={`${badgeBaseClass} border-white/80 bg-white/90 text-slate-700`}>
+            </AdminBadge>
+            <AdminBadge className="items-center border-white/80 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700">
               {formatGroupPoints(group)} Points
-            </span>
+            </AdminBadge>
           </div>
         </div>
 

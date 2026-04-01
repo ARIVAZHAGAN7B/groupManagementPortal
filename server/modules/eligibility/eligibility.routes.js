@@ -29,6 +29,13 @@ router.get(
 );
 
 router.get(
+  "/admin/student-profile/:student_id",
+  authorize("ADMIN", "SYSTEM_ADMIN"),
+  validation.validateStudentIdParam,
+  controller.getAdminStudentProfile
+);
+
+router.get(
   "/leaderboards",
   authorize("STUDENT", "CAPTAIN", "ADMIN", "SYSTEM_ADMIN"),
   controller.getStudentLeaderboards

@@ -2,30 +2,20 @@ import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import {
+  AdminMobileCard,
+  AdminMobileCardList,
+  AdminMobileValueRow
+} from "../ui/AdminMobileCards";
+import {
+  AdminBadge,
+  AdminStatusDotBadge
+} from "../ui/AdminUiPrimitives";
+import {
   formatDateTime,
   getRoleBadgeClass,
   getStatusConfig,
   getTierBadgeClass
 } from "./leadership.constants";
-
-function DetailRow({ label, value, valueClassName = "font-bold text-slate-900" }) {
-  return (
-    <div className="flex items-start justify-between border-t border-slate-100 py-2 text-xs">
-      <span className="text-slate-500">{label}</span>
-      <span className={`max-w-[60%] text-right ${valueClassName}`}>{value}</span>
-    </div>
-  );
-}
-
-function RoleBadge({ role }) {
-  return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${getRoleBadgeClass(role)}`}
-    >
-      {String(role || "-").replaceAll("_", " ")}
-    </span>
-  );
-}
 
 export default function LeadershipManagementMobileCards({
   busyRequestId,
@@ -34,25 +24,16 @@ export default function LeadershipManagementMobileCards({
   onReject,
   rows
 }) {
-  if (rows.length === 0) {
-    return (
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500 shadow-sm">
-        No leadership requests found for current filters.
-      </div>
-    );
-  }
-
   return (
-    <section className="space-y-4 lg:hidden">
-      {rows.map((row) => {
+    <AdminMobileCardList
+      items={rows}
+      emptyMessage="No leadership requests found for current filters."
+      renderItem={(row) => {
         const isBusy = busyRequestId === row.leadership_request_id;
         const statusConfig = getStatusConfig(row.group_status);
 
         return (
-          <article
-            key={row.leadership_request_id}
-            className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-          >
+          <AdminMobileCard key={row.leadership_request_id}>
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h4 className="font-bold text-slate-900">{row.group_name || "-"}</h4>
@@ -73,23 +54,48 @@ export default function LeadershipManagementMobileCards({
               </span>
             </div>
 
-            <DetailRow
+            <AdminMobileValueRow
               label="Status"
-              value={statusConfig.label}
-              valueClassName={`font-bold ${statusConfig.text}`}
+              valueClassName="max-w-[60%]"
+              value={
+                <AdminStatusDotBadge
+                  config={statusConfig}
+                  className="justify-end"
+                />
+              }
             />
-            <DetailRow label="Student" value={row.student_name || "-"} />
-            <DetailRow
+            <AdminMobileValueRow
+              label="Student"
+              value={row.student_name || "-"}
+              valueClassName="max-w-[60%] font-bold text-slate-900"
+            />
+            <AdminMobileValueRow
               label="Student ID"
               value={row.student_id || "-"}
-              valueClassName="font-mono text-slate-500"
+              valueClassName="max-w-[60%] font-mono text-slate-500"
             />
-            <DetailRow label="Requested" value={<RoleBadge role={row.requested_role} />} />
-            <DetailRow label="Current" value={<RoleBadge role={row.current_membership_role} />} />
-            <DetailRow
+            <AdminMobileValueRow
+              label="Requested"
+              value={
+                <AdminBadge className={getRoleBadgeClass(row.requested_role)}>
+                  {String(row.requested_role || "-").replaceAll("_", " ")}
+                </AdminBadge>
+              }
+              valueClassName="max-w-[60%]"
+            />
+            <AdminMobileValueRow
+              label="Current"
+              value={
+                <AdminBadge className={getRoleBadgeClass(row.current_membership_role)}>
+                  {String(row.current_membership_role || "-").replaceAll("_", " ")}
+                </AdminBadge>
+              }
+              valueClassName="max-w-[60%]"
+            />
+            <AdminMobileValueRow
               label="Requested At"
               value={formatDateTime(row.request_date)}
-              valueClassName="text-slate-600"
+              valueClassName="max-w-[60%] text-slate-600"
             />
 
             {row.request_reason ? (
@@ -132,9 +138,9 @@ export default function LeadershipManagementMobileCards({
                 </span>
               </button>
             </div>
-          </article>
+          </AdminMobileCard>
         );
-      })}
-    </section>
+      }}
+    />
   );
 }

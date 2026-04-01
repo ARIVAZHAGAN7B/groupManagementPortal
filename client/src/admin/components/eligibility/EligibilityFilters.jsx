@@ -1,28 +1,13 @@
-import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
-import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import {
   getPhaseOptionLabel,
   inputClass,
   VIEW_OPTIONS
 } from "./eligibility.constants";
-
-function FilterSelect({ children, onChange, value }) {
-  return (
-    <div className="relative min-w-32">
-      <select
-        value={value}
-        onChange={onChange}
-        className={`${inputClass} min-w-32 appearance-none pr-10`}
-      >
-        {children}
-      </select>
-
-      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">
-        <KeyboardArrowDownRoundedIcon sx={{ fontSize: 20 }} />
-      </span>
-    </div>
-  );
-}
+import {
+  AdminFilterBar,
+  AdminFilterSelect,
+  AdminSearchField
+} from "../ui/AdminFilterControls";
 
 export default function EligibilityFilters({
   phases,
@@ -37,28 +22,24 @@ export default function EligibilityFilters({
   yearOptions
 }) {
   return (
-    <section className="flex flex-col items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row">
-      <div className="relative w-full md:flex-1">
-        <SearchRoundedIcon
-          sx={{ fontSize: 20 }}
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-        />
-        <input
-          value={q}
-          onChange={(event) => setQ(event.target.value)}
-          className={`${inputClass} pl-10`}
-          placeholder={
-            viewMode === "individual"
-              ? "Search student, ID, department, reason"
-              : "Search group, code, tier, reason"
-          }
-        />
-      </div>
+    <AdminFilterBar>
+      <AdminSearchField
+        value={q}
+        onChangeValue={setQ}
+        inputClassName={inputClass}
+        placeholder={
+          viewMode === "individual"
+            ? "Search student, ID, department, reason"
+            : "Search group, code, tier, reason"
+        }
+      />
 
       <div className="flex w-full flex-wrap items-center gap-3 md:w-auto">
-        <FilterSelect
+        <AdminFilterSelect
           value={selectedPhaseId}
-          onChange={(event) => setSelectedPhaseId(event.target.value)}
+          onChangeValue={setSelectedPhaseId}
+          wrapperClassName="relative min-w-32"
+          selectClassName={`${inputClass} min-w-32 appearance-none pr-10`}
         >
           {phases.length === 0 ? (
             <option value="">No phases</option>
@@ -68,23 +49,27 @@ export default function EligibilityFilters({
               {getPhaseOptionLabel(phase)}
             </option>
           ))}
-        </FilterSelect>
+        </AdminFilterSelect>
 
-        <FilterSelect
+        <AdminFilterSelect
           value={viewMode}
-          onChange={(event) => setViewMode(event.target.value)}
+          onChangeValue={setViewMode}
+          wrapperClassName="relative min-w-32"
+          selectClassName={`${inputClass} min-w-32 appearance-none pr-10`}
         >
           {VIEW_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
-        </FilterSelect>
+        </AdminFilterSelect>
 
         {viewMode === "individual" ? (
-          <FilterSelect
+          <AdminFilterSelect
             value={yearFilter}
-            onChange={(event) => setYearFilter(event.target.value)}
+            onChangeValue={setYearFilter}
+            wrapperClassName="relative min-w-32"
+            selectClassName={`${inputClass} min-w-32 appearance-none pr-10`}
           >
             <option value="ALL">All Years</option>
             {yearOptions.map((year) => (
@@ -92,10 +77,9 @@ export default function EligibilityFilters({
                 Year {year}
               </option>
             ))}
-          </FilterSelect>
+          </AdminFilterSelect>
         ) : null}
-
       </div>
-    </section>
+    </AdminFilterBar>
   );
 }

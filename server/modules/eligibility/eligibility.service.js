@@ -205,14 +205,21 @@ const GROUP_TIER_MULTIPLIER_BASIS = {
   B: 13,
   A: 14
 };
+const EMPTY_MULTIPLIER_COUNTS = {
+  "1.1": 0,
+  "1.2": 0,
+  "1.3": 0,
+  "1.4": 0
+};
 let eligibilityPointBackfillPromise = null;
 
 const toFixedDecimal = (value) => Number((Number(value) || 0).toFixed(2));
 
 const getMultiplierFromBasis = (basis) => toFixedDecimal((Number(basis) || 0) / 10);
 
+// Multiplier awards are stored as bonus points, not the re-multiplied total.
 const calculateAwardedPoints = (points, basis) =>
-  toFixedDecimal(((Number(points) || 0) * (Number(basis) || 0)) / 10);
+  toFixedDecimal(((Number(points) || 0) * Math.max((Number(basis) || 0) - 10, 0)) / 10);
 
 const buildIndividualEligibilityPointRows = (rows = []) =>
   (Array.isArray(rows) ? rows : []).map((row) => {
@@ -304,6 +311,19 @@ const syncStoredEligibilityPointAllocations = async (phaseId) => {
   }
 };
 
+const syncStoredEligibilityPointAllocationsForPhaseIds = async (phaseIds = []) => {
+  let processedPhases = 0;
+
+  for (const phaseId of Array.from(new Set((phaseIds || []).filter(Boolean)))) {
+    await syncStoredEligibilityPointAllocations(phaseId);
+    processedPhases += 1;
+  }
+
+  return {
+    processed_phases: processedPhases
+  };
+};
+
 const backfillMissingEligibilityPointAllocations = async (options = {}) => {
   if (eligibilityPointBackfillPromise) {
     return eligibilityPointBackfillPromise;
@@ -322,6 +342,22 @@ const backfillMissingEligibilityPointAllocations = async (options = {}) => {
     return {
       processed_phases: processedPhases
     };
+  })().finally(() => {
+    eligibilityPointBackfillPromise = null;
+  });
+
+  return eligibilityPointBackfillPromise;
+};
+
+const syncStoredEligibilityPointAllocationsForAllPhases = async (options = {}) => {
+  if (eligibilityPointBackfillPromise) {
+    return eligibilityPointBackfillPromise;
+  }
+
+  const safeLimit = Math.max(1, Math.min(Number(options.limit) || 1000, 1000));
+  eligibilityPointBackfillPromise = (async () => {
+    const phaseIds = await repo.listPhaseIdsWithEligibilitySnapshots(safeLimit);
+    return syncStoredEligibilityPointAllocationsForPhaseIds(phaseIds);
   })().finally(() => {
     eligibilityPointBackfillPromise = null;
   });
@@ -1024,17 +1060,145 @@ const getGroupEligibilitySummary = async (phaseId, groupId) => {
   };
 };
 
-const getMyDashboardSummary = async (userId, fallbackName = null) => {
-  const student = await repo.getStudentByUserId(userId);
-  if (!student) throw new Error("Student not found");
+const normalizeOptionalNumber = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const numeric = Number(value);
+  return Number.isNaN(numeric) ? null : numeric;
+};
 
-  const studentId = student.student_id;
-  const emptyMultiplierCounts = {
-    "1.1": 0,
-    "1.2": 0,
-    "1.3": 0,
-    "1.4": 0
+const normalizeOptionalBoolean = (value) => {
+  if (value === undefined || value === null) return null;
+  return Boolean(value);
+};
+
+const mapEligibilityHistoryRow = (row) => ({
+  ...row,
+  this_phase_base_points: Number(row?.this_phase_base_points) || 0,
+  eligibility_multiplier: normalizeOptionalNumber(row?.eligibility_multiplier),
+  eligibility_awarded_points: Number(row?.eligibility_awarded_points) || 0,
+  target_points: normalizeOptionalNumber(row?.target_points),
+  is_eligible: normalizeOptionalBoolean(row?.is_eligible)
+});
+
+const mapGroupMembershipHistoryRow = (row) => ({
+  membership_id: Number(row?.membership_id) || 0,
+  student_id: row?.student_id || null,
+  group_id: row?.group_id === undefined || row?.group_id === null ? null : Number(row.group_id),
+  role: row?.role || null,
+  status: row?.membership_status || null,
+  join_date: row?.join_date || null,
+  leave_date: row?.leave_date || null,
+  incubation_end_date: row?.incubation_end_date || null,
+  group_code: row?.group_code || null,
+  group_name: row?.group_name || null,
+  group_tier: row?.group_tier || null,
+  group_status: row?.group_status || null
+});
+
+const mapTeamMembershipHistoryRow = (row) => ({
+  team_membership_id: Number(row?.team_membership_id) || 0,
+  team_id: Number(row?.team_id) || 0,
+  student_id: row?.student_id || null,
+  role: row?.role || null,
+  status: row?.status || null,
+  join_date: row?.join_date || null,
+  leave_date: row?.leave_date || null,
+  notes: row?.notes || null,
+  team_code: row?.team_code || null,
+  team_name: row?.team_name || null,
+  team_type: row?.team_type || null,
+  team_status: row?.team_status || null,
+  event_id:
+    row?.event_id === undefined || row?.event_id === null ? null : Number(row.event_id),
+  event_code: row?.event_code || null,
+  event_name: row?.event_name || null,
+  event_status: row?.event_status || null,
+  event_start_date: row?.event_start_date || null,
+  event_end_date: row?.event_end_date || null
+});
+
+const mapPhaseTimelineRow = (row) => {
+  const groupId =
+    row?.group_id === undefined || row?.group_id === null ? null : Number(row.group_id);
+
+  return {
+    phase_id: row?.phase_id || null,
+    phase_name: row?.phase_name || null,
+    phase_start_date: row?.phase_start_date || null,
+    phase_end_date: row?.phase_end_date || null,
+    phase_change_day: row?.phase_change_day || null,
+    phase_status: row?.phase_status || null,
+    membership_reference_at: row?.membership_reference_at || null,
+    group: groupId
+      ? {
+          membership_id: Number(row?.membership_id) || 0,
+          group_id: groupId,
+          group_code: row?.group_code || null,
+          group_name: row?.group_name || null,
+          tier: row?.group_tier || null,
+          group_status: row?.group_status || null,
+          membership_role: row?.membership_role || null,
+          membership_status: row?.membership_status || null,
+          membership_join_date: row?.membership_join_date || null,
+          membership_leave_date: row?.membership_leave_date || null
+        }
+      : null,
+    individual: {
+      earned_points: Number(row?.this_phase_base_points) || 0,
+      target_points: normalizeOptionalNumber(row?.individual_target_points),
+      is_eligible: normalizeOptionalBoolean(row?.individual_is_eligible),
+      reason_code: row?.individual_reason_code || null,
+      evaluated_at: row?.individual_evaluated_at || null,
+      eligibility_multiplier: normalizeOptionalNumber(row?.individual_eligibility_multiplier),
+      eligibility_awarded_points: Number(row?.individual_eligibility_awarded_points) || 0
+    },
+    group_eligibility: groupId
+      ? {
+          group_id: groupId,
+          group_code: row?.group_code || null,
+          group_name: row?.group_name || null,
+          tier: row?.group_allocation_tier || row?.group_tier || null,
+          earned_points: Number(row?.this_phase_group_points) || 0,
+          target_points: normalizeOptionalNumber(row?.group_target_points),
+          is_eligible: normalizeOptionalBoolean(row?.group_is_eligible),
+          reason_code: row?.group_reason_code || null,
+          evaluated_at: row?.group_evaluated_at || null,
+          eligibility_multiplier: normalizeOptionalNumber(row?.group_eligibility_multiplier),
+          eligibility_awarded_points: Number(row?.group_eligibility_awarded_points) || 0
+        }
+      : null
   };
+};
+
+const groupTeamMembershipsByType = (rows = []) =>
+  rows.reduce(
+    (acc, row) => {
+      const type = String(row?.team_type || "").toUpperCase();
+
+      if (type === "HUB") {
+        acc.hubs.push(row);
+      } else if (type === "EVENT") {
+        acc.event_groups.push(row);
+      } else {
+        acc.teams.push(row);
+      }
+
+      return acc;
+    },
+    {
+      teams: [],
+      hubs: [],
+      event_groups: []
+    }
+  );
+
+const buildMembershipCollection = (rows = []) => ({
+  active: rows.filter((row) => String(row?.status || "").toUpperCase() === "ACTIVE"),
+  previous: rows.filter((row) => String(row?.status || "").toUpperCase() !== "ACTIVE"),
+  all: rows
+});
+
+const buildDashboardSummaryByStudentId = async (studentId, fallbackName = null) => {
   const [studentStats, phase, activeGroupRow, activeTeamMembershipRows] = await Promise.all([
     repo.getDashboardStudentStats(studentId),
     repo.getCurrentPhase(),
@@ -1051,7 +1215,7 @@ const getMyDashboardSummary = async (userId, fallbackName = null) => {
     activeGroupRow?.group_id ? null : membershipService.getRejoinDeadlineInfo(studentId)
   ]);
   const multiplierCounts = {
-    ...emptyMultiplierCounts,
+    ...EMPTY_MULTIPLIER_COUNTS,
     "1.1":
       (Number(studentStats?.multiplier_11_count) || 0) +
       (Number(activeGroupStats?.multiplier_11_count) || 0),
@@ -1188,6 +1352,78 @@ const getMyDashboardSummary = async (userId, fallbackName = null) => {
   };
 };
 
+const getAdminStudentProfile = async (studentId) => {
+  const student = await repo.getStudentProfileById(studentId);
+  if (!student) throw new Error("Student not found");
+
+  const normalizedStudent = {
+    ...student,
+    department: expandDepartmentCode(student.department)
+  };
+
+  const [
+    summary,
+    basePointData,
+    groupMembershipRows,
+    teamMembershipRows,
+    eligibilityHistoryRows,
+    phaseTimelineRows
+  ] = await Promise.all([
+    buildDashboardSummaryByStudentId(studentId, normalizedStudent.name || null),
+    getStudentBasePoints(studentId, 100),
+    membershipRepo.getAllMemberships({ student_id: studentId }),
+    teamRepo.getAllTeamMemberships({ student_id: studentId }),
+    repo.getMyIndividualEligibilityHistory(studentId),
+    repo.getStudentPhaseTimeline(studentId)
+  ]);
+
+  const groupMemberships = (groupMembershipRows || []).map(mapGroupMembershipHistoryRow);
+  const teamMemberships = (teamMembershipRows || []).map(mapTeamMembershipHistoryRow);
+  const membershipsByType = groupTeamMembershipsByType(teamMemberships);
+
+  return {
+    student: normalizedStudent,
+    summary,
+    base_points: {
+      summary: {
+        student_id: studentId,
+        total_base_points: Number(basePointData?.summary?.total_base_points) || 0,
+        last_updated: basePointData?.summary?.last_updated || null
+      },
+      history: Array.isArray(basePointData?.history)
+        ? basePointData.history.map((row) => ({
+            ...row,
+            points: Number(row?.points) || 0
+          }))
+        : []
+    },
+    group_memberships: {
+      current:
+        groupMemberships.find((row) => String(row?.status || "").toUpperCase() === "ACTIVE") ||
+        null,
+      previous: groupMemberships.filter(
+        (row) => String(row?.status || "").toUpperCase() !== "ACTIVE"
+      ),
+      all: groupMemberships
+    },
+    team_memberships: {
+      teams: buildMembershipCollection(membershipsByType.teams),
+      hubs: buildMembershipCollection(membershipsByType.hubs),
+      event_groups: buildMembershipCollection(membershipsByType.event_groups),
+      all: teamMemberships
+    },
+    eligibility_history: (eligibilityHistoryRows || []).map(mapEligibilityHistoryRow),
+    phase_timeline: (phaseTimelineRows || []).map(mapPhaseTimelineRow)
+  };
+};
+
+const getMyDashboardSummary = async (userId, fallbackName = null) => {
+  const student = await repo.getStudentByUserId(userId);
+  if (!student) throw new Error("Student not found");
+
+  return buildDashboardSummaryByStudentId(student.student_id, fallbackName);
+};
+
 module.exports = {
   recordBasePoints,
   evaluatePhaseEligibility,
@@ -1198,8 +1434,10 @@ module.exports = {
   getMyIndividualEligibility,
   getMyIndividualEligibilityHistory,
   backfillMissingEligibilityPointAllocations,
+  syncStoredEligibilityPointAllocationsForAllPhases,
   getStudentBasePoints,
   getAdminStudentOverview,
+  getAdminStudentProfile,
   getStudentLeaderboards,
   getGroupEligibilitySummary,
   getMyDashboardSummary

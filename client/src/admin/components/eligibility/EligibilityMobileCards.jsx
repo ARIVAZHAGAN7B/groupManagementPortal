@@ -1,5 +1,10 @@
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import {
+  AdminMobileCard,
+  AdminMobileCardList,
+  AdminMobileValueRow
+} from "../ui/AdminMobileCards";
+import {
   getAwardValue,
   formatDate,
   getEligibilityStatusConfig,
@@ -11,15 +16,6 @@ import {
   getTierBadgeClass
 } from "./eligibility.constants";
 
-function DetailRow({ label, value, valueClassName = "font-bold text-slate-900" }) {
-  return (
-    <div className="flex items-center justify-between border-t border-slate-100 py-2 text-xs">
-      <span className="text-slate-500">{label}</span>
-      <span className={valueClassName}>{value}</span>
-    </div>
-  );
-}
-
 export default function EligibilityMobileCards({
   overrideBusyKey,
   onOverride,
@@ -28,27 +24,18 @@ export default function EligibilityMobileCards({
   selectedPhaseId,
   type
 }) {
-  if (rows.length === 0) {
-    return (
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500 shadow-sm">
-        No {type === "individual" ? "students" : "groups"} found for current filters.
-      </div>
-    );
-  }
-
   return (
-    <section className="space-y-4 lg:hidden">
-      {rows.map((row) => {
+    <AdminMobileCardList
+      items={rows}
+      emptyMessage={`No ${type === "individual" ? "students" : "groups"} found for current filters.`}
+      renderItem={(row) => {
         const busyKey = getRowBusyKey(type, selectedPhaseId, row);
         const isBusy = overrideBusyKey === busyKey;
         const statusConfig = getEligibilityStatusConfig(row.is_eligible);
         const overrideOptions = getOverrideOptions(row.is_eligible);
 
         return (
-          <article
-            key={getRowKey(type, row)}
-            className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-          >
+          <AdminMobileCard key={getRowKey(type, row)}>
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h4 className="font-bold text-slate-900">
@@ -80,22 +67,22 @@ export default function EligibilityMobileCards({
             </div>
 
             {type === "group" ? (
-              <DetailRow
+              <AdminMobileValueRow
                 label="Status"
                 value={statusConfig.label}
                 valueClassName={`font-bold ${statusConfig.text}`}
               />
             ) : null}
 
-            <DetailRow label="Score" value={getScoreValue(type, row)} />
-            <DetailRow
+            <AdminMobileValueRow label="Score" value={getScoreValue(type, row)} />
+            <AdminMobileValueRow
               label="Bonus"
               value={`${getAwardValue(row)} (${getMultiplierLabel(row)})`}
             />
-            <DetailRow
+            <AdminMobileValueRow
               label="Evaluated"
               value={formatDate(row.evaluated_at)}
-              valueClassName="text-right text-slate-600"
+              valueClassName="text-slate-600"
             />
 
             <div
@@ -128,9 +115,9 @@ export default function EligibilityMobileCards({
                 </button>
               ))}
             </div>
-          </article>
+          </AdminMobileCard>
         );
-      })}
-    </section>
+      }}
+    />
   );
 }

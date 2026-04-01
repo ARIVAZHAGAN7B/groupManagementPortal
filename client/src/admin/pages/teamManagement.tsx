@@ -3,10 +3,10 @@ import type { FormEvent } from "react";
 import TeamManagementDesktopTable from "../components/teamManagement/TeamManagementDesktopTable";
 import TeamManagementFilters from "../components/teamManagement/TeamManagementFilters";
 import TeamManagementFormCard from "../components/teamManagement/TeamManagementFormCard";
-import TeamManagementFormModal from "../components/teamManagement/TeamManagementFormModal";
 import TeamManagementHero from "../components/teamManagement/TeamManagementHero";
 import TeamManagementMembersModal from "../components/teamManagement/TeamManagementMembersModal";
 import TeamManagementMobileCards from "../components/teamManagement/TeamManagementMobileCards";
+import AdminFormModal from "../components/ui/AdminFormModal";
 import AdminPaginationBar from "../components/ui/AdminPaginationBar";
 import useClientPagination from "../../hooks/useClientPagination";
 import {
@@ -345,7 +345,7 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
         totalCount={rows.length}
       />
 
-      <TeamManagementFormModal
+      <AdminFormModal
         busy={saving}
         onClose={() => closeFormModal({ preserveMessage: true })}
         open={formModalOpen}
@@ -360,7 +360,7 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
           saving={saving}
           scopeConfig={scopeConfig}
         />
-      </TeamManagementFormModal>
+      </AdminFormModal>
 
       {loading ? (
         <div className="rounded-3xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500 shadow-sm">

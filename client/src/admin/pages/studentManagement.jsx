@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import StudentManagementDesktopTable from "../components/students/StudentManagementDesktopTable";
 import StudentManagementFilters from "../components/students/StudentManagementFilters";
 import StudentManagementHero from "../components/students/StudentManagementHero";
@@ -11,6 +12,7 @@ import {
 import { fetchAdminStudentOverview } from "../../service/eligibility.api";
 
 export default function StudentManagement() {
+  const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [phase, setPhase] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -152,7 +154,14 @@ export default function StudentManagement() {
       ) : (
         <>
           <StudentManagementMobileCards students={pagedRows} />
-          <StudentManagementDesktopTable students={pagedRows} />
+          <StudentManagementMobileCards
+            students={pagedRows}
+            onView={(studentId) => navigate(`/student-management/${studentId}`)}
+          />
+          <StudentManagementDesktopTable
+            students={pagedRows}
+            onView={(studentId) => navigate(`/student-management/${studentId}`)}
+          />
         </>
       )}
 

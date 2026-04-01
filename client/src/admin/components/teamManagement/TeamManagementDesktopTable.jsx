@@ -2,61 +2,16 @@ import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import {
+  AdminBadge,
+  AdminIconActionButton,
+  AdminTextActionButton
+} from "../ui/AdminUiPrimitives";
+import {
   STATUS_STYLES,
   TYPE_STYLES,
   formatTeamTypeLabel,
   getActionDisabledState
 } from "./teamManagement.constants";
-
-function StatusBadge({ value }) {
-  const normalized = String(value || "").toUpperCase();
-  const cls = STATUS_STYLES[normalized] || "border-slate-200 bg-slate-100 text-slate-600";
-
-  return (
-    <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold ${cls}`}>
-      {normalized || "-"}
-    </span>
-  );
-}
-
-function TypeBadge({ value }) {
-  const normalized = String(value || "").toUpperCase();
-  const cls = TYPE_STYLES[normalized] || "border-slate-200 bg-slate-100 text-slate-600";
-
-  return (
-    <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold ${cls}`}>
-      {formatTeamTypeLabel(normalized)}
-    </span>
-  );
-}
-
-function ActionIconButton({ disabled, label, onClick, children }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={label}
-      aria-label={label}
-      className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-    >
-      {children}
-    </button>
-  );
-}
-
-function ActionButton({ className, disabled, label, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`rounded-md border px-2 py-1 text-[11px] font-semibold leading-none transition disabled:cursor-not-allowed disabled:opacity-40 ${className}`}
-    >
-      {label}
-    </button>
-  );
-}
 
 export default function TeamManagementDesktopTable({
   actionBusyId,
@@ -139,7 +94,14 @@ export default function TeamManagementDesktopTable({
                         </div>
                       ) : (
                         <div className="space-y-1.5">
-                          <TypeBadge value={row.team_type} />
+                          <AdminBadge
+                            className={
+                              TYPE_STYLES[String(row.team_type || "").toUpperCase()] ||
+                              "border-slate-200 bg-slate-100 text-slate-600"
+                            }
+                          >
+                            {formatTeamTypeLabel(row.team_type)}
+                          </AdminBadge>
                         </div>
                       )}
                     </td>
@@ -152,7 +114,14 @@ export default function TeamManagementDesktopTable({
                     </td>
 
                     <td className="px-5 py-4">
-                      <StatusBadge value={row.status} />
+                      <AdminBadge
+                        className={
+                          STATUS_STYLES[String(row.status || "").toUpperCase()] ||
+                          "border-slate-200 bg-slate-100 text-slate-600"
+                        }
+                      >
+                        {String(row.status || "").toUpperCase() || "-"}
+                      </AdminBadge>
                     </td>
 
                     <td className="px-5 py-4">
@@ -163,26 +132,33 @@ export default function TeamManagementDesktopTable({
 
                     <td className="w-[1%] px-5 py-4 whitespace-nowrap">
                       <div className="ml-auto inline-grid grid-flow-col auto-cols-max items-center gap-1.5">
-                        <ActionIconButton
+                        <AdminIconActionButton
                           disabled={busy || viewBusyTeamId === Number(row.team_id)}
                           label="View members"
                           onClick={() => onViewMembers(row)}
+                          sizeClassName="h-7 w-7"
+                          baseClassName="rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                         >
                           <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
-                        </ActionIconButton>
-                        <ActionIconButton
+                        </AdminIconActionButton>
+                        <AdminIconActionButton
                           disabled={busy}
                           label="Edit"
                           onClick={() => onEdit(row)}
+                          sizeClassName="h-7 w-7"
+                          baseClassName="rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                         >
                           <EditRoundedIcon sx={{ fontSize: 16 }} />
-                        </ActionIconButton>
+                        </AdminIconActionButton>
                         {statusActions.map((action) => (
-                          <ActionButton
+                          <AdminTextActionButton
                             key={action.key}
                             label={action.label}
                             onClick={action.onClick}
                             disabled={busy}
+                            fullWidth={false}
+                            sizeClassName="px-2 py-1"
+                            textClassName="text-[11px] font-semibold leading-none"
                             className={action.className}
                           />
                         ))}

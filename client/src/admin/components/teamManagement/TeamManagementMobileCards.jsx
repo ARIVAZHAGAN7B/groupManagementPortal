@@ -2,32 +2,20 @@ import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import {
+  AdminMobileCard,
+  AdminMobileCardList
+} from "../ui/AdminMobileCards";
+import {
+  AdminBadge,
+  AdminIconActionButton,
+  AdminTextActionButton
+} from "../ui/AdminUiPrimitives";
+import {
   STATUS_STYLES,
   TYPE_STYLES,
   formatTeamTypeLabel,
   getActionDisabledState
 } from "./teamManagement.constants";
-
-function Pill({ children, className }) {
-  return (
-    <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold ${className}`}>
-      {children}
-    </span>
-  );
-}
-
-function ActionButton({ className, disabled, label, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`rounded-lg border px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${className}`}
-    >
-      {label}
-    </button>
-  );
-}
 
 export default function TeamManagementMobileCards({
   actionBusyId,
@@ -44,9 +32,12 @@ export default function TeamManagementMobileCards({
   const isEventGroupScope = scopeConfig.scope === "EVENT_GROUP";
 
   return (
-    <div className="grid gap-4 lg:hidden">
-      {rows.length > 0 ? (
-        rows.map((row) => {
+    <AdminMobileCardList
+      items={rows}
+      emptyMessage={`${scopeConfig.emptyStateLabel} for the current filters.`}
+      emptyClassName="rounded-3xl px-4 py-12 lg:hidden"
+      listClassName="grid gap-4 lg:hidden"
+      renderItem={(row) => {
           const busy = actionBusyId === Number(row.team_id);
           const disabled = getActionDisabledState(row.status);
           const statusActions = [
@@ -83,7 +74,7 @@ export default function TeamManagementMobileCards({
             "border-slate-200 bg-slate-100 text-slate-600";
 
           return (
-            <article key={row.team_id} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+            <AdminMobileCard key={row.team_id} className="rounded-3xl">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="font-mono text-xs font-bold text-[#0f6cbd]">{row.team_code}</p>
@@ -91,38 +82,41 @@ export default function TeamManagementMobileCards({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
+                  <AdminIconActionButton
                     onClick={() => onViewMembers(row)}
                     disabled={viewBusyTeamId === Number(row.team_id)}
                     title="View members"
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    label="View members"
+                    sizeClassName="h-10 w-10"
+                    baseClassName="rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                   >
                     <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
-                  </button>
-                  <button
-                    type="button"
+                  </AdminIconActionButton>
+                  <AdminIconActionButton
                     onClick={() => onEdit(row)}
                     disabled={busy}
-                    title="Edit"
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    label="Edit"
+                    sizeClassName="h-10 w-10"
+                    baseClassName="rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                   >
                     <EditRoundedIcon sx={{ fontSize: 18 }} />
-                  </button>
+                  </AdminIconActionButton>
                 </div>
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                <Pill className={typeClass}>
+                <AdminBadge className={typeClass}>
                   {isEventGroupScope ? "Event Group" : formatTeamTypeLabel(row.team_type)}
-                </Pill>
-                <Pill className={statusClass}>{String(row.status || "-").toUpperCase()}</Pill>
-                <Pill className="border-slate-200 bg-slate-100 text-slate-700">
+                </AdminBadge>
+                <AdminBadge className={statusClass}>
+                  {String(row.status || "-").toUpperCase()}
+                </AdminBadge>
+                <AdminBadge className="border-slate-200 bg-slate-100 text-slate-700">
                   <span className="inline-flex items-center gap-1">
                     <PeopleAltOutlinedIcon sx={{ fontSize: 14 }} />
                     {Number(row.active_member_count) || 0} members
                   </span>
-                </Pill>
+                </AdminBadge>
               </div>
 
               <div className="mt-4 text-sm text-slate-600">
@@ -145,23 +139,20 @@ export default function TeamManagementMobileCards({
 
               <div className="mt-4 flex flex-wrap gap-2">
                 {statusActions.map((action) => (
-                  <ActionButton
+                  <AdminTextActionButton
                     key={action.key}
                     label={action.label}
                     onClick={action.onClick}
                     disabled={busy}
+                    fullWidth={false}
+                    sizeClassName="px-3 py-2"
                     className={action.className}
                   />
                 ))}
               </div>
-            </article>
+            </AdminMobileCard>
           );
-        })
-      ) : (
-        <div className="rounded-3xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500 shadow-sm">
-          {scopeConfig.emptyStateLabel} for the current filters.
-        </div>
-      )}
-    </div>
+      }}
+    />
   );
 }

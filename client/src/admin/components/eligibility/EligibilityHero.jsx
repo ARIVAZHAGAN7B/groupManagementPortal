@@ -3,6 +3,9 @@ import {
   getPhaseLabel,
   getPhaseStatusPillClass
 } from "./eligibility.constants";
+import AdminWorkspaceHero, {
+  AdminWorkspaceHeroActionButton
+} from "../ui/AdminWorkspaceHero";
 
 export default function EligibilityHero({
   loading,
@@ -12,47 +15,38 @@ export default function EligibilityHero({
   viewMode
 }) {
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-[#1754cf]/10 bg-[#1754cf]/5 p-4 md:p-5">
-      <div className="relative z-10 flex flex-col gap-3">
-        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-          <div>
-            <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.24em] text-[#1754cf]">
-              Eligibility Workspace
+    <AdminWorkspaceHero
+      eyebrow="Eligibility Workspace"
+      title="Eligibility Management"
+      titleMeta={
+        <>
+          {phase ? (
+            <span className="rounded-full border border-[#1754cf]/15 bg-white/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[#1754cf]">
+              {getPhaseLabel(phase)}
             </span>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-                Eligibility Management
-              </h1>
-              {phase ? (
-                <span className="rounded-full border border-[#1754cf]/15 bg-white/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[#1754cf]">
-                  {getPhaseLabel(phase)}
-                </span>
-              ) : null}
-              {phase?.status ? (
-                <span
-                  className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${getPhaseStatusPillClass(
-                    phase.status
-                  )}`}
-                >
-                  {phase.status}
-                </span>
-              ) : null}
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-wait disabled:opacity-70"
-          >
-            <RefreshRoundedIcon sx={{ fontSize: 18 }} />
-            {loading ? "Refreshing..." : "Refresh"}
-          </button>
-        </div>
-      </div>
-
-      <div className="absolute -bottom-10 -right-10 h-48 w-48 rounded-full bg-[#1754cf]/10 blur-3xl" />
-    </section>
+          ) : null}
+          {phase?.status ? (
+            <span
+              className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${getPhaseStatusPillClass(
+                phase.status
+              )}`}
+            >
+              {phase.status}
+            </span>
+          ) : null}
+        </>
+      }
+      actions={
+        <AdminWorkspaceHeroActionButton
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          className="border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+        >
+          <RefreshRoundedIcon sx={{ fontSize: 18 }} />
+          {loading ? "Refreshing..." : "Refresh"}
+        </AdminWorkspaceHeroActionButton>
+      }
+    />
   );
 }

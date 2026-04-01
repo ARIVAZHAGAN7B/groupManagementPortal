@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
+import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
+import { useRealtimeEvents } from "../../hooks/useRealtimeEvents";
+import { REALTIME_EVENTS } from "../../lib/realtime";
+import { useGetProfileQuery } from "../../store/api/sharedApi";
 import { fetchAuditLogs } from "../../service/audit.api";
-import { getProfile } from "../../service/joinRequests.api";
+import { useAuth } from "../../utils/AuthContext";
 
 const emptyFilters = {
   q: "",
@@ -153,6 +157,7 @@ function AuditCard({ row }) {
 }
 
 export default function AuditLogs() {
+  const { user } = useAuth();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -160,8 +165,12 @@ export default function AuditLogs() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
   const [filters, setFilters] = useState(emptyFilters);
-  const [profile, setProfile] = useState(null);
-  const [profileLoading, setProfileLoading] = useState(true);
+  const profileQuery = useGetProfileQuery(
+    { userId: user?.userId },
+    { skip: !user?.userId }
+  );
+  const profile = profileQuery.data || null;
+  const profileLoading = Boolean(user?.userId) && profileQuery.isFetching && !profileQuery.data;
 
   const load = async (nextPage = page, nextLimit = limit, overrideFilters = null) => {
     setLoading(true);
@@ -188,35 +197,15 @@ export default function AuditLogs() {
   };
 
   useEffect(() => {
-    let mounted = true;
-
-    const loadProfile = async () => {
-      setProfileLoading(true);
-
-      try {
-        const data = await getProfile();
-        if (!mounted) return;
-        setProfile(data || null);
-      } catch {
-        if (!mounted) return;
-        setProfile(null);
-      } finally {
-        if (!mounted) return;
-        setProfileLoading(false);
-      }
-    };
-
-    loadProfile();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
     void load(1, limit);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleRealtimeRefresh = useDebouncedCallback(() => {
+    void load(page, limit);
+  }, 300);
+
+  useRealtimeEvents(REALTIME_EVENTS.AUDIT, handleRealtimeRefresh);
 
   const pageCount = useMemo(() => Math.max(1, Math.ceil(total / limit)), [total, limit]);
 

@@ -7,7 +7,7 @@ import {
 function EmptyArchiveState() {
   return (
     <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center text-sm text-slate-500">
-      No additional inactive phases outside the recent 5.
+      No additional inactive phases.
     </div>
   );
 }

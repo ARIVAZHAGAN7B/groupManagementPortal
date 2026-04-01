@@ -1,5 +1,3 @@
-USE test;
-
 CREATE TABLE IF NOT EXISTS events (
   event_id INT NOT NULL AUTO_INCREMENT,
   event_code VARCHAR(50) NOT NULL,
@@ -31,3 +29,4 @@ CREATE TABLE IF NOT EXISTS events (
 --   ADD CONSTRAINT fk_teams_event
 --     FOREIGN KEY (event_id) REFERENCES events(event_id)
 --     ON UPDATE CASCADE ON DELETE SET NULL;
+

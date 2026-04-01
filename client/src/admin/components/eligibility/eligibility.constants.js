@@ -77,6 +77,21 @@ export const getEligibilityStatusConfig = (value) =>
 export const formatEligibleLabel = (value) =>
   getEligibilityStatusConfig(value).label;
 
+export const getOverrideOptions = (value) => {
+  if (isEligibleValue(value)) {
+    return [{ isEligible: false, label: "Not Eligible" }];
+  }
+
+  if (isNotEligibleValue(value)) {
+    return [{ isEligible: true, label: "Eligible" }];
+  }
+
+  return [
+    { isEligible: true, label: "Eligible" },
+    { isEligible: false, label: "Not Eligible" }
+  ];
+};
+
 export const getPhaseStatusPillClass = (status) =>
   PHASE_STATUS_PILL_CLASSES[String(status || "").toUpperCase()] ||
   "border border-slate-200 bg-slate-100 text-slate-500";
@@ -108,12 +123,28 @@ export const getEntityMeta = (type, row) =>
     ? `${row?.department || "-"} | Year ${row?.year ?? "-"}`
     : `Tier ${String(row?.tier || "-").toUpperCase()} | ID ${row?.group_id || "-"}`;
 
+export const formatPointsValue = (value) => {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return "0";
+
+  return numericValue.toLocaleString(undefined, {
+    minimumFractionDigits: Number.isInteger(numericValue) ? 0 : 2,
+    maximumFractionDigits: 2
+  });
+};
+
 export const getScoreValue = (type, row) =>
-  Number(
-    type === "individual"
-      ? row?.this_phase_base_points || 0
-      : row?.this_phase_group_points || 0
-  ).toLocaleString();
+  formatPointsValue(
+    type === "individual" ? row?.this_phase_base_points || 0 : row?.this_phase_group_points || 0
+  );
+
+export const getAwardValue = (row) => formatPointsValue(row?.eligibility_awarded_points || 0);
+
+export const getMultiplierLabel = (row) => {
+  const multiplier = Number(row?.eligibility_multiplier);
+  if (!Number.isFinite(multiplier) || multiplier <= 0) return "x0.00";
+  return `x${multiplier.toFixed(2)}`;
+};
 
 export const getDefaultReasonCode = (type, isEligible) => {
   if (isEligible) {

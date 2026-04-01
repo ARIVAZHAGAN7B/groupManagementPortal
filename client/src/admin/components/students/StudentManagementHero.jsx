@@ -1,38 +1,12 @@
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
-import { formatDate, formatNumber } from "./studentManagement.constants";
-
-function StatPill({ accentClass, detail, label, value }) {
-  return (
-    <article className="rounded-lg border border-white/80 bg-white/90 px-3 py-2.5 shadow-sm">
-      <div className="flex items-center gap-2">
-        <span className={`h-2 w-2 shrink-0 rounded-full ${accentClass}`} />
-        <p className="text-sm font-semibold text-slate-700">
-          {label}: <span className="text-slate-900">{value}</span>
-        </p>
-      </div>
-      <p className="mt-1 pl-4 text-[11px] font-medium text-slate-500">{detail}</p>
-    </article>
-  );
-}
+import { formatDate } from "./studentManagement.constants";
 
 export default function StudentManagementHero({
-  filteredCount,
   loading,
   onRefresh,
   phase,
   stats
 }) {
-  const total = Number(stats?.totalStudents) || 0;
-  const inGroup = Number(stats?.inGroup) || 0;
-  const ungrouped = Number(stats?.ungrouped) || 0;
-  const totalBasePoints = Number(stats?.totalBasePoints) || 0;
-  const totalPhasePoints = Number(stats?.totalPhasePoints) || 0;
-
-  const headerSummary =
-    typeof filteredCount === "number" && filteredCount !== total
-      ? `Showing ${filteredCount} of ${total} students`
-      : `${total} students in workspace`;
-
   const phaseSummary = phase?.phase_id
     ? `Active phase: ${formatDate(phase.start_date)} to ${formatDate(phase.end_date)}`
     : "No active phase";
@@ -50,7 +24,6 @@ export default function StudentManagementHero({
                 Student Management
               </h1>
             </div>
-            <p className="mt-1 text-xs font-medium text-slate-600">{headerSummary}</p>
             <p className="mt-1 text-[11px] font-medium text-slate-500">{phaseSummary}</p>
           </div>
 
@@ -63,33 +36,6 @@ export default function StudentManagementHero({
             <RefreshRoundedIcon sx={{ fontSize: 18 }} />
             {loading ? "Refreshing..." : "Refresh"}
           </button>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-          <StatPill
-            accentClass="bg-[#1754cf]"
-            detail={`${ungrouped} ungrouped`}
-            label="Total"
-            value={total}
-          />
-          <StatPill
-            accentClass="bg-emerald-500"
-            detail={`${total > 0 ? Math.round((inGroup / total) * 100) : 0}% in groups`}
-            label="In Groups"
-            value={inGroup}
-          />
-          <StatPill
-            accentClass="bg-amber-500"
-            detail="Total recorded points"
-            label="Base Points"
-            value={formatNumber(totalBasePoints)}
-          />
-          <StatPill
-            accentClass="bg-sky-500"
-            detail={phase?.phase_id ? "Current phase total" : "No active phase"}
-            label="Phase Points"
-            value={formatNumber(totalPhasePoints)}
-          />
         </div>
       </div>
 

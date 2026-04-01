@@ -1,6 +1,10 @@
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import {
-  formatDateTime,
+  getAwardValue,
+  formatDate,
   getEligibilityStatusConfig,
+  getMultiplierLabel,
+  getOverrideOptions,
   getRowBusyKey,
   getRowKey,
   getScoreValue,
@@ -24,9 +28,23 @@ function ActionTextButton({ className = "", disabled = false, label, onClick }) 
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`w-full whitespace-nowrap rounded-md px-2.5 py-1 text-center text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+      className={`w-full whitespace-nowrap rounded-md px-1.5 py-1 text-center text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
     >
       {label}
+    </button>
+  );
+}
+
+function ActionIconButton({ className = "", label, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${className}`}
+    >
+      <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
     </button>
   );
 }
@@ -34,9 +52,9 @@ function ActionTextButton({ className = "", disabled = false, label, onClick }) 
 function IndividualTable({
   overrideBusyKey,
   onOverride,
+  onViewReason,
   rows,
-  selectedPhaseId,
-  totalCount
+  selectedPhaseId
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -48,8 +66,9 @@ function IndividualTable({
               <th className="px-6 py-4">Department</th>
               <th className="px-6 py-4 text-center">Year</th>
               <th className="px-6 py-4 text-center">Score</th>
+              <th className="px-6 py-4 text-center">Bonus</th>
               <th className="px-6 py-4">Status</th>
-              <th className="px-6 py-4">Reason</th>
+              <th className="px-6 py-4 text-center">View</th>
               <th className="px-6 py-4">Evaluated</th>
               <th className="px-6 py-4 text-right">Actions</th>
             </tr>
@@ -60,6 +79,7 @@ function IndividualTable({
               rows.map((row) => {
                 const busyKey = getRowBusyKey("individual", selectedPhaseId, row);
                 const isBusy = overrideBusyKey === busyKey;
+                const overrideOptions = getOverrideOptions(row.is_eligible);
 
                 return (
                   <tr key={getRowKey("individual", row)} className="transition-colors hover:bg-slate-50">
@@ -82,29 +102,44 @@ function IndividualTable({
                         {getScoreValue("individual", row)}
                       </span>
                     </td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="text-sm font-bold text-[#1754cf]">{getAwardValue(row)}</div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                        {getMultiplierLabel(row)}
+                      </div>
+                    </td>
                     <td className="px-6 py-4">
                       <StatusBadge value={row.is_eligible} />
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      {row.reason_code || "-"}
+                    <td className="px-6 py-4 text-center">
+                      <ActionIconButton
+                        label="View reason"
+                        onClick={() => onViewReason("individual", row)}
+                        className="mx-auto border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                      />
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-500">
-                      {formatDateTime(row.evaluated_at)}
+                      {formatDate(row.evaluated_at)}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="ml-auto grid w-[10.5rem] grid-cols-2 gap-2">
-                        <ActionTextButton
-                          label={isBusy ? "Saving..." : "Eligible"}
-                          onClick={() => onOverride("individual", row, true)}
-                          disabled={isBusy}
-                          className="border border-green-200 bg-green-50 text-green-600 hover:bg-green-100"
-                        />
-                        <ActionTextButton
-                          label={isBusy ? "Saving..." : "Not Eligible"}
-                          onClick={() => onOverride("individual", row, false)}
-                          disabled={isBusy}
-                          className="border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
-                        />
+                      <div
+                        className={`ml-auto grid w-[10.5rem] gap-2 ${
+                          overrideOptions.length > 1 ? "grid-cols-2" : "grid-cols-1"
+                        }`}
+                      >
+                        {overrideOptions.map((option) => (
+                          <ActionTextButton
+                            key={option.label}
+                            label={isBusy ? "Saving..." : option.label}
+                            onClick={() => onOverride("individual", row, option.isEligible)}
+                            disabled={isBusy}
+                            className={
+                              option.isEligible
+                                ? "border border-green-200 bg-green-50 text-green-600 hover:bg-green-100"
+                                : "border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                            }
+                          />
+                        ))}
                       </div>
                     </td>
                   </tr>
@@ -112,20 +147,13 @@ function IndividualTable({
               })
             ) : (
               <tr>
-                <td colSpan={8} className="px-6 py-12 text-center text-sm text-slate-500">
+                <td colSpan={9} className="px-6 py-12 text-center text-sm text-slate-500">
                   No students found for current filters.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
-      </div>
-
-      <div className="flex items-center justify-between bg-slate-50 px-6 py-4">
-        <p className="text-xs font-medium text-slate-500">
-          Showing {rows.length} of {totalCount} students
-        </p>
-        <p className="text-xs font-medium text-slate-500">All matching students are listed</p>
       </div>
     </section>
   );
@@ -134,9 +162,9 @@ function IndividualTable({
 function GroupTable({
   overrideBusyKey,
   onOverride,
+  onViewReason,
   rows,
-  selectedPhaseId,
-  totalCount
+  selectedPhaseId
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -147,8 +175,9 @@ function GroupTable({
               <th className="px-6 py-4">Group</th>
               <th className="px-6 py-4 text-center">Tier</th>
               <th className="px-6 py-4 text-center">Score</th>
+              <th className="px-6 py-4 text-center">Bonus</th>
               <th className="px-6 py-4">Status</th>
-              <th className="px-6 py-4">Reason</th>
+              <th className="px-6 py-4 text-center">View</th>
               <th className="px-6 py-4">Evaluated</th>
               <th className="px-6 py-4 text-right">Actions</th>
             </tr>
@@ -159,6 +188,7 @@ function GroupTable({
               rows.map((row) => {
                 const busyKey = getRowBusyKey("group", selectedPhaseId, row);
                 const isBusy = overrideBusyKey === busyKey;
+                const overrideOptions = getOverrideOptions(row.is_eligible);
 
                 return (
                   <tr key={getRowKey("group", row)} className="transition-colors hover:bg-slate-50">
@@ -184,29 +214,44 @@ function GroupTable({
                         {getScoreValue("group", row)}
                       </span>
                     </td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="text-sm font-bold text-[#1754cf]">{getAwardValue(row)}</div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                        {getMultiplierLabel(row)}
+                      </div>
+                    </td>
                     <td className="px-6 py-4">
                       <StatusBadge value={row.is_eligible} />
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      {row.reason_code || "-"}
+                    <td className="px-6 py-4 text-center">
+                      <ActionIconButton
+                        label="View reason"
+                        onClick={() => onViewReason("group", row)}
+                        className="mx-auto border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                      />
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-500">
-                      {formatDateTime(row.evaluated_at)}
+                      {formatDate(row.evaluated_at)}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="ml-auto grid w-[10.5rem] grid-cols-2 gap-2">
-                        <ActionTextButton
-                          label={isBusy ? "Saving..." : "Eligible"}
-                          onClick={() => onOverride("group", row, true)}
-                          disabled={isBusy}
-                          className="border border-green-200 bg-green-50 text-green-600 hover:bg-green-100"
-                        />
-                        <ActionTextButton
-                          label={isBusy ? "Saving..." : "Not Eligible"}
-                          onClick={() => onOverride("group", row, false)}
-                          disabled={isBusy}
-                          className="border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
-                        />
+                      <div
+                        className={`ml-auto grid w-[10.5rem] gap-2 ${
+                          overrideOptions.length > 1 ? "grid-cols-2" : "grid-cols-1"
+                        }`}
+                      >
+                        {overrideOptions.map((option) => (
+                          <ActionTextButton
+                            key={option.label}
+                            label={isBusy ? "Saving..." : option.label}
+                            onClick={() => onOverride("group", row, option.isEligible)}
+                            disabled={isBusy}
+                            className={
+                              option.isEligible
+                                ? "border border-green-200 bg-green-50 text-green-600 hover:bg-green-100"
+                                : "border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                            }
+                          />
+                        ))}
                       </div>
                     </td>
                   </tr>
@@ -214,7 +259,7 @@ function GroupTable({
               })
             ) : (
               <tr>
-                <td colSpan={7} className="px-6 py-12 text-center text-sm text-slate-500">
+                <td colSpan={8} className="px-6 py-12 text-center text-sm text-slate-500">
                   No groups found for current filters.
                 </td>
               </tr>
@@ -222,23 +267,16 @@ function GroupTable({
           </tbody>
         </table>
       </div>
-
-      <div className="flex items-center justify-between bg-slate-50 px-6 py-4">
-        <p className="text-xs font-medium text-slate-500">
-          Showing {rows.length} of {totalCount} groups
-        </p>
-        <p className="text-xs font-medium text-slate-500">All matching groups are listed</p>
-      </div>
     </section>
   );
 }
 
 export default function EligibilityDesktopTable(props) {
-  const { rows, totalCount, type } = props;
+  const { rows, type } = props;
 
   if (type === "individual") {
-    return <IndividualTable {...props} rows={rows} totalCount={totalCount} />;
+    return <IndividualTable {...props} rows={rows} />;
   }
 
-  return <GroupTable {...props} rows={rows} totalCount={totalCount} />;
+  return <GroupTable {...props} rows={rows} />;
 }

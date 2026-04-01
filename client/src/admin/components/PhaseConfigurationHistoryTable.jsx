@@ -85,12 +85,16 @@ function PhaseHistoryRow({ phase }) {
   );
 }
 
-export default function PhaseConfigurationHistoryTable({ recentPhases }) {
+export default function PhaseConfigurationHistoryTable({
+  helperText = "Showing all configured phases",
+  phases = [],
+  title = "Configured Phases"
+}) {
   return (
     <section className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-xl font-bold text-slate-900">Last 5 Phases</h2>
-        <span className="text-xs font-medium text-slate-400">Showing recent activity</span>
+        <h2 className="text-xl font-bold text-slate-900">{title}</h2>
+        <span className="text-xs font-medium text-slate-400">{helperText}</span>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -117,8 +121,8 @@ export default function PhaseConfigurationHistoryTable({ recentPhases }) {
           </thead>
 
           <tbody className="divide-y divide-slate-100">
-            {recentPhases.length > 0 ? (
-              recentPhases.map((phase) => (
+            {phases.length > 0 ? (
+              phases.map((phase) => (
                 <PhaseHistoryRow key={phase.phase_id || phase.phase_name} phase={phase} />
               ))
             ) : (

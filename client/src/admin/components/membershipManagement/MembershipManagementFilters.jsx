@@ -21,15 +21,16 @@ function FilterSelect({ children, onChange, value }) {
 }
 
 export default function MembershipManagementFilters({
-  filteredCount,
   query,
   roleFilter,
   roleOptions,
   setQuery,
   setRoleFilter,
   setStatusFilter,
+  setYearFilter,
   statusFilter,
-  totalCount
+  yearFilter,
+  yearOptions
 }) {
   return (
     <section className="flex flex-col items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row">
@@ -46,12 +47,21 @@ export default function MembershipManagementFilters({
         />
       </div>
 
-      <div className="flex w-full items-center gap-3 md:w-auto">
+      <div className="flex w-full flex-wrap items-center gap-3 md:w-auto">
         <FilterSelect value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
           <option value="ALL">All Roles</option>
           {roleOptions.map((role) => (
             <option key={role} value={role}>
               {role.replaceAll("_", " ")}
+            </option>
+          ))}
+        </FilterSelect>
+
+        <FilterSelect value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}>
+          <option value="ALL">All Years</option>
+          {yearOptions.map((year) => (
+            <option key={year} value={year}>
+              Year {year}
             </option>
           ))}
         </FilterSelect>
@@ -63,10 +73,6 @@ export default function MembershipManagementFilters({
             </option>
           ))}
         </FilterSelect>
-
-        <p className="hidden whitespace-nowrap text-xs font-medium text-slate-500 lg:block">
-          Showing {filteredCount} of {totalCount}
-        </p>
       </div>
     </section>
   );

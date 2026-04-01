@@ -7,8 +7,18 @@ const truncatePhaseName = (value) => {
   return text.length > 7 ? `${text.slice(0, 7)}...` : text;
 };
 
+const formatPoints = (value) => {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return "0";
+
+  return numericValue.toLocaleString(undefined, {
+    minimumFractionDigits: Number.isInteger(numericValue) ? 0 : 2,
+    maximumFractionDigits: 2
+  });
+};
+
 export default function MyGroupEligibilitySection({
-  description = "Completed phase eligibility with target progress and final status.",
+  description = "Completed phase eligibility with target progress, final status, and bonus points.",
   emptyMessage = "No completed phases are available yet.",
   eligibility,
   eligibilityErr,
@@ -51,7 +61,7 @@ export default function MyGroupEligibilitySection({
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-slate-200">
-          <table className="min-w-[860px] w-full text-sm">
+          <table className="min-w-[1040px] w-full text-sm">
             <thead className="bg-slate-50 text-slate-600">
               <tr>
                 <th className="px-4 py-3 text-left font-semibold">Phase Name</th>
@@ -59,7 +69,9 @@ export default function MyGroupEligibilitySection({
                 <th className="px-4 py-3 text-left font-semibold">End Date</th>
                 <th className="px-4 py-3 text-left font-semibold">Tier</th>
                 <th className="px-4 py-3 text-left font-semibold">Target Assigned</th>
-                <th className="px-4 py-3 text-left font-semibold">Target Achived</th>
+                <th className="px-4 py-3 text-left font-semibold">Target Achieved</th>
+                <th className="px-4 py-3 text-left font-semibold">Multiplier</th>
+                <th className="px-4 py-3 text-left font-semibold">Bonus</th>
                 <th className="px-4 py-3 text-left font-semibold">Eligibility</th>
               </tr>
             </thead>
@@ -83,10 +95,18 @@ export default function MyGroupEligibilitySection({
                     <td className="px-4 py-3 text-slate-700">
                       {phase?.target_points === null || phase?.target_points === undefined
                         ? "Not set"
-                        : Number(phase.target_points)}
+                        : formatPoints(phase.target_points)}
                     </td>
                     <td className="px-4 py-3 text-slate-700">
-                      {Number(phase?.earned_points ?? 0)}
+                      {formatPoints(phase?.earned_points ?? 0)}
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">
+                      {phase?.eligibility_multiplier
+                        ? `x${Number(phase.eligibility_multiplier).toFixed(2)}`
+                        : "-"}
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">
+                      {formatPoints(phase?.eligibility_awarded_points ?? 0)}
                     </td>
                     <td className="px-4 py-3">
                       {phase?.eligibility_error ? (

@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import StudentHeader from "../ui/studentHeader";
 import SideBar from "../ui/sideBar";
 
-const SIDEBAR_W = 256;
+const SIDEBAR_W = 220;
 
 const StudentLayout = ({ children }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -32,7 +32,7 @@ const StudentLayout = ({ children }) => {
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <aside
-          className={`fixed inset-y-0 left-0 z-50 flex h-full transform flex-col border-r border-slate-200 bg-white transition-transform duration-200 lg:static lg:z-auto lg:translate-x-0 ${
+          className={`fixed inset-y-0 left-0 z-50 flex h-full transform flex-col border-r border-slate-200 bg-slate-50 transition-transform duration-200 lg:static lg:z-auto lg:translate-x-0 ${
             mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
           }`}
           style={{ width: SIDEBAR_W }}

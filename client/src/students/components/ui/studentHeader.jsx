@@ -1,10 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import MenuRoundedIcon from "@mui/icons-material/MenuRounded";
-import Icons from "../../../assets/Icons";
+import Image from "../../../assets/Image";
+import { useAdaptiveNow } from "../../../hooks/useAdaptiveNow";
+import { useDebouncedCallback } from "../../../hooks/useDebouncedCallback";
+import { useRealtimeEvents } from "../../../hooks/useRealtimeEvents";
+import { REALTIME_EVENTS } from "../../../lib/realtime";
+import ThemeModeControl from "../../../shared/components/theme/ThemeModeControl";
+import {
+  useGetPhaseContextQuery,
+  useGetProfileQuery,
+  useGetStudentMembershipQuery
+} from "../../../store/api/sharedApi";
 import { useAuth } from "../../../utils/AuthContext";
-import { fetchMyGroup } from "../../../service/membership.api";
-import { fetchCurrentPhase, fetchPhaseTargets } from "../../../service/phase.api";
-import { getProfile } from "../../../service/joinRequests.api";
 
 const PHASE_END_HOUR = 18;
 
@@ -58,111 +65,45 @@ const getInitials = (name) => {
 
 const StudentHeader = ({ onMenuClick }) => {
   const { user } = useAuth();
+  const phaseQuery = useGetPhaseContextQuery(undefined, {
+    skip: !user?.userId
+  });
+  const membershipQuery = useGetStudentMembershipQuery(
+    { userId: user?.userId },
+    { skip: !user?.userId }
+  );
+  const profileQuery = useGetProfileQuery(
+    { userId: user?.userId },
+    { skip: !user?.userId }
+  );
+  const phase = phaseQuery.data?.phase || null;
+  const phaseTargets = phaseQuery.data?.phaseTargets || null;
+  const myGroup = membershipQuery.data?.group || null;
+  const rejoinDeadline = membershipQuery.data?.rejoinDeadline || null;
+  const profile = profileQuery.data || null;
+  const loading = phaseQuery.isLoading && !phaseQuery.data;
+  const profileLoading = Boolean(user?.userId) && profileQuery.isFetching && !profileQuery.data;
+  const rejoinTargetTimeMs = useMemo(() => {
+    if (myGroup || !rejoinDeadline?.has_rejoin_deadline) return NaN;
+    return Date.parse(rejoinDeadline.rejoin_deadline_at);
+  }, [myGroup, rejoinDeadline]);
+  const nowMs = useAdaptiveNow(rejoinTargetTimeMs);
+  const handleRealtimeRefresh = useDebouncedCallback(() => {
+    if (!user?.userId) return;
 
-  const [phase, setPhase] = useState(null);
-  const [phaseTargets, setPhaseTargets] = useState(null);
-  const [myGroup, setMyGroup] = useState(null);
-  const [rejoinDeadline, setRejoinDeadline] = useState(null);
+    void phaseQuery.refetch();
+    void membershipQuery.refetch();
+  }, 250);
 
-  const [profile, setProfile] = useState(null);
-  const [profileLoading, setProfileLoading] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [nowMs, setNowMs] = useState(() => Date.now());
-
-  // =========================
-  // Load Phase + Group
-  // =========================
-  useEffect(() => {
-    let mounted = true;
-
-    const loadData = async () => {
-      try {
-        const [phaseRes, groupRes] = await Promise.all([
-          fetchCurrentPhase(),
-          fetchMyGroup().catch(() => ({ group: null })),
-        ]);
-
-        let targetRes = null;
-
-        if (phaseRes?.phase_id) {
-          targetRes = await fetchPhaseTargets(phaseRes.phase_id).catch(
-            () => null
-          );
-        }
-
-        if (!mounted) return;
-
-        setPhase(phaseRes || null);
-        setMyGroup(groupRes?.group ?? null);
-        setRejoinDeadline(groupRes?.rejoin_deadline ?? null);
-        setPhaseTargets(targetRes);
-      } catch {
-        if (!mounted) return;
-        setPhase(null);
-        setMyGroup(null);
-        setRejoinDeadline(null);
-        setPhaseTargets(null);
-      } finally {
-        if (!mounted) return;
-        setLoading(false);
-      }
-    };
-
-    loadData();
-    const interval = setInterval(loadData, 60000);
-
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setNowMs(Date.now());
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // =========================
-  // Load Profile
-  // =========================
-  useEffect(() => {
-    let mounted = true;
-
-    const loadProfile = async () => {
-      if (!user) {
-        setProfile(null);
-        setProfileLoading(false);
-        return;
-      }
-
-      setProfileLoading(true);
-
-      try {
-        const data = await getProfile(); // ✅ no userId
-        if (!mounted) return;
-        setProfile(data);
-      } catch {
-        if (!mounted) return;
-        setProfile(null);
-      } finally {
-        if (!mounted) return;
-        setProfileLoading(false);
-      }
-    };
-
-    loadProfile();
-
-    return () => {
-      mounted = false;
-    };
-  }, [user]);
-
-  // =========================
-  // Derived Values
-  // =========================
+  useRealtimeEvents(
+    [
+      REALTIME_EVENTS.PHASE,
+      REALTIME_EVENTS.MEMBERSHIPS,
+      REALTIME_EVENTS.POINTS,
+      REALTIME_EVENTS.ELIGIBILITY
+    ],
+    handleRealtimeRefresh
+  );
 
   const studentName = useMemo(() => {
     return profile?.name || user?.name || "Student";
@@ -275,9 +216,14 @@ const StudentHeader = ({ onMenuClick }) => {
           <MenuRoundedIcon fontSize="small" />
         </button>
 
-        <div className="grid h-10 w-10 place-items-center rounded-lg bg-[#3211d4] text-white">
-          <Icons.School fontSize="small" />
-        </div>
+        <img
+          src={Image.GMPLogo}
+          alt="GM Portal logo"
+          width="40"
+          height="40"
+          decoding="async"
+          className="h-10 w-10 rounded-lg object-contain"
+        />
 
         <div className="hidden sm:block">
           <h1 className="text-lg font-bold text-slate-900">GM Portal</h1>
@@ -323,6 +269,8 @@ const StudentHeader = ({ onMenuClick }) => {
             </span>
           </div>
         )}
+
+        <ThemeModeControl />
 
         <div className="flex items-center gap-3">
           <div className="hidden lg:block text-right">

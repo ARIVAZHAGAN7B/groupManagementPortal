@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useRealtimeEvents } from "../../hooks/useRealtimeEvents";
+import { REALTIME_EVENTS, matchesRealtimeScope } from "../../lib/realtime";
 import { fetchEvents } from "../../service/events.api";
 import { fetchEventGroupsByEvent } from "../../service/teams.api";
 import {
@@ -31,15 +33,6 @@ const Badge = ({ value, map }) => {
   );
 };
 
-const StatCard = ({ label, value, accent }) => (
-  <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-    <p className="text-[10.5px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
-      {label}
-    </p>
-    <p className={`text-xl font-bold ${accent ?? "text-gray-800"}`}>{value}</p>
-  </div>
-);
-
 const selectCls =
   "w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 transition disabled:opacity-50 disabled:cursor-not-allowed";
 const labelCls = "block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1";
@@ -56,11 +49,6 @@ export default function EventJoinRequestManagement() {
   const [error, setError] = useState("");
   const [decisionBusyId, setDecisionBusyId] = useState(null);
   const [approvalRoleByRequestId, setApprovalRoleByRequestId] = useState({});
-
-  const activeTeams = useMemo(
-    () => teams.filter((t) => String(t?.status || "").toUpperCase() === "ACTIVE"),
-    [teams]
-  );
 
   const loadEventsAndSelect = async () => {
     setLoadingEvents(true);
@@ -163,6 +151,20 @@ export default function EventJoinRequestManagement() {
     if (selectedTeamId) loadPending(selectedTeamId);
   }, [selectedTeamId]);
 
+  useRealtimeEvents(REALTIME_EVENTS.EVENT_JOIN_REQUESTS, (payload) => {
+    if (!matchesRealtimeScope(payload, { teamId: selectedTeamId })) return;
+    void loadPending(selectedTeamId);
+  });
+
+  useRealtimeEvents(REALTIME_EVENTS.TEAM_MEMBERSHIPS, () => {
+    if (selectedEventId) {
+      void loadTeamsForEvent(selectedEventId);
+    }
+    if (selectedTeamId) {
+      void loadPending(selectedTeamId);
+    }
+  });
+
   const onDecision = async (row, status) => {
     const requestId = row?.event_request_id;
     if (!requestId) return;
@@ -231,16 +233,6 @@ export default function EventJoinRequestManagement() {
             {loadingRows ? "..." : "Refresh Requests"}
           </button>
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <StatCard label="Events" value={events.length} />
-        <StatCard label="Active Event Groups" value={activeTeams.length} accent="text-blue-600" />
-        <StatCard
-          label="Pending Requests"
-          value={pendingRows.length}
-          accent={pendingRows.length > 0 ? "text-amber-600" : "text-gray-800"}
-        />
       </div>
 
       <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-3">

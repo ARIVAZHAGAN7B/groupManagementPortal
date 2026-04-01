@@ -1,36 +1,21 @@
-import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useGetProfileQuery } from "../../store/api/sharedApi";
 import { useAuth } from "../../utils/AuthContext";
-import { getProfile } from "../../service/joinRequests.api";
 
 const AdminDashboard = () => {
     const navigate = useNavigate();
     const { user, logout } = useAuth();
-    const [profile, setProfile] = useState(null);
-
-    useEffect(() => {
-        let mounted = true;
-
-        const loadProfile = async () => {
-            const data = await getProfile();
-            if (!mounted) return;
-            setProfile(data || null);
-        };
-
-        loadProfile();
-
-        return () => {
-            mounted = false;
-        };
-    }, []);
+    const { data: profile } = useGetProfileQuery(
+        { userId: user?.userId },
+        { skip: !user?.userId }
+    );
 
     const handleLogout = async () => {
         try {
             await logout?.();
             // redirect to login page
             navigate("/login");
-        } catch (err) {
-            console.error("Logout failed:", err);
+        } catch (_err) {
             alert("Failed to logout. Please try again.");
         }
     };

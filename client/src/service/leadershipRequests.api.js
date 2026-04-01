@@ -1,12 +1,21 @@
-import { api } from "../lib/api";
+import {
+  api,
+  CLIENT_CACHE_TAGS,
+  postWithInvalidation,
+  putWithInvalidation
+} from "../lib/api";
+
+const LEADERSHIP_INVALIDATION_TAGS = [
+  CLIENT_CACHE_TAGS.GROUP_MEMBERSHIPS,
+  CLIENT_CACHE_TAGS.GROUP_RANKS
+];
 
 export async function applyLeadershipRoleRequest({ group_id, requested_role, request_reason }) {
-  const { data } = await api.post("/api/leadership-requests/apply", {
+  return postWithInvalidation("/api/leadership-requests/apply", {
     group_id,
     requested_role,
     ...(request_reason ? { request_reason } : {})
   });
-  return data;
 }
 
 export async function getMyLeadershipRoleRequests() {
@@ -19,17 +28,18 @@ export async function getPendingLeadershipRequestsByGroup(groupId) {
   return data;
 }
 
-export async function getAllPendingLeadershipRequests() {
-  const { data } = await api.get("/api/leadership-requests/pending");
+export async function getAllPendingLeadershipRequests(params = {}) {
+  const { data } = await api.get("/api/leadership-requests/pending", { params });
   return data;
 }
 
 export async function decideLeadershipRoleRequest(requestId, status, decision_reason) {
-  const { data } = await api.put(`/api/leadership-requests/${requestId}/decision`, {
+  return putWithInvalidation(`/api/leadership-requests/${requestId}/decision`, {
     status,
     decision_reason
+  }, {
+    invalidateTags: LEADERSHIP_INVALIDATION_TAGS
   });
-  return data;
 }
 
 export async function fetchAdminLeadershipNotifications() {

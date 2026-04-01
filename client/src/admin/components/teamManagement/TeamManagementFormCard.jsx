@@ -1,37 +1,10 @@
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import {
-  TEAM_FORM_TYPES,
   TEAM_STATUSES,
   formatTeamTypeLabel,
   inputClass,
   selectClass
 } from "./teamManagement.constants";
-
-function TypeOptionCard({ active, description, label, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        "rounded-2xl border px-4 py-4 text-left transition",
-        active
-          ? "border-[#0f6cbd] bg-[#0f6cbd]/6 shadow-[0_10px_30px_rgba(15,108,189,0.08)]"
-          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-      ].join(" ")}
-    >
-      <div className="flex items-center gap-2">
-        <span
-          className={[
-            "h-2.5 w-2.5 rounded-full",
-            active ? "bg-[#0f6cbd]" : "bg-slate-300"
-          ].join(" ")}
-        />
-        <span className="text-sm font-semibold text-slate-900">{label}</span>
-      </div>
-      <p className="mt-2 text-xs leading-5 text-slate-500">{description}</p>
-    </button>
-  );
-}
 
 export default function TeamManagementFormCard({
   editingRow,
@@ -44,21 +17,18 @@ export default function TeamManagementFormCard({
   scopeConfig
 }) {
   const isEventGroupScope = scopeConfig.scope === "EVENT_GROUP";
-  const isLegacySection = String(editingRow?.team_type || form.team_type || "").toUpperCase() === "SECTION";
 
   const submitLabel = saving
     ? "Saving..."
     : editingRow
       ? `Update ${scopeConfig.scopeLabel}`
-      : form.team_type === "HUB"
-        ? "Create Hub"
-        : "Create Team";
+      : `Create ${scopeConfig.scopeLabel}`;
 
   if (isEventGroupScope && !editingRow) {
     return (
       <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="max-w-3xl">
-          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-orange-600">
+          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-[#1754cf]">
             Edit-Only Mode
           </p>
           <h2 className="mt-2 text-xl font-bold text-slate-900">Select an Event Group to Edit</h2>
@@ -89,30 +59,18 @@ export default function TeamManagementFormCard({
           >
             Cancel Edit
           </button>
-        ) : null}
+        ) : (
+          <button
+            type="button"
+            onClick={onCancelEdit}
+            className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+          >
+            Close
+          </button>
+        )}
       </div>
 
       <form onSubmit={onSubmit} className="mt-5 space-y-5">
-        {!isEventGroupScope && !isLegacySection ? (
-          <div className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
-              Choose Type
-            </p>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              {TEAM_FORM_TYPES.map((option) => (
-                <TypeOptionCard
-                  key={option.value}
-                  active={form.team_type === option.value}
-                  description={option.description}
-                  label={option.label}
-                  onClick={() => onChangeField("team_type", option.value)}
-                />
-              ))}
-            </div>
-          </div>
-        ) : null}
-
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div>
             <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
@@ -122,7 +80,13 @@ export default function TeamManagementFormCard({
               value={form.team_code}
               onChange={(e) => onChangeField("team_code", e.target.value)}
               className={inputClass}
-              placeholder={isEventGroupScope ? "EVT-GRP-01" : form.team_type === "HUB" ? "AIHUB" : "TEAM-01"}
+              placeholder={
+                isEventGroupScope
+                  ? "EVT-GRP-01"
+                  : scopeConfig.scope === "HUB"
+                    ? "HUB-01"
+                    : "TEAM-01"
+              }
               maxLength={50}
             />
           </div>
@@ -138,7 +102,7 @@ export default function TeamManagementFormCard({
               placeholder={
                 isEventGroupScope
                   ? "Hackathon Group Alpha"
-                  : form.team_type === "HUB"
+                  : scopeConfig.scope === "HUB"
                     ? "AI Innovation Hub"
                     : "Platform Team"
               }
@@ -192,7 +156,7 @@ export default function TeamManagementFormCard({
             placeholder={
               isEventGroupScope
                 ? "Add context about this event group, ownership, or participation notes..."
-                : form.team_type === "HUB"
+                : scopeConfig.scope === "HUB"
                   ? "Describe the hub scope, programs, and collaborating teams..."
                   : "Describe what the team owns, delivers, or supports..."
             }

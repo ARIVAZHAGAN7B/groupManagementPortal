@@ -59,27 +59,42 @@ export const getIndividualTargetInput = (targetData) => {
   return value === null || value === undefined || value === "" ? "" : String(value);
 };
 
-export const collectPhaseGroups = (phases) => {
-  const phaseList = Array.isArray(phases) ? phases : [];
-  const recentPhases = phaseList.slice(0, 5);
-  const recentPhaseIds = new Set(
-    recentPhases
-      .map((phase) => String(phase?.phase_id || "").trim())
-      .filter(Boolean)
+export const loadPhaseTargetDetails = async (phaseIds, fetchTargets, seedDetails = {}) => {
+  const detailMap = { ...seedDetails };
+  const uniqueIds = [...new Set((Array.isArray(phaseIds) ? phaseIds : []).filter(Boolean))];
+  const pendingIds = uniqueIds.filter((phaseId) => !detailMap[phaseId]);
+
+  if (pendingIds.length === 0) {
+    return detailMap;
+  }
+
+  const results = await Promise.allSettled(
+    pendingIds.map((phaseId) => fetchTargets(phaseId))
   );
 
-  const additionalInactivePhases = phaseList.filter((phase) => {
-    const phaseId = String(phase?.phase_id || "").trim();
-    return (
-      String(phase?.status || "").toUpperCase() === "INACTIVE" &&
-      phaseId &&
-      !recentPhaseIds.has(phaseId)
-    );
+  pendingIds.forEach((phaseId, index) => {
+    const result = results[index];
+    if (result.status === "fulfilled") {
+      detailMap[phaseId] = result.value;
+      return;
+    }
+
+    detailMap[phaseId] = {
+      targets: [],
+      individual_target: null,
+      hasError: true
+    };
   });
 
+  return detailMap;
+};
+
+export const collectPhaseGroups = (phases) => {
+  const phaseList = Array.isArray(phases) ? phases : [];
+
   return {
-    recentPhases,
-    additionalInactivePhases
+    recentPhases: phaseList,
+    additionalInactivePhases: []
   };
 };
 

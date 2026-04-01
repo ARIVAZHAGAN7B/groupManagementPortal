@@ -1,16 +1,27 @@
-import { api } from "../lib/api";
+import {
+  CLIENT_CACHE_TAGS,
+  CLIENT_CACHE_TTL,
+  cachedGet,
+  putWithInvalidation
+} from "../lib/api";
 
 export async function fetchTeamTargets(params = {}) {
-  const { data } = await api.get("/api/team-targets", { params });
+  const data = await cachedGet("/api/team-targets", { params }, {
+    tags: [CLIENT_CACHE_TAGS.TEAM_TARGETS],
+    ttlMs: CLIENT_CACHE_TTL.MEDIUM
+  });
   return Array.isArray(data) ? data : [];
 }
 
 export async function fetchTeamTargetByTeamId(teamId) {
-  const { data } = await api.get(`/api/team-targets/${teamId}`);
-  return data;
+  return cachedGet(`/api/team-targets/${teamId}`, {}, {
+    tags: [CLIENT_CACHE_TAGS.TEAM_TARGETS],
+    ttlMs: CLIENT_CACHE_TTL.MEDIUM
+  });
 }
 
 export async function setTeamTarget(teamId, payload) {
-  const { data } = await api.put(`/api/team-targets/${teamId}`, payload);
-  return data;
+  return putWithInvalidation(`/api/team-targets/${teamId}`, payload, {
+    invalidateTags: [CLIENT_CACHE_TAGS.TEAM_TARGETS]
+  });
 }

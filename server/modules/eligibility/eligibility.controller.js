@@ -1,5 +1,6 @@
 const eligibilityService = require("./eligibility.service");
 const auditService = require("../audit/audit.service");
+const { broadcastEligibilityChanged, broadcastPointsChanged } = require("../../realtime/events");
 
 const recordBasePoints = async (req, res) => {
   try {
@@ -17,6 +18,21 @@ const recordBasePoints = async (req, res) => {
         reason: req.body?.reason,
         result
       }
+    });
+
+    broadcastPointsChanged({
+      action: "BASE_POINTS_RECORDED",
+      studentId: result?.student_id || req.body?.student_id || null,
+      groupId: result?.group_id || null,
+      membershipId: result?.membership_id || null,
+      historyId: result?.history_id || null,
+      groupPointId: result?.group_point_id || null
+    });
+    broadcastEligibilityChanged({
+      action: "BASE_POINTS_RECORDED",
+      scope: "STUDENT",
+      studentId: result?.student_id || req.body?.student_id || null,
+      groupId: result?.group_id || null
     });
 
     res.status(201).json({
@@ -52,6 +68,12 @@ const evaluatePhaseEligibility = async (req, res) => {
       entityType: "PHASE",
       entityId: req.params.phase_id,
       details: result
+    });
+
+    broadcastEligibilityChanged({
+      action: "PHASE_ELIGIBILITY_EVALUATED",
+      scope: "PHASE",
+      phaseId: req.params.phase_id
     });
 
     res.json({
@@ -105,6 +127,13 @@ const overrideIndividualEligibility = async (req, res) => {
       details: result
     });
 
+    broadcastEligibilityChanged({
+      action: "INDIVIDUAL_ELIGIBILITY_OVERRIDDEN",
+      scope: "INDIVIDUAL",
+      phaseId: req.params.phase_id,
+      studentId: req.params.student_id
+    });
+
     res.json({
       message: "Individual eligibility overridden",
       data: result
@@ -130,6 +159,13 @@ const overrideGroupEligibility = async (req, res) => {
       entityId: `${req.params.phase_id}:${req.params.group_id}`,
       reasonCode: req.body?.reason_code || null,
       details: result
+    });
+
+    broadcastEligibilityChanged({
+      action: "GROUP_ELIGIBILITY_OVERRIDDEN",
+      scope: "GROUP",
+      phaseId: req.params.phase_id,
+      groupId: req.params.group_id
     });
 
     res.json({

@@ -19,6 +19,17 @@ const validateRole = (req, res, next) => {
   next();
 };
 
+const validateRank = (req, res, next) => {
+  const rank = Number(req.body?.rank);
+
+  if (!Number.isInteger(rank) || rank < 1 || rank > 5) {
+    return res.status(400).json({ message: "Rank must be an integer between 1 and 5" });
+  }
+
+  req.body.rank = rank;
+  next();
+};
+
 const validateRemoveMembership = (req, res, next) => {
   const reason = String(req.body?.reason || "").trim();
 
@@ -36,5 +47,6 @@ const validateRemoveMembership = (req, res, next) => {
 module.exports = {
   validateJoin,
   validateRole,
+  validateRank,
   validateRemoveMembership
 };

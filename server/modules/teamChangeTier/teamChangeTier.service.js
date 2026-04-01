@@ -166,6 +166,25 @@ const getEligibilityMapForPhase = async (phase, executor) => {
   );
 };
 
+const toSavedTierChangeSnapshot = (saved) => {
+  if (!saved) return null;
+
+  return {
+    team_change_tier_id: saved.team_change_tier_id,
+    phase_id: saved.phase_id,
+    group_id: saved.group_id,
+    previous_phase_id: saved.previous_phase_id || null,
+    current_tier: normalizeTier(saved.current_tier),
+    recommended_tier: normalizeTier(saved.recommended_tier),
+    change_action: normalizeChangeAction(saved.change_action, { required: true }),
+    last_phase_eligible: toBoolOrNull(saved.last_phase_eligible),
+    previous_phase_eligible: toBoolOrNull(saved.previous_phase_eligible),
+    rule_code: saved.rule_code,
+    approved_by_admin_id: saved.approved_by_admin_id,
+    applied_at: saved.applied_at
+  };
+};
+
 const getPhaseTierChangePreview = async (phaseId, actorUser) => {
   await ensureAdminActor(db, actorUser);
 
@@ -183,21 +202,36 @@ const getPhaseTierChangePreview = async (phaseId, actorUser) => {
   );
 
   const rows = (Array.isArray(groups) ? groups : []).map((group) => {
-    const currentTier = normalizeTier(group.tier);
-    const lastPhaseEligible = phaseEligibility.has(String(group.group_id))
+    const liveCurrentTier = normalizeTier(group.tier);
+    const liveLastPhaseEligible = phaseEligibility.has(String(group.group_id))
       ? phaseEligibility.get(String(group.group_id))
       : null;
-    const previousPhaseEligible = previousPhaseEligibility.has(String(group.group_id))
+    const livePreviousPhaseEligible = previousPhaseEligibility.has(String(group.group_id))
       ? previousPhaseEligibility.get(String(group.group_id))
       : null;
+    const saved = toSavedTierChangeSnapshot(savedByGroup.get(String(group.group_id)) || null);
 
-    const recommendation = buildRecommendation({
-      currentTier,
-      groupStatus: group.status,
-      lastPhaseEligible
-    });
+    const currentTier = saved?.current_tier || liveCurrentTier;
+    const lastPhaseEligible =
+      saved?.last_phase_eligible !== undefined ? saved.last_phase_eligible : liveLastPhaseEligible;
+    const previousPhaseEligible =
+      saved?.previous_phase_eligible !== undefined
+        ? saved.previous_phase_eligible
+        : livePreviousPhaseEligible;
 
-    const saved = savedByGroup.get(String(group.group_id)) || null;
+    const recommendation = saved
+      ? {
+          change_action: saved.change_action,
+          recommended_tier: saved.recommended_tier,
+          rule_code: saved.rule_code,
+          action_locked: true,
+          available_actions: [saved.change_action]
+        }
+      : buildRecommendation({
+          currentTier,
+          groupStatus: group.status,
+          lastPhaseEligible
+        });
 
     return {
       group_id: group.group_id,
@@ -207,22 +241,10 @@ const getPhaseTierChangePreview = async (phaseId, actorUser) => {
       active_member_count: Number(group.active_member_count) || 0,
       current_tier: currentTier,
       last_phase_eligible: lastPhaseEligible,
-      previous_phase_id: previousPhase?.phase_id || null,
+      previous_phase_id: saved?.previous_phase_id || previousPhase?.phase_id || null,
       previous_phase_eligible: previousPhaseEligible,
       ...recommendation,
       team_change_tier: saved
-        ? {
-            team_change_tier_id: saved.team_change_tier_id,
-            phase_id: saved.phase_id,
-            group_id: saved.group_id,
-            current_tier: saved.current_tier,
-            recommended_tier: saved.recommended_tier,
-            change_action: saved.change_action,
-            rule_code: saved.rule_code,
-            approved_by_admin_id: saved.approved_by_admin_id,
-            applied_at: saved.applied_at
-          }
-        : null
     };
   });
 

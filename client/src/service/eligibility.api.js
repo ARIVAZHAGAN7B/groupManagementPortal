@@ -1,4 +1,19 @@
-import { api } from "../lib/api";
+import {
+  api,
+  CLIENT_CACHE_TAGS,
+  CLIENT_CACHE_STORAGE,
+  CLIENT_CACHE_TTL,
+  cachedGet,
+  postWithInvalidation,
+  putWithInvalidation
+} from "../lib/api";
+
+const ELIGIBILITY_INVALIDATION_TAGS = [
+  CLIENT_CACHE_TAGS.LEADERBOARDS,
+  CLIENT_CACHE_TAGS.GROUP_ELIGIBILITY,
+  CLIENT_CACHE_TAGS.GROUP_MEMBERSHIPS,
+  CLIENT_CACHE_TAGS.GROUP_RANKS
+];
 
 export async function fetchAdminStudentOverview() {
   const { data } = await api.get("/api/eligibility/admin/student-overview");
@@ -6,8 +21,9 @@ export async function fetchAdminStudentOverview() {
 }
 
 export async function recordStudentBasePoints(payload) {
-  const { data } = await api.post("/api/eligibility/base-points", payload);
-  return data; // { message, data: { history_id, student_id, total_base_points } }
+  return postWithInvalidation("/api/eligibility/base-points", payload, {
+    invalidateTags: ELIGIBILITY_INVALIDATION_TAGS
+  }); // { message, data: { history_id, student_id, total_base_points } }
 }
 
 export async function fetchStudentBasePoints(studentId, params = {}) {
@@ -32,29 +48,40 @@ export async function fetchAdminGroupEligibility(phaseId, params = {}) {
 }
 
 export async function overrideIndividualEligibility(phaseId, studentId, payload) {
-  const { data } = await api.put(
+  return putWithInvalidation(
     `/api/eligibility/phases/${phaseId}/individual/${studentId}/override`,
-    payload
+    payload,
+    {
+      invalidateTags: ELIGIBILITY_INVALIDATION_TAGS
+    }
   );
-  return data;
 }
 
 export async function overrideGroupEligibility(phaseId, groupId, payload) {
-  const { data } = await api.put(
+  return putWithInvalidation(
     `/api/eligibility/phases/${phaseId}/group/${groupId}/override`,
-    payload
+    payload,
+    {
+      invalidateTags: ELIGIBILITY_INVALIDATION_TAGS
+    }
   );
-  return data;
 }
 
 export async function fetchStudentLeaderboards(params = {}) {
-  const { data } = await api.get("/api/eligibility/leaderboards", { params });
+  const data = await cachedGet("/api/eligibility/leaderboards", { params }, {
+    storage: CLIENT_CACHE_STORAGE.MEMORY,
+    tags: [CLIENT_CACHE_TAGS.LEADERBOARDS],
+    ttlMs: CLIENT_CACHE_TTL.SHORT
+  });
   return data; // { limit, individual, leaders, groups }
 }
 
 export async function fetchGroupEligibilitySummary(phaseId, groupId) {
-  const { data } = await api.get(`/api/eligibility/phases/${phaseId}/groups/${groupId}/summary`);
-  return data;
+  return cachedGet(`/api/eligibility/phases/${phaseId}/groups/${groupId}/summary`, {}, {
+    storage: CLIENT_CACHE_STORAGE.MEMORY,
+    tags: [CLIENT_CACHE_TAGS.GROUP_ELIGIBILITY],
+    ttlMs: CLIENT_CACHE_TTL.SHORT
+  });
 }
 
 export async function fetchMyDashboardSummary() {

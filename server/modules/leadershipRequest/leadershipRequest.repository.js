@@ -80,12 +80,42 @@ const findPendingByGroup = async (groupId) => {
   return rows;
 };
 
-const findAllPending = async () => {
+const findAllPending = async (filters = {}) => {
+  const where = ["lrr.status='PENDING'"];
+  const params = [];
+  const groupId = Number(filters.group_id);
+  const requestedRole = String(filters.requested_role || "").trim().toUpperCase();
+  const searchQuery = String(filters.q || "").trim().toLowerCase();
+
+  if (Number.isInteger(groupId) && groupId > 0) {
+    where.push("lrr.group_id=?");
+    params.push(groupId);
+  }
+
+  if (requestedRole) {
+    where.push("UPPER(lrr.requested_role)=?");
+    params.push(requestedRole);
+  }
+
+  if (searchQuery) {
+    where.push(`LOWER(CONCAT_WS(' ',
+      s.name,
+      s.email,
+      s.student_id,
+      g.group_code,
+      g.group_name,
+      g.tier,
+      lrr.requested_role
+    )) LIKE ?`);
+    params.push(`%${searchQuery}%`);
+  }
+
   const [rows] = await db.query(
     `SELECT
        lrr.*,
        s.name AS student_name,
        s.email AS student_email,
+       s.student_id AS student_roll_number,
        m.role AS current_membership_role,
        m.status AS current_membership_status,
        g.group_code,
@@ -96,8 +126,9 @@ const findAllPending = async () => {
      LEFT JOIN students s ON s.student_id = lrr.student_id
      LEFT JOIN memberships m ON m.membership_id = lrr.membership_id
      LEFT JOIN Sgroup g ON g.group_id = lrr.group_id
-     WHERE lrr.status='PENDING'
-     ORDER BY lrr.request_date ASC, lrr.leadership_request_id ASC`
+     WHERE ${where.join(" AND ")}
+     ORDER BY lrr.request_date ASC, lrr.leadership_request_id ASC`,
+    params
   );
   return rows;
 };

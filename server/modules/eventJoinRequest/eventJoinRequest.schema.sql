@@ -1,5 +1,3 @@
-USE test;
-
 CREATE TABLE IF NOT EXISTS event_join_request (
   event_request_id BIGINT NOT NULL AUTO_INCREMENT,
   student_id VARCHAR(36) NOT NULL,
@@ -25,3 +23,4 @@ CREATE TABLE IF NOT EXISTS event_join_request (
     ON UPDATE CASCADE
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+

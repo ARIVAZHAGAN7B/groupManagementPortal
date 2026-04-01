@@ -1,5 +1,3 @@
-USE test;
-
 CREATE TABLE IF NOT EXISTS teams (
   team_id INT NOT NULL AUTO_INCREMENT,
   event_id INT NULL,
@@ -16,6 +14,7 @@ CREATE TABLE IF NOT EXISTS teams (
   KEY idx_teams_status (status),
   KEY idx_teams_type_status (team_type, status),
   KEY idx_teams_event_status (event_id, status),
+  KEY idx_teams_type_event_status (team_type, event_id, status),
   CONSTRAINT fk_teams_event
     FOREIGN KEY (event_id)
     REFERENCES events(event_id)
@@ -40,6 +39,7 @@ CREATE TABLE IF NOT EXISTS team_membership (
   KEY idx_team_membership_team_status (team_id, status),
   KEY idx_team_membership_student_status (student_id, status),
   KEY idx_team_membership_role_status (role, status),
+  KEY idx_team_membership_student_team_status (student_id, team_id, status),
   CONSTRAINT fk_team_membership_team
     FOREIGN KEY (team_id)
     REFERENCES teams(team_id)
@@ -59,3 +59,4 @@ CREATE TABLE IF NOT EXISTS team_membership (
 --   ADD CONSTRAINT fk_teams_event
 --     FOREIGN KEY (event_id) REFERENCES events(event_id)
 --     ON UPDATE CASCADE ON DELETE SET NULL;
+

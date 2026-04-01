@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import AddCircleOutlineRoundedIcon from "@mui/icons-material/AddCircleOutlineRounded";
 import { useNavigate, useParams } from "react-router-dom";
+import { useRealtimeEvents } from "../../../hooks/useRealtimeEvents";
+import { REALTIME_EVENTS } from "../../../lib/realtime";
 import { fetchEventById } from "../../../service/events.api";
 import { getMyEventJoinRequests } from "../../../service/eventJoinRequests.api";
 import {
@@ -87,6 +89,13 @@ export default function StudentEventGroupsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useRealtimeEvents(
+    [REALTIME_EVENTS.EVENT_JOIN_REQUESTS, REALTIME_EVENTS.TEAM_MEMBERSHIPS],
+    () => {
+      void load();
+    }
+  );
 
   useEffect(() => {
     setTeamForm(EMPTY_EVENT_GROUP_FORM);

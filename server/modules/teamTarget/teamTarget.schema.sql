@@ -1,5 +1,3 @@
-USE test;
-
 CREATE TABLE IF NOT EXISTS team_target (
   team_target_id BIGINT NOT NULL AUTO_INCREMENT,
   team_id INT NOT NULL,
@@ -17,3 +15,4 @@ CREATE TABLE IF NOT EXISTS team_target (
     ON UPDATE CASCADE
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+

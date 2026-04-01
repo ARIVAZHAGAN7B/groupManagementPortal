@@ -2,51 +2,7 @@ const db = require("../../config/db");
 
 const getExecutor = (executor) => executor || db;
 
-let ensurePromise = null;
-
-const ensureSchema = async () => {
-  if (!ensurePromise) {
-    ensurePromise = (async () => {
-      await db.query(`
-        CREATE TABLE IF NOT EXISTS group_points (
-          group_point_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-          student_id VARCHAR(36) NOT NULL,
-          group_id INT NOT NULL,
-          membership_id INT NOT NULL,
-          points INT NOT NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          INDEX idx_group_points_student (student_id, created_at),
-          INDEX idx_group_points_group (group_id, created_at),
-          INDEX idx_group_points_membership (membership_id, created_at),
-          CONSTRAINT fk_group_points_student
-            FOREIGN KEY (student_id)
-            REFERENCES students(student_id)
-            ON UPDATE CASCADE
-            ON DELETE CASCADE,
-          CONSTRAINT fk_group_points_group
-            FOREIGN KEY (group_id)
-            REFERENCES Sgroup(group_id)
-            ON UPDATE CASCADE
-            ON DELETE CASCADE,
-          CONSTRAINT fk_group_points_membership
-            FOREIGN KEY (membership_id)
-            REFERENCES memberships(membership_id)
-            ON UPDATE CASCADE
-            ON DELETE CASCADE
-        )
-      `);
-    })().catch((error) => {
-      ensurePromise = null;
-      throw error;
-    });
-  }
-
-  return ensurePromise;
-};
-
 const getMembershipContext = async (membershipId, executor) => {
-  await ensureSchema();
-
   const [rows] = await getExecutor(executor).query(
     `SELECT membership_id, student_id, group_id, status, join_date, leave_date
      FROM memberships
@@ -59,8 +15,6 @@ const getMembershipContext = async (membershipId, executor) => {
 };
 
 const findMembershipForStudentAt = async (studentId, activityAt, executor) => {
-  await ensureSchema();
-
   const [rows] = await getExecutor(executor).query(
     `SELECT membership_id, student_id, group_id, status, join_date, leave_date
      FROM memberships
@@ -77,8 +31,6 @@ const findMembershipForStudentAt = async (studentId, activityAt, executor) => {
 };
 
 const insertGroupPoint = async (payload, executor) => {
-  await ensureSchema();
-
   const [result] = await getExecutor(executor).query(
     `INSERT INTO group_points
       (student_id, group_id, membership_id, points, created_at)
@@ -96,8 +48,6 @@ const insertGroupPoint = async (payload, executor) => {
 };
 
 const getGroupPointById = async (groupPointId, executor) => {
-  await ensureSchema();
-
   const [rows] = await getExecutor(executor).query(
     `SELECT
        gp.group_point_id,
@@ -161,8 +111,6 @@ const buildWhere = (filters = {}) => {
 };
 
 const listGroupPoints = async (filters = {}, paging = {}, executor) => {
-  await ensureSchema();
-
   const page = Math.max(1, Number(paging.page) || 1);
   const limit = Math.max(1, Math.min(Number(paging.limit) || 50, 200));
   const offset = (page - 1) * limit;
@@ -210,8 +158,6 @@ const listGroupPoints = async (filters = {}, paging = {}, executor) => {
 };
 
 const sumGroupPoints = async (filters = {}, executor) => {
-  await ensureSchema();
-
   const { whereSql, values } = buildWhere(filters);
   const [[row]] = await getExecutor(executor).query(
     `SELECT COALESCE(SUM(gp.points), 0) AS total_points
@@ -224,7 +170,6 @@ const sumGroupPoints = async (filters = {}, executor) => {
 };
 
 module.exports = {
-  ensureSchema,
   getMembershipContext,
   findMembershipForStudentAt,
   insertGroupPoint,

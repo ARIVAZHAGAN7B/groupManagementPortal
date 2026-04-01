@@ -1,5 +1,3 @@
-USE test;
-
 -- Manual schema for phase-wise tier decisions derived from eligibility
 -- (user naming requested: team_change_tier)
 -- DB-managed only; backend does not auto-create this table.
@@ -45,4 +43,5 @@ CREATE TABLE IF NOT EXISTS team_change_tier (
     ON UPDATE CASCADE
     ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 

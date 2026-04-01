@@ -1,4 +1,5 @@
 const teamService = require("./team.service");
+const { broadcastTeamMembershipChanged } = require("../../realtime/events");
 
 const createTeam = async (req, res) => {
   try {
@@ -14,8 +15,8 @@ const createTeam = async (req, res) => {
 
 const getTeams = async (req, res) => {
   try {
-    const rows = await teamService.getTeams(req.query || {});
-    res.json(Array.isArray(rows) ? rows : []);
+    const data = await teamService.getTeams(req.query || {});
+    res.json(data);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -23,8 +24,8 @@ const getTeams = async (req, res) => {
 
 const getTeamsByEvent = async (req, res) => {
   try {
-    const rows = await teamService.getTeamsByEvent(req.params.eventId, req.query || {});
-    res.json(Array.isArray(rows) ? rows : []);
+    const data = await teamService.getTeamsByEvent(req.params.eventId, req.query || {});
+    res.json(data);
   } catch (error) {
     const status = error.message === "Event not found" ? 404 : 400;
     res.status(status).json({ message: error.message });
@@ -55,8 +56,8 @@ const getTeamMemberships = async (req, res) => {
 
 const getAllTeamMemberships = async (req, res) => {
   try {
-    const rows = await teamService.getAllTeamMemberships(req.query);
-    res.json(rows);
+    const data = await teamService.getAllTeamMemberships(req.query);
+    res.json(data);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -79,6 +80,15 @@ const addTeamMember = async (req, res) => {
       req.body,
       req.user?.userId || null
     );
+
+    await broadcastTeamMembershipChanged({
+      action: "TEAM_MEMBERSHIP_ADDED",
+      studentId: row?.student_id || null,
+      teamId: row?.team_id || Number(req.params.id),
+      membershipId: row?.team_membership_id || null,
+      role: row?.role || null
+    });
+
     res.status(201).json({
       message: "Team member added successfully",
       data: row
@@ -96,6 +106,15 @@ const createTeamInEventByStudent = async (req, res) => {
       req.body,
       req.user?.userId
     );
+
+    await broadcastTeamMembershipChanged({
+      action: "EVENT_GROUP_CREATED",
+      studentId: result?.captain_membership?.student_id || null,
+      teamId: result?.team?.team_id || null,
+      membershipId: result?.captain_membership?.team_membership_id || null,
+      role: result?.captain_membership?.role || "CAPTAIN"
+    });
+
     res.status(201).json({
       message: "Event group created successfully",
       data: result
@@ -113,6 +132,15 @@ const joinTeamAsSelf = async (req, res) => {
       req.user?.userId,
       req.body || {}
     );
+
+    await broadcastTeamMembershipChanged({
+      action: "TEAM_JOINED",
+      studentId: row?.student_id || null,
+      teamId: row?.team_id || Number(req.params.id),
+      membershipId: row?.team_membership_id || null,
+      role: row?.role || null
+    });
+
     res.status(201).json({
       message: "Joined team successfully",
       data: row
@@ -126,6 +154,15 @@ const joinTeamAsSelf = async (req, res) => {
 const updateTeamMember = async (req, res) => {
   try {
     const row = await teamService.updateTeamMember(req.params.membershipId, req.body);
+
+    await broadcastTeamMembershipChanged({
+      action: "TEAM_MEMBERSHIP_UPDATED",
+      studentId: row?.student_id || null,
+      teamId: row?.team_id || null,
+      membershipId: row?.team_membership_id || Number(req.params.membershipId),
+      role: row?.role || null
+    });
+
     res.json({
       message: "Team membership updated successfully",
       data: row
@@ -143,6 +180,16 @@ const leaveTeamMember = async (req, res) => {
       req.body,
       req.user || null
     );
+
+    await broadcastTeamMembershipChanged({
+      action: "TEAM_MEMBERSHIP_LEFT",
+      studentId: row?.student_id || null,
+      teamId: row?.team_id || null,
+      membershipId: row?.team_membership_id || Number(req.params.membershipId),
+      role: row?.role || null,
+      membershipStatus: row?.status || "LEFT"
+    });
+
     res.json({
       message: "Team membership marked as left",
       data: row

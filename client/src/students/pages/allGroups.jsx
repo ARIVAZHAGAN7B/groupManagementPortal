@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
+import { useDebouncedValue } from "../../hooks/useDebouncedValue";
+import { useRealtimeEvents } from "../../hooks/useRealtimeEvents";
+import { REALTIME_EVENTS } from "../../lib/realtime";
+import { useAppDispatch, useAppSelector } from "../../store/hooks";
+import { loadStudentMembership } from "../../store/slices/studentMembershipSlice";
 import { fetchStudentLeaderboards } from "../../service/eligibility.api";
 import { fetchGroups } from "../../service/groups.api";
 import { getMyJoinRequests, applyJoinRequest } from "../../service/joinRequests.api";
-import { fetchMyGroup } from "../../service/membership.api";
+import { useAuth } from "../../utils/AuthContext";
 import AllGroupsDesktopTable from "../components/allGroups/AllGroupsDesktopTable";
 import AllGroupsHero from "../components/allGroups/AllGroupsHero";
 import AllGroupsMobileCards from "../components/allGroups/AllGroupsMobileCards";
@@ -121,11 +127,13 @@ const compareGroupNames = (aGroup, bGroup) =>
   String(aGroup?.group_name || "").localeCompare(String(bGroup?.group_name || ""));
 
 export default function AllGroups() {
+  const dispatch = useAppDispatch();
+  const { user } = useAuth();
   const nav = useNavigate();
+  const myGroup = useAppSelector((state) => state.studentMembership.group);
 
   const [groups, setGroups] = useState([]);
   const [groupRankings, setGroupRankings] = useState([]);
-  const [myGroup, setMyGroup] = useState(null);
   const [myJoinRequests, setMyJoinRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -143,6 +151,9 @@ export default function AllGroups() {
   const [pointsMinFilter, setPointsMinFilter] = useState("");
   const [acceptingFilter, setAcceptingFilter] = useState("ALL");
   const [sortState, setSortState] = useState(() => createDefaultSortState());
+  const debouncedGroupQuery = useDebouncedValue(groupQuery, 300);
+  const debouncedCaptainFilter = useDebouncedValue(captainFilter, 300);
+  const debouncedPointsMinFilter = useDebouncedValue(pointsMinFilter, 300);
   const hasActiveSort = Boolean(sortState.key) && Boolean(sortState.direction);
   const canResetFilters =
     String(groupQuery || "").trim().length > 0 ||
@@ -156,25 +167,61 @@ export default function AllGroups() {
     acceptingFilter !== "ALL" ||
     hasActiveSort;
 
-  const load = useCallback(async () => {
+  const serverFilterParams = useMemo(() => {
+    const params = {};
+    const groupSearch = String(debouncedGroupQuery || "").trim();
+    const captainSearch = String(debouncedCaptainFilter || "").trim();
+    const minPoints = String(debouncedPointsMinFilter || "").trim();
+
+    if (groupSearch) params.q = groupSearch;
+    if (tierFilter !== "ALL") params.tier = tierFilter;
+    if (statusFilter !== "ALL") params.status = statusFilter;
+    if (eligibilityFilter !== "ALL") params.eligibility_status = eligibilityFilter;
+    if (captainSearch) params.captain = captainSearch;
+    if (acceptingFilter === "YES") params.accepting = "true";
+    if (acceptingFilter === "NO") params.accepting = "false";
+    if (vacancyFilter === "HAS_VACANCY") params.has_vacancy = "true";
+    if (vacancyFilter === "FULL") params.has_vacancy = "false";
+    if (minPoints && Number.isFinite(Number(minPoints))) params.min_points = Number(minPoints);
+
+    return params;
+  }, [
+    acceptingFilter,
+    debouncedCaptainFilter,
+    debouncedGroupQuery,
+    debouncedPointsMinFilter,
+    eligibilityFilter,
+    statusFilter,
+    tierFilter,
+    vacancyFilter
+  ]);
+
+  const loadGroups = useCallback(async () => {
     setLoading(true);
     setErr("");
+
+    try {
+      const groupRows = await fetchGroups({
+        exclude_status: "FROZEN",
+        ...serverFilterParams
+      });
+      setGroups(Array.isArray(groupRows) ? groupRows : []);
+    } catch (e) {
+      setErr(e?.response?.data?.error || e?.response?.data?.message || "Failed to load groups");
+      setGroups([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [serverFilterParams]);
+
+  const loadRankings = useCallback(async () => {
     setRankingWarning("");
 
     try {
-      const [groupRows, leaderboardRows, myGroupRes, myRequestRows] = await Promise.all([
-        fetchGroups({ exclude_status: "FROZEN" }),
-        fetchStudentLeaderboards({
-          include: "groups",
-          exclude_group_status: "FROZEN"
-        }).catch(() => null),
-        fetchMyGroup().catch(() => ({ group: null })),
-        getMyJoinRequests().catch(() => [])
-      ]);
-
-      setGroups(Array.isArray(groupRows) ? groupRows : []);
-      setMyGroup(myGroupRes?.group ?? null);
-      setMyJoinRequests(Array.isArray(myRequestRows) ? myRequestRows : []);
+      const leaderboardRows = await fetchStudentLeaderboards({
+        include: "groups",
+        exclude_group_status: "FROZEN"
+      }).catch(() => null);
 
       if (leaderboardRows) {
         setGroupRankings(Array.isArray(leaderboardRows?.groups) ? leaderboardRows.groups : []);
@@ -182,20 +229,48 @@ export default function AllGroups() {
         setGroupRankings([]);
         setRankingWarning("Groups loaded, but ranking data is temporarily unavailable.");
       }
-    } catch (e) {
-      setErr(e?.response?.data?.error || e?.response?.data?.message || "Failed to load groups");
-      setGroups([]);
+    } catch (_error) {
       setGroupRankings([]);
-      setMyGroup(null);
-      setMyJoinRequests([]);
-    } finally {
-      setLoading(false);
+      setRankingWarning("Groups loaded, but ranking data is temporarily unavailable.");
     }
   }, []);
 
+  const loadMyRequests = useCallback(async () => {
+    const myRequestRows = await getMyJoinRequests().catch(() => []);
+    setMyJoinRequests(Array.isArray(myRequestRows) ? myRequestRows : []);
+  }, []);
+
   useEffect(() => {
-    load();
-  }, [load]);
+    void loadGroups();
+  }, [loadGroups]);
+
+  useEffect(() => {
+    if (!user?.userId) return;
+    void loadRankings();
+    void loadMyRequests();
+    dispatch(loadStudentMembership({ userId: user.userId }));
+  }, [dispatch, loadMyRequests, loadRankings, user?.userId]);
+  const refreshAll = useCallback(() => {
+    void loadGroups();
+    void loadRankings();
+    void loadMyRequests();
+    if (!user?.userId) return;
+    dispatch(loadStudentMembership({ force: true, userId: user.userId }));
+  }, [dispatch, loadGroups, loadMyRequests, loadRankings, user?.userId]);
+
+  const handleRealtimeRefresh = useDebouncedCallback(() => {
+    refreshAll();
+  }, 300);
+
+  useRealtimeEvents(
+    [
+      REALTIME_EVENTS.JOIN_REQUESTS,
+      REALTIME_EVENTS.MEMBERSHIPS,
+      REALTIME_EVENTS.POINTS,
+      REALTIME_EVENTS.ELIGIBILITY
+    ],
+    handleRealtimeRefresh
+  );
 
   const groupRankMap = useMemo(
     () => toGroupRankMap(groupRankings),
@@ -557,17 +632,20 @@ export default function AllGroups() {
 
       try {
         await applyJoinRequest(group.group_id);
-        await load();
+        if (user?.userId) {
+          dispatch(loadStudentMembership({ force: true, userId: user.userId }));
+        }
+        await Promise.all([loadGroups(), loadMyRequests()]);
       } catch (e) {
         setActionErr(e?.response?.data?.message || "Failed to send join request");
       } finally {
         setJoinBusyGroupId(null);
       }
     },
-    [load, resolveJoinAction]
+    [dispatch, loadGroups, loadMyRequests, resolveJoinAction, user?.userId]
   );
 
-  const resetFilters = useCallback(async () => {
+  const resetFilters = useCallback(() => {
     setGroupQuery("");
     setTierFilter("ALL");
     setStatusFilter("ALL");
@@ -578,8 +656,7 @@ export default function AllGroups() {
     setPointsMinFilter("");
     setAcceptingFilter("ALL");
     setSortState(createDefaultSortState());
-    await load();
-  }, [load]);
+  }, []);
 
   const filterProps = useMemo(
     () => ({
@@ -656,7 +733,7 @@ export default function AllGroups() {
     <div className="max-w-screen-2xl space-y-4 p-4 md:p-6">
       <AllGroupsHero
         loading={loading}
-        onRefresh={load}
+        onRefresh={refreshAll}
       />
 
       {err ? (

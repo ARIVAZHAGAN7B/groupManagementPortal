@@ -1,42 +1,6 @@
 const db = require("../../config/db");
 
-let ensurePromise = null;
-
-const ensureSchema = async () => {
-  if (!ensurePromise) {
-    ensurePromise = (async () => {
-      await db.query(`
-        CREATE TABLE IF NOT EXISTS audit_logs (
-          audit_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-          action VARCHAR(120) NOT NULL,
-          entity_type VARCHAR(120) NOT NULL,
-          entity_id VARCHAR(120) NULL,
-          actor_user_id VARCHAR(64) NULL,
-          actor_role VARCHAR(60) NULL,
-          reason_code VARCHAR(120) NULL,
-          details_json LONGTEXT NULL,
-          ip_address VARCHAR(128) NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          INDEX idx_audit_created_at (created_at),
-          INDEX idx_audit_action (action),
-          INDEX idx_audit_entity (entity_type, entity_id),
-          INDEX idx_audit_actor (actor_user_id, actor_role)
-        )
-      `);
-      await db.query(`
-        ALTER TABLE audit_logs
-        MODIFY COLUMN actor_user_id VARCHAR(64) NULL
-      `);
-    })().catch((error) => {
-      ensurePromise = null;
-      throw error;
-    });
-  }
-  return ensurePromise;
-};
-
 const insertAuditLog = async (payload, executor) => {
-  await ensureSchema();
   const exec = executor || db;
   const [result] = await exec.query(
     `INSERT INTO audit_logs
@@ -99,7 +63,6 @@ const buildWhere = (filters = {}) => {
 };
 
 const listAuditLogs = async (filters = {}, paging = {}) => {
-  await ensureSchema();
   const page = Math.max(1, Number(paging.page) || 1);
   const limit = Math.max(1, Math.min(Number(paging.limit) || 50, 200));
   const offset = (page - 1) * limit;
@@ -157,7 +120,6 @@ const listAuditLogs = async (filters = {}, paging = {}) => {
 };
 
 module.exports = {
-  ensureSchema,
   insertAuditLog,
   listAuditLogs
 };

@@ -1,4 +1,5 @@
 const repo = require("./audit.repository");
+const { broadcastAuditChanged } = require("../../realtime/events");
 
 const getIpAddress = (req) => {
   if (!req) return null;
@@ -46,6 +47,13 @@ const logAction = async ({
     reason_code: reasonCode ? String(reasonCode) : null,
     details_json: safeStringify(details),
     ip_address: getIpAddress(req)
+  });
+
+  broadcastAuditChanged({
+    action: "AUDIT_LOG_CREATED",
+    auditId,
+    entityType: String(entityType),
+    entityId: entityId === undefined || entityId === null ? null : String(entityId)
   });
 
   return { audit_id: auditId };

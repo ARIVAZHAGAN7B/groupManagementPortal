@@ -62,9 +62,6 @@ export default function StudentManagementFilters({
           ))}
         </FilterSelect>
 
-        <p className="hidden whitespace-nowrap text-xs font-medium text-slate-500 lg:block">
-          Showing {filteredCount} of {totalCount}
-        </p>
       </div>
     </section>
   );

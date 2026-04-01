@@ -1,35 +1,71 @@
-import { api } from "../lib/api";
+import {
+  api,
+  CLIENT_CACHE_TAGS,
+  CLIENT_CACHE_STORAGE,
+  CLIENT_CACHE_TTL,
+  cachedGet,
+  postWithInvalidation,
+  putWithInvalidation,
+  deleteWithInvalidation
+} from "../lib/api";
+
+const TEAM_INVALIDATION_TAGS = [
+  CLIENT_CACHE_TAGS.EVENTS,
+  CLIENT_CACHE_TAGS.TEAMS,
+  CLIENT_CACHE_TAGS.TEAM_MEMBERSHIPS,
+  CLIENT_CACHE_TAGS.TEAM_TARGETS
+];
 
 export async function fetchTeams(params = {}) {
-  const { data } = await api.get("/api/teams", { params });
+  const data = await cachedGet("/api/teams", { params }, {
+    tags: [CLIENT_CACHE_TAGS.TEAMS],
+    ttlMs: CLIENT_CACHE_TTL.MEDIUM
+  });
   return Array.isArray(data) ? data : [];
 }
 
+export async function fetchHubs(params = {}) {
+  return fetchTeams({ team_type: "HUB", ...params });
+}
+
 export async function fetchTeamsByEvent(eventId, params = {}) {
-  const { data } = await api.get(`/api/teams/event/${eventId}`, { params });
+  const data = await cachedGet(`/api/teams/event/${eventId}`, { params }, {
+    tags: [CLIENT_CACHE_TAGS.TEAMS],
+    ttlMs: CLIENT_CACHE_TTL.MEDIUM
+  });
   return Array.isArray(data) ? data : [];
 }
 
 export async function fetchEventGroups(params = {}) {
   const merged = { team_type: "EVENT", ...params };
-  const { data } = await api.get("/api/event-groups", { params: merged });
+  const data = await cachedGet("/api/event-groups", { params: merged }, {
+    tags: [CLIENT_CACHE_TAGS.TEAMS],
+    ttlMs: CLIENT_CACHE_TTL.MEDIUM
+  });
   return Array.isArray(data) ? data : [];
 }
 
 export async function fetchEventGroupsByEvent(eventId, params = {}) {
   const merged = { team_type: "EVENT", ...params };
-  const { data } = await api.get(`/api/event-groups/event/${eventId}`, { params: merged });
+  const data = await cachedGet(`/api/event-groups/event/${eventId}`, { params: merged }, {
+    tags: [CLIENT_CACHE_TAGS.TEAMS],
+    ttlMs: CLIENT_CACHE_TTL.MEDIUM
+  });
   return Array.isArray(data) ? data : [];
 }
 
 export async function fetchTeamById(id) {
-  const { data } = await api.get(`/api/teams/${id}`);
-  return data;
+  return cachedGet(`/api/teams/${id}`, {}, {
+    tags: [CLIENT_CACHE_TAGS.TEAMS],
+    ttlMs: CLIENT_CACHE_TTL.MEDIUM
+  });
 }
 
 export async function fetchEventGroupById(id) {
-  const { data } = await api.get(`/api/event-groups/${id}`);
-  return data;
+  return cachedGet(`/api/event-groups/${id}`, {}, {
+    tags: [CLIENT_CACHE_TAGS.TEAMS],
+    ttlMs: CLIENT_CACHE_TTL.MEDIUM
+  });
 }
 
 export async function fetchMyTeamMemberships(params = {}) {
@@ -39,7 +75,7 @@ export async function fetchMyTeamMemberships(params = {}) {
 
 export async function fetchAllTeamMemberships(params = {}) {
   const { data } = await api.get("/api/teams/memberships", { params });
-  return Array.isArray(data) ? data : [];
+  return data;
 }
 
 export async function fetchMyEventGroupMemberships(params = {}) {
@@ -49,28 +85,39 @@ export async function fetchMyEventGroupMemberships(params = {}) {
 }
 
 export async function fetchTeamMemberships(teamId, params = {}) {
-  const { data } = await api.get(`/api/teams/${teamId}/memberships`, { params });
+  const data = await cachedGet(`/api/teams/${teamId}/memberships`, { params }, {
+    storage: CLIENT_CACHE_STORAGE.MEMORY,
+    tags: [CLIENT_CACHE_TAGS.TEAM_MEMBERSHIPS],
+    ttlMs: CLIENT_CACHE_TTL.SHORT
+  });
   return Array.isArray(data) ? data : [];
 }
 
 export async function fetchEventGroupMemberships(teamId, params = {}) {
-  const { data } = await api.get(`/api/event-groups/${teamId}/memberships`, { params });
+  const data = await cachedGet(`/api/event-groups/${teamId}/memberships`, { params }, {
+    storage: CLIENT_CACHE_STORAGE.MEMORY,
+    tags: [CLIENT_CACHE_TAGS.TEAM_MEMBERSHIPS],
+    ttlMs: CLIENT_CACHE_TTL.SHORT
+  });
   return Array.isArray(data) ? data : [];
 }
 
 export async function joinTeam(teamId, payload = {}) {
-  const { data } = await api.post(`/api/teams/${teamId}/join`, payload);
-  return data;
+  return postWithInvalidation(`/api/teams/${teamId}/join`, payload, {
+    invalidateTags: TEAM_INVALIDATION_TAGS
+  });
 }
 
 export async function addTeamMember(teamId, payload) {
-  const { data } = await api.post(`/api/teams/${teamId}/memberships`, payload);
-  return data;
+  return postWithInvalidation(`/api/teams/${teamId}/memberships`, payload, {
+    invalidateTags: TEAM_INVALIDATION_TAGS
+  });
 }
 
 export async function createEventTeam(eventId, payload) {
-  const { data } = await api.post(`/api/event-groups/event/${eventId}`, payload);
-  return data; // { message, data: { team, captain_membership } }
+  return postWithInvalidation(`/api/event-groups/event/${eventId}`, payload, {
+    invalidateTags: TEAM_INVALIDATION_TAGS
+  });
 }
 
 export async function createEventGroup(eventId, payload) {
@@ -78,66 +125,103 @@ export async function createEventGroup(eventId, payload) {
 }
 
 export async function createTeam(payload) {
-  const { data } = await api.post("/api/teams", payload);
-  return data;
+  return postWithInvalidation("/api/teams", payload, {
+    invalidateTags: TEAM_INVALIDATION_TAGS
+  });
+}
+
+export async function createHub(payload) {
+  return createTeam({ ...payload, team_type: "HUB" });
 }
 
 export async function updateEventGroup(id, payload) {
-  const { data } = await api.put(`/api/event-groups/${id}`, payload);
-  return data;
+  return putWithInvalidation(`/api/event-groups/${id}`, payload, {
+    invalidateTags: TEAM_INVALIDATION_TAGS
+  });
 }
 
 export async function updateTeam(id, payload) {
-  const { data } = await api.put(`/api/teams/${id}`, payload);
-  return data;
+  return putWithInvalidation(`/api/teams/${id}`, payload, {
+    invalidateTags: TEAM_INVALIDATION_TAGS
+  });
+}
+
+export async function updateHub(id, payload) {
+  return updateTeam(id, { ...payload, team_type: "HUB" });
 }
 
 export async function updateTeamMembership(membershipId, payload) {
-  const { data } = await api.put(`/api/teams/memberships/${membershipId}`, payload);
-  return data;
+  return putWithInvalidation(`/api/teams/memberships/${membershipId}`, payload, {
+    invalidateTags: TEAM_INVALIDATION_TAGS
+  });
 }
 
 export async function activateTeam(id) {
-  const { data } = await api.put(`/api/teams/${id}/activate`);
-  return data;
+  return putWithInvalidation(`/api/teams/${id}/activate`, undefined, {
+    invalidateTags: TEAM_INVALIDATION_TAGS
+  });
+}
+
+export async function activateHub(id) {
+  return activateTeam(id);
 }
 
 export async function activateEventGroup(id) {
-  const { data } = await api.put(`/api/event-groups/${id}/activate`);
-  return data;
+  return putWithInvalidation(`/api/event-groups/${id}/activate`, undefined, {
+    invalidateTags: TEAM_INVALIDATION_TAGS
+  });
 }
 
 export async function freezeTeam(id) {
-  const { data } = await api.put(`/api/teams/${id}/freeze`);
-  return data;
+  return putWithInvalidation(`/api/teams/${id}/freeze`, undefined, {
+    invalidateTags: TEAM_INVALIDATION_TAGS
+  });
+}
+
+export async function freezeHub(id) {
+  return freezeTeam(id);
 }
 
 export async function freezeEventGroup(id) {
-  const { data } = await api.put(`/api/event-groups/${id}/freeze`);
-  return data;
+  return putWithInvalidation(`/api/event-groups/${id}/freeze`, undefined, {
+    invalidateTags: TEAM_INVALIDATION_TAGS
+  });
 }
 
 export async function archiveTeam(id) {
-  const { data } = await api.put(`/api/teams/${id}/archive`);
-  return data;
+  return putWithInvalidation(`/api/teams/${id}/archive`, undefined, {
+    invalidateTags: TEAM_INVALIDATION_TAGS
+  });
+}
+
+export async function archiveHub(id) {
+  return archiveTeam(id);
 }
 
 export async function archiveEventGroup(id) {
-  const { data } = await api.put(`/api/event-groups/${id}/archive`);
-  return data;
+  return putWithInvalidation(`/api/event-groups/${id}/archive`, undefined, {
+    invalidateTags: TEAM_INVALIDATION_TAGS
+  });
 }
 
 export async function deleteTeam(id) {
-  const { data } = await api.delete(`/api/teams/${id}`);
-  return data;
+  return deleteWithInvalidation(`/api/teams/${id}`, {}, {
+    invalidateTags: TEAM_INVALIDATION_TAGS
+  });
+}
+
+export async function deleteHub(id) {
+  return deleteTeam(id);
 }
 
 export async function leaveTeamMembership(membershipId, payload = {}) {
-  const { data } = await api.delete(`/api/teams/memberships/${membershipId}`, { data: payload });
-  return data;
+  return deleteWithInvalidation(`/api/teams/memberships/${membershipId}`, { data: payload }, {
+    invalidateTags: TEAM_INVALIDATION_TAGS
+  });
 }
 
 export async function deleteEventGroup(id) {
-  const { data } = await api.delete(`/api/event-groups/${id}`);
-  return data;
+  return deleteWithInvalidation(`/api/event-groups/${id}`, {}, {
+    invalidateTags: TEAM_INVALIDATION_TAGS
+  });
 }

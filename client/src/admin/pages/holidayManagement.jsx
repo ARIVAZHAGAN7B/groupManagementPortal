@@ -53,21 +53,7 @@ const formatDate = (value) => {
   });
 };
 
-function StatPill({ accentClass, detail, label, value }) {
-  return (
-    <article className="rounded-lg border border-white/80 bg-white/90 px-3 py-2.5 shadow-sm">
-      <div className="flex items-center gap-2">
-        <span className={`h-2 w-2 shrink-0 rounded-full ${accentClass}`} />
-        <p className="text-sm font-semibold text-slate-700">
-          {label}: <span className="text-slate-900">{value}</span>
-        </p>
-      </div>
-      <p className="mt-1 pl-4 text-[11px] font-medium text-slate-500">{detail}</p>
-    </article>
-  );
-}
-
-function HolidayManagementHero({ loading, onRefresh, stats }) {
+function HolidayManagementHero({ loading, onRefresh }) {
   return (
     <section className="relative overflow-hidden rounded-2xl border border-[#1754cf]/10 bg-[#1754cf]/5 p-4 md:p-5">
       <div className="relative z-10 flex flex-col gap-3">
@@ -97,32 +83,6 @@ function HolidayManagementHero({ loading, onRefresh, stats }) {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-          <StatPill
-            accentClass="bg-[#1754cf]"
-            detail="All configured holidays"
-            label="Total"
-            value={stats.total}
-          />
-          <StatPill
-            accentClass="bg-emerald-500"
-            detail="Today and later"
-            label="Upcoming"
-            value={stats.upcoming}
-          />
-          <StatPill
-            accentClass="bg-amber-500"
-            detail="Already passed"
-            label="Past"
-            value={stats.past}
-          />
-          <StatPill
-            accentClass="bg-sky-500"
-            detail="In the current year"
-            label="This Year"
-            value={stats.currentYear}
-          />
-        </div>
       </div>
 
       <div className="absolute -bottom-10 -right-10 h-48 w-48 rounded-full bg-[#1754cf]/10 blur-3xl" />

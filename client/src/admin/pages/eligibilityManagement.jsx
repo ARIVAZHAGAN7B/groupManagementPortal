@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useRealtimeEvents } from "../../hooks/useRealtimeEvents";
+import { REALTIME_EVENTS, matchesRealtimeScope } from "../../lib/realtime";
 import {
   fetchAdminGroupEligibility,
   fetchAdminIndividualEligibility,
@@ -11,6 +13,9 @@ import EligibilityFilters from "../components/eligibility/EligibilityFilters";
 import EligibilityHero from "../components/eligibility/EligibilityHero";
 import EligibilityMobileCards from "../components/eligibility/EligibilityMobileCards";
 import EligibilityOverrideModal from "../components/eligibility/EligibilityOverrideModal";
+import EligibilityReasonModal from "../components/eligibility/EligibilityReasonModal";
+import AdminPaginationBar from "../components/ui/AdminPaginationBar";
+import useClientPagination from "../../hooks/useClientPagination";
 import {
   getDefaultReasonCode,
   getSearchText,
@@ -19,6 +24,8 @@ import {
   isNotEligibleValue,
   isOverrideReason
 } from "../components/eligibility/eligibility.constants";
+
+const ALL_YEAR_FILTER = "ALL";
 
 const getNextSelectedPhaseId = (rows, previousPhaseId) => {
   if (!Array.isArray(rows) || rows.length === 0) return "";
@@ -44,6 +51,7 @@ export default function EligibilityManagement() {
   const [loadingRows, setLoadingRows] = useState(false);
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
+  const [yearFilter, setYearFilter] = useState(ALL_YEAR_FILTER);
   const [overrideBusyKey, setOverrideBusyKey] = useState("");
   const [overrideState, setOverrideState] = useState({
     open: false,
@@ -52,6 +60,11 @@ export default function EligibilityManagement() {
     isEligible: true,
     reasonCode: "",
     error: ""
+  });
+  const [reasonState, setReasonState] = useState({
+    open: false,
+    type: "individual",
+    row: null
   });
 
   const selectedPhase = useMemo(
@@ -134,6 +147,14 @@ export default function EligibilityManagement() {
     loadEligibility(selectedPhaseId);
   }, [selectedPhaseId]);
 
+  useRealtimeEvents(
+    [REALTIME_EVENTS.ELIGIBILITY, REALTIME_EVENTS.POINTS, REALTIME_EVENTS.PHASE],
+    (payload) => {
+      if (!matchesRealtimeScope(payload, { phaseId: selectedPhaseId })) return;
+      void refreshAll();
+    }
+  );
+
   useEffect(() => {
     setOverrideState((prev) => ({
       ...prev,
@@ -141,16 +162,62 @@ export default function EligibilityManagement() {
       row: null,
       error: ""
     }));
+    setReasonState((prev) => ({
+      ...prev,
+      open: false,
+      row: null
+    }));
   }, [selectedPhaseId]);
 
   const sourceRows = viewMode === "individual" ? individualRows : groupRows;
 
+  const yearOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          individualRows
+            .map((row) => String(row?.year || "").trim())
+            .filter(Boolean)
+        )
+      ).sort((a, b) => Number(a) - Number(b)),
+    [individualRows]
+  );
+
+  useEffect(() => {
+    if (yearFilter === ALL_YEAR_FILTER) return;
+    if (yearOptions.includes(yearFilter)) return;
+    setYearFilter(ALL_YEAR_FILTER);
+  }, [yearFilter, yearOptions]);
+
   const filteredRows = useMemo(() => {
     const query = String(q || "").trim().toLowerCase();
-    if (!query) return sourceRows;
 
-    return sourceRows.filter((row) => getSearchText(viewMode, row).includes(query));
-  }, [q, sourceRows, viewMode]);
+    return sourceRows.filter((row) => {
+      if (viewMode === "individual") {
+        const rowYear = String(row?.year || "").trim();
+        if (yearFilter !== ALL_YEAR_FILTER && rowYear !== yearFilter) {
+          return false;
+        }
+      }
+
+      if (!query) return true;
+
+      return getSearchText(viewMode, row).includes(query);
+    });
+  }, [q, sourceRows, viewMode, yearFilter]);
+
+  const {
+    limit,
+    page,
+    pageCount,
+    pagedItems: pagedRows,
+    setLimit,
+    setPage
+  } = useClientPagination(filteredRows);
+
+  useEffect(() => {
+    setPage(1);
+  }, [q, selectedPhaseId, setPage, viewMode, yearFilter]);
 
   const stats = useMemo(() => {
     const rows = Array.isArray(sourceRows) ? sourceRows : [];
@@ -184,6 +251,22 @@ export default function EligibilityManagement() {
       open: false,
       row: null,
       error: ""
+    }));
+  };
+
+  const openReason = (type, row) => {
+    setReasonState({
+      open: true,
+      type,
+      row
+    });
+  };
+
+  const closeReason = () => {
+    setReasonState((prev) => ({
+      ...prev,
+      open: false,
+      row: null
     }));
   };
 
@@ -267,15 +350,16 @@ export default function EligibilityManagement() {
         />
 
         <EligibilityFilters
-          filteredCount={filteredRows.length}
           phases={phases}
           q={q}
           selectedPhaseId={selectedPhaseId}
           setQ={setQ}
           setSelectedPhaseId={setSelectedPhaseId}
           setViewMode={setViewMode}
-          totalCount={stats.total}
+          setYearFilter={setYearFilter}
           viewMode={viewMode}
+          yearFilter={yearFilter}
+          yearOptions={yearOptions}
         />
 
         {error ? (
@@ -298,26 +382,39 @@ export default function EligibilityManagement() {
           </div>
         ) : (
           <>
-            <EligibilityMobileCards
-              overrideBusyKey={overrideBusyKey}
-              onOverride={openOverride}
-              rows={filteredRows}
-              selectedPhaseId={selectedPhaseId}
-              type={viewMode}
-            />
+              <EligibilityMobileCards
+                overrideBusyKey={overrideBusyKey}
+                onOverride={openOverride}
+                onViewReason={openReason}
+                rows={pagedRows}
+                selectedPhaseId={selectedPhaseId}
+                type={viewMode}
+              />
 
             <div className="hidden lg:block">
               <EligibilityDesktopTable
                 overrideBusyKey={overrideBusyKey}
                 onOverride={openOverride}
-                rows={filteredRows}
+                onViewReason={openReason}
+                rows={pagedRows}
                 selectedPhaseId={selectedPhaseId}
-                totalCount={stats.total}
                 type={viewMode}
               />
             </div>
           </>
         )}
+
+        <AdminPaginationBar
+          itemLabel={viewMode === "individual" ? "students" : "groups"}
+          limit={limit}
+          loading={loadingPhases || loadingRows}
+          onLimitChange={setLimit}
+          onPageChange={setPage}
+          page={page}
+          pageCount={pageCount}
+          shownCount={pagedRows.length}
+          totalCount={filteredRows.length}
+        />
       </div>
 
       <EligibilityOverrideModal
@@ -327,6 +424,12 @@ export default function EligibilityManagement() {
         onSubmit={handleOverrideSubmit}
         open={overrideState.open}
         override={overrideState}
+      />
+
+      <EligibilityReasonModal
+        onClose={closeReason}
+        open={reasonState.open}
+        reasonView={reasonState}
       />
     </>
   );

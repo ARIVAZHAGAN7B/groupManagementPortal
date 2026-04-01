@@ -1,6 +1,7 @@
 const db = require("../../config/db");
 const repo = require("./eventJoinRequest.repository");
 const teamRepo = require("../team/team.repository");
+const { expandDepartmentCode } = require("../../utils/department.service");
 
 const ADMIN_ROLES = ["ADMIN", "SYSTEM_ADMIN"];
 const EVENT_MEMBERSHIP_ROLES = ["CAPTAIN", "VICE_CAPTAIN", "MEMBER"];
@@ -164,7 +165,13 @@ const applyEventJoinRequest = async (studentId, teamId) => {
   const existingPending = await repo.findPendingRequest(studentId, teamId);
   if (existingPending) throw new Error("Event join request already exists");
 
-  return repo.createRequest(studentId, teamId);
+  const created = await repo.createRequest(studentId, teamId);
+  return {
+    ...created,
+    student_id: studentId,
+    team_id: Number(teamId),
+    status: "PENDING"
+  };
 };
 
 const getStudentIdByUserId = async (userId) => getStudentIdByUserIdFrom(db, userId);
@@ -254,6 +261,10 @@ const decideEventJoinRequest = async (requestId, status, reason, actorUser, opti
 
     await conn.commit();
     return {
+      event_request_id: Number(requestId),
+      student_id: request.student_id,
+      team_id: request.team_id,
+      status: normalizedStatus,
       message: `Request ${normalizedStatus} successfully`,
       approved_role: normalizedStatus === "APPROVED" ? membershipRole : null
     };
@@ -275,7 +286,11 @@ const getPendingRequestsByTeam = async (teamId, actorUser) => {
     await ensureTeamCaptainAccessByUserId(db, actorUser.userId, teamId);
   }
 
-  return repo.findPendingByTeam(teamId);
+  const rows = await repo.findPendingByTeam(teamId);
+  return (rows || []).map((row) => ({
+    ...row,
+    department: expandDepartmentCode(row.department)
+  }));
 };
 
 const getMyEventJoinRequests = async (studentId) => repo.findByStudent(studentId);

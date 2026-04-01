@@ -3,6 +3,8 @@ import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import { useNavigate, useParams } from "react-router-dom";
+import { useRealtimeEvents } from "../../../hooks/useRealtimeEvents";
+import { REALTIME_EVENTS, matchesRealtimeScope } from "../../../lib/realtime";
 import { fetchEventById } from "../../../service/events.api";
 import {
   fetchEventGroupById,
@@ -78,6 +80,14 @@ export default function StudentEventGroupDetailsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useRealtimeEvents(
+    [REALTIME_EVENTS.EVENT_JOIN_REQUESTS, REALTIME_EVENTS.TEAM_MEMBERSHIPS],
+    (payload) => {
+      if (!matchesRealtimeScope(payload, { teamId: groupId })) return;
+      void load();
+    }
+  );
 
   const myActiveMembershipInEvent = useMemo(
     () =>

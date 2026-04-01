@@ -71,8 +71,7 @@ export default function GroupManagementDesktopTable({
   onDelete,
   onEdit,
   onFreeze,
-  onView,
-  totalCount
+  onView
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -176,13 +175,6 @@ export default function GroupManagementDesktopTable({
             )}
           </tbody>
         </table>
-      </div>
-
-      <div className="flex items-center justify-between bg-slate-50 px-6 py-4">
-        <p className="text-xs font-medium text-slate-500">
-          Showing {groups.length} of {totalCount} groups
-        </p>
-        <p className="text-xs font-medium text-slate-500">All matching groups are listed</p>
       </div>
     </section>
   );

@@ -1,8 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
+import { useDebouncedValue } from "../../hooks/useDebouncedValue";
+import { useRealtimeEvents } from "../../hooks/useRealtimeEvents";
+import { REALTIME_EVENTS } from "../../lib/realtime";
+import { useGetAdminNotificationsQuery } from "../../store/api/sharedApi";
+import { useAuth } from "../../utils/AuthContext";
 import {
   decideLeadershipRoleRequest,
-  fetchAdminLeadershipNotifications,
   getAllPendingLeadershipRequests
 } from "../../service/leadershipRequests.api";
 import GroupManagementActionModal from "../components/groups/GroupManagementActionModal";
@@ -11,17 +16,22 @@ import LeadershipManagementDesktopTable from "../components/leadership/Leadershi
 import LeadershipManagementFilters from "../components/leadership/LeadershipManagementFilters";
 import LeadershipManagementHero from "../components/leadership/LeadershipManagementHero";
 import LeadershipManagementMobileCards from "../components/leadership/LeadershipManagementMobileCards";
+import AdminPaginationBar from "../components/ui/AdminPaginationBar";
+import useClientPagination from "../../hooks/useClientPagination";
 import { getRequestSearchText } from "../components/leadership/leadership.constants";
 
 export default function LeadershipRequestManagement() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [rows, setRows] = useState([]);
-  const [notifications, setNotifications] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
   const [groupFilter, setGroupFilter] = useState("");
   const [requestedRoleFilter, setRequestedRoleFilter] = useState("");
+  const debouncedQ = useDebouncedValue(q, 300);
+  const debouncedGroupFilter = useDebouncedValue(groupFilter, 200);
+  const debouncedRequestedRoleFilter = useDebouncedValue(requestedRoleFilter, 200);
   const [actionBusy, setActionBusy] = useState(false);
   const [decisionBusyId, setDecisionBusyId] = useState(null);
   const [modalState, setModalState] = useState({
@@ -34,31 +44,53 @@ export default function LeadershipRequestManagement() {
     cancelLabel: "Cancel",
     onConfirm: null
   });
+  const notificationsQuery = useGetAdminNotificationsQuery(
+    { userId: user?.userId, userRole: user?.role },
+    { skip: !user?.userId }
+  );
+  const notifications = notificationsQuery.data?.leadership || null;
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError("");
 
     try {
-      const [pendingRows, notificationSummary] = await Promise.all([
-        getAllPendingLeadershipRequests(),
-        fetchAdminLeadershipNotifications().catch(() => null)
-      ]);
-
+      const pendingRows = await getAllPendingLeadershipRequests({
+        ...(String(debouncedQ || "").trim() ? { q: String(debouncedQ).trim() } : {}),
+        ...(String(debouncedGroupFilter || "").trim()
+          ? { group_id: String(debouncedGroupFilter).trim() }
+          : {}),
+        ...(String(debouncedRequestedRoleFilter || "").trim()
+          ? { requested_role: String(debouncedRequestedRoleFilter).trim() }
+          : {})
+      });
       setRows(Array.isArray(pendingRows) ? pendingRows : []);
-      setNotifications(notificationSummary || null);
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to load leadership requests");
       setRows([]);
-      setNotifications(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, [debouncedGroupFilter, debouncedQ, debouncedRequestedRoleFilter]);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
+  const handleRealtimeRefresh = useDebouncedCallback(() => {
+    void load();
+    if (!user?.userId) return;
+
+    void notificationsQuery.refetch();
+  }, 300);
+
+  useRealtimeEvents(
+    [
+      REALTIME_EVENTS.LEADERSHIP_REQUESTS,
+      REALTIME_EVENTS.ADMIN_NOTIFICATIONS,
+      REALTIME_EVENTS.MEMBERSHIPS
+    ],
+    handleRealtimeRefresh
+  );
 
   const distinctGroups = useMemo(() => {
     const map = new Map();
@@ -103,6 +135,19 @@ export default function LeadershipRequestManagement() {
       return getRequestSearchText(row).includes(search);
     });
   }, [groupFilter, q, requestedRoleFilter, rows]);
+
+  const {
+    limit,
+    page,
+    pageCount,
+    pagedItems: pagedRows,
+    setLimit,
+    setPage
+  } = useClientPagination(filtered);
+
+  useEffect(() => {
+    setPage(1);
+  }, [groupFilter, q, requestedRoleFilter, setPage]);
 
   const stats = useMemo(
     () => ({
@@ -154,6 +199,7 @@ export default function LeadershipRequestManagement() {
           : "Rejected leadership role request by admin";
 
       await decideLeadershipRoleRequest(requestId, status, reason);
+      if (user?.userId) void notificationsQuery.refetch();
       await load();
 
       openAlertModal({
@@ -256,7 +302,7 @@ export default function LeadershipRequestManagement() {
               onApprove={(row) => requestDecision(row, "APPROVED")}
               onOpenGroup={(groupId) => navigate(`/groups/${groupId}`)}
               onReject={(row) => requestDecision(row, "REJECTED")}
-              rows={filtered}
+              rows={pagedRows}
             />
 
             <div className="hidden lg:block">
@@ -265,12 +311,23 @@ export default function LeadershipRequestManagement() {
                 onApprove={(row) => requestDecision(row, "APPROVED")}
                 onOpenGroup={(groupId) => navigate(`/groups/${groupId}`)}
                 onReject={(row) => requestDecision(row, "REJECTED")}
-                rows={filtered}
-                totalCount={stats.total}
+                rows={pagedRows}
               />
             </div>
           </>
         )}
+
+        <AdminPaginationBar
+          itemLabel="requests"
+          limit={limit}
+          loading={loading}
+          onLimitChange={setLimit}
+          onPageChange={setPage}
+          page={page}
+          pageCount={pageCount}
+          shownCount={pagedRows.length}
+          totalCount={filtered.length}
+        />
       </div>
 
       <GroupManagementActionModal

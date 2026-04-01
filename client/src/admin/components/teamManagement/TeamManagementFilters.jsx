@@ -1,7 +1,6 @@
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import {
-  TEAM_FILTER_TYPES,
   TEAM_STATUSES,
   inputClass,
   selectClass
@@ -27,13 +26,9 @@ export default function TeamManagementFilters({
   scopeConfig,
   setQuery,
   setStatusFilter,
-  setTypeFilter,
   statusFilter,
-  totalCount,
-  typeFilter
+  totalCount
 }) {
-  const isEventGroupScope = scopeConfig.scope === "EVENT_GROUP";
-
   return (
     <section className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:flex-row lg:items-center">
       <div className="relative flex-1">
@@ -50,16 +45,6 @@ export default function TeamManagementFilters({
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        {!isEventGroupScope ? (
-          <FilterSelect value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-            {TEAM_FILTER_TYPES.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </FilterSelect>
-        ) : null}
-
         <FilterSelect value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="ALL">All Statuses</option>
           {TEAM_STATUSES.map((status) => (
@@ -68,10 +53,6 @@ export default function TeamManagementFilters({
             </option>
           ))}
         </FilterSelect>
-
-        <div className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">
-          Showing {filteredCount} of {totalCount}
-        </div>
       </div>
     </section>
   );

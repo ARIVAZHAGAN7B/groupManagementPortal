@@ -118,7 +118,13 @@ exports.applyJoinRequest = async (studentId, groupId) => {
   const existing = await repo.findPendingRequest(studentId, groupId);
   if (existing) throw new Error("Join request already exists");
 
-  return repo.createJoinRequest(studentId, groupId);
+  const created = await repo.createJoinRequest(studentId, groupId);
+  return {
+    ...created,
+    student_id: studentId,
+    group_id: Number(groupId),
+    status: "PENDING"
+  };
 };
 
 exports.getStudentIdByUserId = async (userId) => {
@@ -241,6 +247,10 @@ exports.decideJoinRequest = async (requestId, status, reason, actorUser, options
 
     await conn.commit();
     return {
+      request_id: Number(requestId),
+      student_id: request.student_id,
+      group_id: request.group_id,
+      status,
       message: `Request ${status} successfully`,
       approved_role: status === "APPROVED" ? approvedRole || "MEMBER" : null,
       all_leadership_roles_empty_before_approval:

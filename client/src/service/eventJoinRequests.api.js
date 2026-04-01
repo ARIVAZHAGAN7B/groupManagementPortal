@@ -1,10 +1,20 @@
-import { api } from "../lib/api";
+import {
+  api,
+  CLIENT_CACHE_TAGS,
+  postWithInvalidation,
+  putWithInvalidation
+} from "../lib/api";
+
+const EVENT_JOIN_INVALIDATION_TAGS = [
+  CLIENT_CACHE_TAGS.TEAMS,
+  CLIENT_CACHE_TAGS.TEAM_MEMBERSHIPS,
+  CLIENT_CACHE_TAGS.EVENTS
+];
 
 export async function applyEventJoinRequest(teamId) {
-  const { data } = await api.post("/api/event-group-join-requests/apply", {
+  return postWithInvalidation("/api/event-group-join-requests/apply", {
     team_id: teamId
   });
-  return data;
 }
 
 export async function getMyEventJoinRequests() {
@@ -32,9 +42,11 @@ export async function decideEventJoinRequest(
     payload.approved_role = approved_role;
   }
 
-  const { data } = await api.put(
+  return putWithInvalidation(
     `/api/event-group-join-requests/${requestId}/decision`,
-    payload
+    payload,
+    {
+      invalidateTags: EVENT_JOIN_INVALIDATION_TAGS
+    }
   );
-  return data;
 }

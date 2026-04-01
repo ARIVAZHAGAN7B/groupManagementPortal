@@ -5,26 +5,6 @@ export const selectClass = `${inputClass} appearance-none pr-10`;
 
 export const TEAM_STATUSES = ["ACTIVE", "INACTIVE", "FROZEN", "ARCHIVED"];
 
-export const TEAM_FORM_TYPES = [
-  {
-    value: "TEAM",
-    label: "Team",
-    description: "Use for standard working teams and execution units."
-  },
-  {
-    value: "HUB",
-    label: "Hub",
-    description: "Use for broader coordination groups or multi-team domains."
-  }
-];
-
-export const TEAM_FILTER_TYPES = [
-  { value: "ALL", label: "All Types" },
-  { value: "TEAM", label: "Teams" },
-  { value: "HUB", label: "Hubs" },
-  { value: "SECTION", label: "Legacy Sections" }
-];
-
 export const STATUS_STYLES = {
   ACTIVE: "border-emerald-200 bg-emerald-50 text-emerald-700",
   FROZEN: "border-sky-200 bg-sky-50 text-sky-700",
@@ -44,13 +24,14 @@ export const getScopeConfig = (scope = "TEAM") => {
 
   if (normalized === "EVENT_GROUP") {
     return {
-      accent: "text-orange-600",
+      accent: "text-[#1754cf]",
       allowCreate: false,
       createButtonLabel: "Edit Existing Group",
       emptyStateLabel: "No event groups found",
-      heroBackground: "border-orange-200/70 bg-gradient-to-br from-orange-50 via-white to-amber-50",
-      heroGlow: "bg-orange-300/20",
+      heroBackground: "border-[#1754cf]/10 bg-[#1754cf]/5",
+      heroGlow: "bg-[#1754cf]/10",
       scope: "EVENT_GROUP",
+      teamType: "EVENT",
       scopeLabel: "Event Group",
       scopeLabelPlural: "Event Groups",
       searchPlaceholder: "Search by group code, event, status, or notes",
@@ -58,17 +39,35 @@ export const getScopeConfig = (scope = "TEAM") => {
     };
   }
 
+  if (normalized === "HUB") {
+    return {
+      accent: "text-[#1754cf]",
+      allowCreate: true,
+      createButtonLabel: "Create Hub",
+      emptyStateLabel: "No hubs found",
+      heroBackground: "border-[#1754cf]/10 bg-[#1754cf]/5",
+      heroGlow: "bg-[#1754cf]/10",
+      scope: "HUB",
+      teamType: "HUB",
+      scopeLabel: "Hub",
+      scopeLabelPlural: "Hubs",
+      searchPlaceholder: "Search by hub code, name, status, or notes",
+      workspaceLabel: "Hub Workspace"
+    };
+  }
+
   return {
-    accent: "text-[#0f6cbd]",
+    accent: "text-[#1754cf]",
     allowCreate: true,
     createButtonLabel: "Create Team",
     emptyStateLabel: "No teams found",
-    heroBackground: "border-[#0f6cbd]/15 bg-gradient-to-br from-[#0f6cbd]/8 via-white to-cyan-50",
-    heroGlow: "bg-[#0f6cbd]/15",
+    heroBackground: "border-[#1754cf]/10 bg-[#1754cf]/5",
+    heroGlow: "bg-[#1754cf]/10",
     scope: "TEAM",
+    teamType: "TEAM",
     scopeLabel: "Team",
     scopeLabelPlural: "Teams",
-    searchPlaceholder: "Search by code, name, type, status, or notes",
+    searchPlaceholder: "Search by team code, name, status, or notes",
     workspaceLabel: "Team Workspace"
   };
 };
@@ -126,29 +125,19 @@ export const filterTeamRows = (rows, { query = "", statusFilter = "ALL", typeFil
 export const buildStatCards = (rows, scope = "TEAM") => {
   const all = Array.isArray(rows) ? rows : [];
   const total = all.length;
-
-  if (String(scope || "TEAM").toUpperCase() === "EVENT_GROUP") {
-    const active = all.filter((row) => String(row?.status || "").toUpperCase() === "ACTIVE").length;
-    const frozen = all.filter((row) => String(row?.status || "").toUpperCase() === "FROZEN").length;
-    const archived = all.filter((row) => String(row?.status || "").toUpperCase() === "ARCHIVED").length;
-
-    return [
-      { accentClass: "bg-orange-500", label: "Total", value: total },
-      { accentClass: "bg-emerald-500", label: "Active", value: active },
-      { accentClass: "bg-sky-500", label: "Frozen", value: frozen },
-      { accentClass: "bg-amber-500", label: "Archived", value: archived }
-    ];
-  }
-
   const active = all.filter((row) => String(row?.status || "").toUpperCase() === "ACTIVE").length;
-  const hubs = all.filter((row) => String(row?.team_type || "").toUpperCase() === "HUB").length;
-  const sections = all.filter((row) => String(row?.team_type || "").toUpperCase() === "SECTION").length;
+  const frozen = all.filter((row) => String(row?.status || "").toUpperCase() === "FROZEN").length;
+  const archived = all.filter((row) => String(row?.status || "").toUpperCase() === "ARCHIVED").length;
+  const normalizedScope = String(scope || "TEAM").toUpperCase();
+
+  const primaryAccentClass =
+    normalizedScope ? "bg-[#1754cf]" : "bg-[#1754cf]";
 
   return [
-    { accentClass: "bg-[#0f6cbd]", label: "Total", value: total },
+    { accentClass: primaryAccentClass, label: "Total", value: total },
     { accentClass: "bg-emerald-500", label: "Active", value: active },
-    { accentClass: "bg-fuchsia-500", label: "Hubs", value: hubs },
-    { accentClass: "bg-amber-500", label: "Legacy Sections", value: sections }
+    { accentClass: "bg-sky-500", label: "Frozen", value: frozen },
+    { accentClass: "bg-amber-500", label: "Archived", value: archived }
   ];
 };
 

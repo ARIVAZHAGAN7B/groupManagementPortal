@@ -1,32 +1,45 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import TeamManagementDesktopTable from "../components/teamManagement/TeamManagementDesktopTable";
 import TeamManagementFilters from "../components/teamManagement/TeamManagementFilters";
 import TeamManagementFormCard from "../components/teamManagement/TeamManagementFormCard";
+import TeamManagementFormModal from "../components/teamManagement/TeamManagementFormModal";
 import TeamManagementHero from "../components/teamManagement/TeamManagementHero";
+import TeamManagementMembersModal from "../components/teamManagement/TeamManagementMembersModal";
 import TeamManagementMobileCards from "../components/teamManagement/TeamManagementMobileCards";
+import AdminPaginationBar from "../components/ui/AdminPaginationBar";
+import useClientPagination from "../../hooks/useClientPagination";
 import {
   buildStatCards,
   filterTeamRows,
   getScopeConfig
 } from "../components/teamManagement/teamManagement.constants";
 import {
+  activateHub,
   activateEventGroup,
   activateTeam,
+  archiveHub,
   archiveEventGroup,
   archiveTeam,
+  createHub,
   createTeam,
+  deleteHub,
   deleteEventGroup,
   deleteTeam,
+  fetchEventGroupMemberships,
   fetchEventGroups,
+  fetchHubs,
+  fetchTeamMemberships,
   fetchTeams,
+  freezeHub,
   freezeEventGroup,
   freezeTeam,
+  updateHub,
   updateEventGroup,
   updateTeam
 } from "../../service/teams.api";
 
-type ManagementScope = "TEAM" | "EVENT_GROUP";
+type ManagementScope = "TEAM" | "HUB" | "EVENT_GROUP";
 
 type TeamManagementProps = {
   scope?: ManagementScope;
@@ -35,7 +48,7 @@ type TeamManagementProps = {
 const buildInitialForm = (scope: ManagementScope) => ({
   team_code: "",
   team_name: "",
-  team_type: scope === "EVENT_GROUP" ? "EVENT" : "TEAM",
+  team_type: scope === "EVENT_GROUP" ? "EVENT" : scope === "HUB" ? "HUB" : "TEAM",
   status: "ACTIVE",
   description: ""
 });
@@ -43,7 +56,6 @@ const buildInitialForm = (scope: ManagementScope) => ({
 export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) {
   const scopeConfig = getScopeConfig(scope);
   const isEventGroupScope = scopeConfig.scope === "EVENT_GROUP";
-  const formSectionRef = useRef<HTMLDivElement | null>(null);
 
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,10 +63,15 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
   const [successMessage, setSuccessMessage] = useState("");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
-  const [typeFilter, setTypeFilter] = useState("ALL");
   const [saving, setSaving] = useState(false);
   const [actionBusyId, setActionBusyId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [formModalOpen, setFormModalOpen] = useState(false);
+  const [viewTeam, setViewTeam] = useState<any | null>(null);
+  const [viewMembers, setViewMembers] = useState<any[]>([]);
+  const [viewMembersLoading, setViewMembersLoading] = useState(false);
+  const [viewMembersError, setViewMembersError] = useState("");
+  const [viewBusyTeamId, setViewBusyTeamId] = useState<number | null>(null);
   const [form, setForm] = useState(buildInitialForm(scope));
 
   const resetForm = () => {
@@ -64,7 +81,12 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
 
   useEffect(() => {
     resetForm();
-    setTypeFilter("ALL");
+    setFormModalOpen(false);
+    setViewTeam(null);
+    setViewMembers([]);
+    setViewMembersLoading(false);
+    setViewMembersError("");
+    setViewBusyTeamId(null);
   }, [scope]);
 
   const loadRows = async () => {
@@ -72,9 +94,12 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
     setError("");
 
     try {
-      const data = isEventGroupScope
-        ? await fetchEventGroups()
-        : await fetchTeams({ exclude_team_type: "EVENT" });
+      const data =
+        scopeConfig.scope === "EVENT_GROUP"
+          ? await fetchEventGroups()
+          : scopeConfig.scope === "HUB"
+            ? await fetchHubs()
+            : await fetchTeams({ team_type: scopeConfig.teamType });
       setRows(Array.isArray(data) ? data : []);
     } catch (err: any) {
       setError(
@@ -89,7 +114,7 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
 
   useEffect(() => {
     loadRows();
-  }, [isEventGroupScope]);
+  }, [scopeConfig.scope, scopeConfig.teamType]);
 
   const editingRow = useMemo(
     () => rows.find((row) => Number(row.team_id) === editingId) || null,
@@ -97,9 +122,22 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
   );
 
   const filteredRows = useMemo(
-    () => filterTeamRows(rows, { query, statusFilter, typeFilter }),
-    [rows, query, statusFilter, typeFilter]
+    () => filterTeamRows(rows, { query, statusFilter }),
+    [rows, query, statusFilter]
   );
+
+  const {
+    limit,
+    page,
+    pageCount,
+    pagedItems: pagedRows,
+    setLimit,
+    setPage
+  } = useClientPagination(filteredRows);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, scope, setPage, statusFilter]);
 
   const statCards = useMemo(() => buildStatCards(rows, scope), [rows, scope]);
 
@@ -107,15 +145,23 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const scrollToForm = () => {
-    formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const closeFormModal = ({ preserveMessage = true } = {}) => {
+    if (saving) return;
+
+    resetForm();
+    setFormModalOpen(false);
+
+    if (!preserveMessage) {
+      setSuccessMessage("");
+      setError("");
+    }
   };
 
   const handleStartCreate = () => {
     resetForm();
     setError("");
     setSuccessMessage("");
-    scrollToForm();
+    setFormModalOpen(true);
   };
 
   const handleEdit = (row: any) => {
@@ -123,13 +169,13 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
     setForm({
       team_code: row.team_code || "",
       team_name: row.team_name || "",
-      team_type: isEventGroupScope ? "EVENT" : row.team_type || "TEAM",
+      team_type: scopeConfig.teamType,
       status: row.status || "ACTIVE",
       description: row.description || ""
     });
     setError("");
     setSuccessMessage("");
-    scrollToForm();
+    setFormModalOpen(true);
   };
 
   const handleReset = () => {
@@ -139,6 +185,40 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
     }
 
     resetForm();
+  };
+
+  const closeViewMembers = () => {
+    setViewTeam(null);
+    setViewMembers([]);
+    setViewMembersLoading(false);
+    setViewMembersError("");
+    setViewBusyTeamId(null);
+  };
+
+  const handleViewMembers = async (row: any) => {
+    if (!row?.team_id) return;
+
+    setViewTeam(row);
+    setViewMembers([]);
+    setViewMembersError("");
+    setViewMembersLoading(true);
+    setViewBusyTeamId(Number(row.team_id));
+
+    try {
+      const memberships = isEventGroupScope
+        ? await fetchEventGroupMemberships(row.team_id, { status: "ACTIVE" })
+        : await fetchTeamMemberships(row.team_id, { status: "ACTIVE" });
+      setViewMembers(Array.isArray(memberships) ? memberships : []);
+    } catch (err: any) {
+      setViewMembersError(
+        err?.response?.data?.message ||
+          `Failed to load ${scopeConfig.scopeLabel.toLowerCase()} members`
+      );
+      setViewMembers([]);
+    } finally {
+      setViewMembersLoading(false);
+      setViewBusyTeamId(null);
+    }
   };
 
   const handleSubmit = async (event: FormEvent) => {
@@ -151,7 +231,7 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
       const payload = {
         team_code: String(form.team_code || "").trim().toUpperCase(),
         team_name: String(form.team_name || "").trim(),
-        team_type: isEventGroupScope ? "EVENT" : form.team_type,
+        team_type: scopeConfig.teamType,
         status: form.status,
         description: String(form.description || "").trim()
       };
@@ -167,19 +247,26 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
       if (editingId) {
         if (isEventGroupScope) {
           await updateEventGroup(editingId, payload);
+        } else if (scopeConfig.scope === "HUB") {
+          await updateHub(editingId, payload);
         } else {
           await updateTeam(editingId, payload);
         }
       } else {
-        await createTeam(payload);
+        if (scopeConfig.scope === "HUB") {
+          await createHub(payload);
+        } else {
+          await createTeam(payload);
+        }
       }
 
       setSuccessMessage(
         editingId
           ? `${scopeConfig.scopeLabel} updated successfully.`
-          : `${payload.team_type === "HUB" ? "Hub" : scopeConfig.scopeLabel} created successfully.`
+          : `${scopeConfig.scopeLabel} created successfully.`
       );
       resetForm();
+      setFormModalOpen(false);
       await loadRows();
     } catch (err: any) {
       setError(
@@ -216,10 +303,13 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
     }
   };
 
-  const activateHandler = isEventGroupScope ? activateEventGroup : activateTeam;
-  const freezeHandler = isEventGroupScope ? freezeEventGroup : freezeTeam;
-  const archiveHandler = isEventGroupScope ? archiveEventGroup : archiveTeam;
-  const deactivateHandler = isEventGroupScope ? deleteEventGroup : deleteTeam;
+  const freezeHandler = isEventGroupScope ? freezeEventGroup : scopeConfig.scope === "HUB" ? freezeHub : freezeTeam;
+  const archiveHandler =
+    isEventGroupScope ? archiveEventGroup : scopeConfig.scope === "HUB" ? archiveHub : archiveTeam;
+  const deactivateHandler =
+    isEventGroupScope ? deleteEventGroup : scopeConfig.scope === "HUB" ? deleteHub : deleteTeam;
+  const scopedActivateHandler =
+    isEventGroupScope ? activateEventGroup : scopeConfig.scope === "HUB" ? activateHub : activateTeam;
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-5 md:px-6">
@@ -251,24 +341,26 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
         scopeConfig={scopeConfig}
         setQuery={setQuery}
         setStatusFilter={setStatusFilter}
-        setTypeFilter={setTypeFilter}
         statusFilter={statusFilter}
         totalCount={rows.length}
-        typeFilter={typeFilter}
       />
 
-      <div ref={formSectionRef}>
+      <TeamManagementFormModal
+        busy={saving}
+        onClose={() => closeFormModal({ preserveMessage: true })}
+        open={formModalOpen}
+      >
         <TeamManagementFormCard
           editingRow={editingRow}
           form={form}
-          onCancelEdit={resetForm}
+          onCancelEdit={() => closeFormModal({ preserveMessage: true })}
           onChangeField={onChangeField}
           onReset={handleReset}
           onSubmit={handleSubmit}
           saving={saving}
           scopeConfig={scopeConfig}
         />
-      </div>
+      </TeamManagementFormModal>
 
       {loading ? (
         <div className="rounded-3xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500 shadow-sm">
@@ -281,7 +373,7 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
             onActivate={(row) =>
               runRowAction(
                 row,
-                activateHandler,
+                scopedActivateHandler,
                 `${scopeConfig.scopeLabel} ${row.team_code} is now ACTIVE.`
               )
             }
@@ -289,8 +381,8 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
               runRowAction(
                 row,
                 archiveHandler,
-                `${scopeConfig.scopeLabel} ${row.team_code} has been archived.`,
-                `Archive ${scopeConfig.scopeLabel.toLowerCase()} ${row.team_code}?`
+                `${scopeConfig.scopeLabel} ${row.team_code} has been moved to ARCHIVED.`,
+                `Delete ${scopeConfig.scopeLabel.toLowerCase()} ${row.team_code}?`
               )
             }
             onDeactivate={(row) =>
@@ -298,7 +390,7 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
                 row,
                 deactivateHandler,
                 `${scopeConfig.scopeLabel} ${row.team_code} is now INACTIVE.`,
-                `Set ${scopeConfig.scopeLabel.toLowerCase()} ${row.team_code} to INACTIVE?`
+                `Mark ${scopeConfig.scopeLabel.toLowerCase()} ${row.team_code} as INACTIVE?`
               )
             }
             onEdit={handleEdit}
@@ -309,8 +401,10 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
                 `${scopeConfig.scopeLabel} ${row.team_code} has been frozen.`
               )
             }
-            rows={filteredRows}
+            onViewMembers={handleViewMembers}
+            rows={pagedRows}
             scopeConfig={scopeConfig}
+            viewBusyTeamId={viewBusyTeamId}
           />
 
           <div className="hidden lg:block">
@@ -319,7 +413,7 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
               onActivate={(row) =>
                 runRowAction(
                   row,
-                  activateHandler,
+                  scopedActivateHandler,
                   `${scopeConfig.scopeLabel} ${row.team_code} is now ACTIVE.`
                 )
               }
@@ -327,8 +421,8 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
                 runRowAction(
                   row,
                   archiveHandler,
-                  `${scopeConfig.scopeLabel} ${row.team_code} has been archived.`,
-                  `Archive ${scopeConfig.scopeLabel.toLowerCase()} ${row.team_code}?`
+                  `${scopeConfig.scopeLabel} ${row.team_code} has been moved to ARCHIVED.`,
+                  `Delete ${scopeConfig.scopeLabel.toLowerCase()} ${row.team_code}?`
                 )
               }
               onDeactivate={(row) =>
@@ -336,7 +430,7 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
                   row,
                   deactivateHandler,
                   `${scopeConfig.scopeLabel} ${row.team_code} is now INACTIVE.`,
-                  `Set ${scopeConfig.scopeLabel.toLowerCase()} ${row.team_code} to INACTIVE?`
+                  `Mark ${scopeConfig.scopeLabel.toLowerCase()} ${row.team_code} as INACTIVE?`
                 )
               }
               onEdit={handleEdit}
@@ -347,13 +441,35 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
                   `${scopeConfig.scopeLabel} ${row.team_code} has been frozen.`
                 )
               }
-              rows={filteredRows}
+              onViewMembers={handleViewMembers}
+              rows={pagedRows}
               scopeConfig={scopeConfig}
-              totalCount={rows.length}
+              viewBusyTeamId={viewBusyTeamId}
             />
           </div>
         </>
       )}
+
+      <AdminPaginationBar
+        itemLabel={String(scopeConfig.scopeLabelPlural || "records").toLowerCase()}
+        limit={limit}
+        loading={loading}
+        onLimitChange={setLimit}
+        onPageChange={setPage}
+        page={page}
+        pageCount={pageCount}
+        shownCount={pagedRows.length}
+        totalCount={filteredRows.length}
+      />
+
+      <TeamManagementMembersModal
+        error={viewMembersError}
+        loading={viewMembersLoading}
+        onClose={closeViewMembers}
+        rows={viewMembers}
+        scopeConfig={scopeConfig}
+        team={viewTeam}
+      />
     </div>
   );
 }

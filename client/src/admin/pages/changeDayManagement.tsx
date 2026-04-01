@@ -1,4 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { useRealtimeEvents } from "../../hooks/useRealtimeEvents";
+import { REALTIME_EVENTS } from "../../lib/realtime";
+import { sharedApi } from "../../store/api/sharedApi";
+import { useAppDispatch } from "../../store/hooks";
+import { loadPhaseContext } from "../../store/slices/phaseSlice";
 import {
   fetchCurrentPhase,
   fetchPhaseTargets,
@@ -90,6 +95,7 @@ const getValidChangeDayRange = (phase) => {
 };
 
 export default function ChangeDayManagement() {
+  const dispatch = useAppDispatch();
   const [currentPhase, setCurrentPhase] = useState(null);
   const [selectedChangeDay, setSelectedChangeDay] = useState("");
   const [settingsForm, setSettingsForm] = useState({
@@ -177,6 +183,10 @@ export default function ChangeDayManagement() {
     load();
   }, []);
 
+  useRealtimeEvents(REALTIME_EVENTS.PHASE, () => {
+    void load();
+  });
+
   const onSaveChangeDay = async () => {
     if (!currentPhase?.phase_id) {
       setError("No active phase found.");
@@ -217,6 +227,8 @@ export default function ChangeDayManagement() {
         start_time: toTimeInput(updatedPhase?.start_time) || prev.start_time,
         end_time: toTimeInput(updatedPhase?.end_time) || prev.end_time
       }));
+      dispatch(loadPhaseContext({ force: true }));
+      dispatch(sharedApi.util.invalidateTags([{ type: "PhaseContext", id: "CURRENT" }]));
       setSuccess(res?.message || "Change day updated successfully.");
     } catch (err) {
       setError(err?.response?.data?.error || "Failed to update change day");
@@ -266,6 +278,8 @@ export default function ChangeDayManagement() {
       setSelectedChangeDay((prev) =>
         toDateInput(updatedPhase?.change_day || prev)
       );
+      dispatch(loadPhaseContext({ force: true }));
+      dispatch(sharedApi.util.invalidateTags([{ type: "PhaseContext", id: "CURRENT" }]));
       setSuccess(res?.message || "Phase settings updated successfully.");
     } catch (err) { 
       setError(err?.response?.data?.error || "Failed to update phase settings");
@@ -313,6 +327,8 @@ export default function ChangeDayManagement() {
     setSuccess("");
     try {
       await setPhaseTargets(currentPhase.phase_id, payload, parsedIndividualTarget);
+      dispatch(loadPhaseContext({ force: true }));
+      dispatch(sharedApi.util.invalidateTags([{ type: "PhaseContext", id: "CURRENT" }]));
       setSuccess("Targets updated successfully.");
     } catch (err) {
       setError(err?.response?.data?.error || "Failed to update targets");

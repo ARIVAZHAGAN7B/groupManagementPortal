@@ -1,6 +1,9 @@
 const db = require("../../config/db");
 const repo = require("./eligibility.repository");
 const groupPointRepo = require("../groupPoint/groupPoint.repository");
+const membershipRepo = require("../membership/membership.repository");
+const membershipService = require("../membership/membership.service");
+const teamRepo = require("../team/team.repository");
 const { expandDepartmentCode } = require("../../utils/department.service");
 
 const pad2 = (value) => String(value).padStart(2, "0");
@@ -121,9 +124,210 @@ const normalizeReasonCode = (value, fallbackPrefix = "ADMIN_OVERRIDE") => {
   return normalized || fallbackPrefix;
 };
 
+const buildEligibilityResult = ({
+  phaseId,
+  phaseName,
+  window,
+  individualTarget,
+  groupTargets,
+  individualEvaluated,
+  individualEligible,
+  groupEvaluated,
+  groupEligible,
+  preservedSnapshot = false
+}) => ({
+  phase_id: phaseId,
+  phase_name: phaseName || null,
+  evaluation_window: {
+    start_date: window.start_date,
+    end_date: window.end_date,
+    start_time: window.start_time,
+    end_time: window.end_time,
+    start_at: window.start_at,
+    end_at: window.end_at
+  },
+  targets: {
+    individual_target: individualTarget,
+    group_targets: groupTargets
+  },
+  totals: {
+    individual_evaluated: individualEvaluated,
+    individual_eligible: individualEligible,
+    group_evaluated: groupEvaluated,
+    group_eligible: groupEligible
+  },
+  preserved_snapshot: preservedSnapshot
+});
+
+const mapDashboardMembership = (row) => ({
+  team_membership_id: Number(row?.team_membership_id) || 0,
+  team_id: Number(row?.team_id) || 0,
+  team_code: row?.team_code || null,
+  team_name: row?.team_name || null,
+  team_type: row?.team_type || null,
+  team_status: row?.team_status || null,
+  role: row?.role || null,
+  status: row?.status || null,
+  join_date: row?.join_date || null,
+  notes: row?.notes || null,
+  event_id:
+    row?.event_id === undefined || row?.event_id === null ? null : Number(row.event_id),
+  event_code: row?.event_code || null,
+  event_name: row?.event_name || null,
+  event_status: row?.event_status || null
+});
+
+const mapDashboardGroup = (row) => {
+  if (!row) return null;
+
+  return {
+    membership_id: Number(row.membership_id) || 0,
+    student_id: row.student_id || null,
+    group_id: Number(row.group_id) || 0,
+    group_code: row.group_code || null,
+    group_name: row.group_name || null,
+    tier: row.tier || null,
+    role: row.role || null,
+    membership_status: row.membership_status || null,
+    group_status: row.group_status || null,
+    member_count: Number(row.member_count) || 0,
+    join_date: row.join_date || null
+  };
+};
+
 const LEADERBOARD_LIMIT = 30;
 const LEADER_ROLES = ["CAPTAIN", "VICE_CAPTAIN", "STRATEGIST", "MANAGER"];
 const LEADERBOARD_TIERS = new Set(["D", "C", "B", "A"]);
+const INDIVIDUAL_ELIGIBILITY_MULTIPLIER_BASIS = 12;
+const GROUP_TIER_MULTIPLIER_BASIS = {
+  D: 11,
+  C: 12,
+  B: 13,
+  A: 14
+};
+let eligibilityPointBackfillPromise = null;
+
+const toFixedDecimal = (value) => Number((Number(value) || 0).toFixed(2));
+
+const getMultiplierFromBasis = (basis) => toFixedDecimal((Number(basis) || 0) / 10);
+
+const calculateAwardedPoints = (points, basis) =>
+  toFixedDecimal(((Number(points) || 0) * (Number(basis) || 0)) / 10);
+
+const buildIndividualEligibilityPointRows = (rows = []) =>
+  (Array.isArray(rows) ? rows : []).map((row) => {
+    const sourceBasePoints = Number(row?.this_phase_base_points) || 0;
+    const isEligible = row?.is_eligible === true || row?.is_eligible === 1;
+    const multiplierBasis = INDIVIDUAL_ELIGIBILITY_MULTIPLIER_BASIS;
+
+    return {
+      student_id: row.student_id,
+      phase_id: row.phase_id,
+      source_base_points: sourceBasePoints,
+      multiplier: getMultiplierFromBasis(multiplierBasis),
+      is_eligible: isEligible,
+      awarded_points: isEligible ? calculateAwardedPoints(sourceBasePoints, multiplierBasis) : 0
+    };
+  });
+
+const buildGroupEligibilityPointRows = (rows = []) =>
+  (Array.isArray(rows) ? rows : []).map((row) => {
+    const sourceGroupPoints = Number(row?.this_phase_group_points) || 0;
+    const appliedTier = String(
+      row?.allocation_tier || row?.applied_tier || row?.tier || ""
+    ).toUpperCase();
+    const multiplierBasis = GROUP_TIER_MULTIPLIER_BASIS[appliedTier] || 10;
+    const isEligible = row?.is_eligible === true || row?.is_eligible === 1;
+
+    return {
+      group_id: Number(row.group_id),
+      phase_id: row.phase_id,
+      source_group_points: sourceGroupPoints,
+      applied_tier: appliedTier || null,
+      multiplier: getMultiplierFromBasis(multiplierBasis),
+      is_eligible: isEligible,
+      awarded_points: isEligible ? calculateAwardedPoints(sourceGroupPoints, multiplierBasis) : 0
+    };
+  });
+
+const syncEligibilityPointAllocations = async (
+  { individualRows = [], groupRows = [] },
+  executor
+) => {
+  const individualPointRows = buildIndividualEligibilityPointRows(individualRows);
+  const groupPointRows = buildGroupEligibilityPointRows(groupRows);
+
+  if (individualPointRows.length > 0) {
+    await repo.upsertIndividualEligibilityPoints(individualPointRows, executor);
+    await repo.recalculateIndividualEligibilityPointTotals(
+      individualPointRows.map((row) => row.student_id),
+      executor
+    );
+  }
+
+  if (groupPointRows.length > 0) {
+    await repo.upsertGroupEligibilityPoints(groupPointRows, executor);
+    await repo.recalculateGroupEligibilityPointTotals(
+      groupPointRows.map((row) => row.group_id),
+      executor
+    );
+  }
+
+  return {
+    individualPointRows,
+    groupPointRows
+  };
+};
+
+const syncStoredEligibilityPointAllocations = async (phaseId) => {
+  const [individualSnapshots, groupSnapshots] = await Promise.all([
+    repo.getIndividualEligibility(phaseId),
+    repo.getGroupEligibility(phaseId)
+  ]);
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    await syncEligibilityPointAllocations(
+      {
+        individualRows: individualSnapshots,
+        groupRows: groupSnapshots
+      },
+      conn
+    );
+    await conn.commit();
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+};
+
+const backfillMissingEligibilityPointAllocations = async (options = {}) => {
+  if (eligibilityPointBackfillPromise) {
+    return eligibilityPointBackfillPromise;
+  }
+
+  const safeLimit = Math.max(1, Math.min(Number(options.limit) || 50, 200));
+  eligibilityPointBackfillPromise = (async () => {
+    const phaseIds = await repo.listPhaseIdsMissingPointAllocations(safeLimit);
+    let processedPhases = 0;
+
+    for (const phaseId of phaseIds) {
+      await syncStoredEligibilityPointAllocations(phaseId);
+      processedPhases += 1;
+    }
+
+    return {
+      processed_phases: processedPhases
+    };
+  })().finally(() => {
+    eligibilityPointBackfillPromise = null;
+  });
+
+  return eligibilityPointBackfillPromise;
+};
 
 const withRanks = (rows = []) =>
   rows.map((row, index) => ({
@@ -210,7 +414,11 @@ const recordBasePoints = async (payload) => {
     );
 
     let group_point_id = null;
+    let group_id = null;
+    let membership_id = null;
     if (membership?.membership_id && membership?.group_id) {
+      membership_id = membership.membership_id;
+      group_id = membership.group_id;
       group_point_id = await groupPointRepo.insertGroupPoint(
         {
           student_id: payload.student_id,
@@ -229,6 +437,8 @@ const recordBasePoints = async (payload) => {
     return {
       history_id,
       group_point_id,
+      membership_id,
+      group_id,
       student_id: payload.student_id,
       total_base_points: summary?.total_base_points ?? payload.points
     };
@@ -240,7 +450,7 @@ const recordBasePoints = async (payload) => {
   }
 };
 
-const evaluatePhaseEligibility = async (phaseId) => {
+const evaluatePhaseEligibility = async (phaseId, options = {}) => {
   const phase = await repo.getPhaseById(phaseId);
   if (!phase) throw new Error("Phase not found");
 
@@ -249,9 +459,33 @@ const evaluatePhaseEligibility = async (phaseId) => {
     throw new Error("Phase dates are invalid");
   }
 
-  const [individualTarget, groupTargets, studentPoints, groupPoints] = await Promise.all([
+  const [individualTarget, groupTargets, snapshotStats] = await Promise.all([
     repo.getIndividualTarget(phaseId),
     repo.getGroupTargets(phaseId),
+    repo.getPhaseEligibilitySnapshotStats(phaseId)
+  ]);
+
+  const isCompletedPhase = String(phase.status || "").toUpperCase() === "COMPLETED";
+  const hasSnapshot =
+    snapshotStats.individual_evaluated > 0 || snapshotStats.group_evaluated > 0;
+  if (isCompletedPhase && hasSnapshot && options?.force !== true) {
+    await syncStoredEligibilityPointAllocations(phaseId);
+
+    return buildEligibilityResult({
+      phaseId,
+      phaseName: phase.phase_name,
+      window,
+      individualTarget,
+      groupTargets,
+      individualEvaluated: snapshotStats.individual_evaluated,
+      individualEligible: snapshotStats.individual_eligible,
+      groupEvaluated: snapshotStats.group_evaluated,
+      groupEligible: snapshotStats.group_eligible,
+      preservedSnapshot: true
+    });
+  }
+
+  const [studentPoints, groupPoints] = await Promise.all([
     repo.getStudentPhasePoints(window.start_at, window.end_at),
     repo.getGroupPhasePoints(window.start_at, window.end_at)
   ]);
@@ -301,6 +535,7 @@ const evaluatePhaseEligibility = async (phaseId) => {
     return {
       group_id: group.group_id,
       phase_id: phaseId,
+      tier,
       this_phase_group_points: points,
       is_eligible: isEligible,
       reason_code: isEligible ? "GROUP_TARGET_MET" : "GROUP_TARGET_NOT_MET"
@@ -312,6 +547,13 @@ const evaluatePhaseEligibility = async (phaseId) => {
     await conn.beginTransaction();
     await repo.upsertIndividualEligibility(individualRows, conn);
     await repo.upsertGroupEligibility(groupRows, conn);
+    await syncEligibilityPointAllocations(
+      {
+        individualRows,
+        groupRows
+      },
+      conn
+    );
     await conn.commit();
   } catch (error) {
     await conn.rollback();
@@ -323,51 +565,67 @@ const evaluatePhaseEligibility = async (phaseId) => {
   const individualEligibleCount = individualRows.filter((row) => row.is_eligible).length;
   const groupEligibleCount = groupRows.filter((row) => row.is_eligible).length;
 
-  return {
-    phase_id: phaseId,
-    phase_name: phase.phase_name || null,
-    evaluation_window: {
-      start_date: window.start_date,
-      end_date: window.end_date,
-      start_time: window.start_time,
-      end_time: window.end_time,
-      start_at: window.start_at,
-      end_at: window.end_at
-    },
-    targets: {
-      individual_target: individualTarget,
-      group_targets: groupTargets
-    },
-    totals: {
-      individual_evaluated: individualRows.length,
-      individual_eligible: individualEligibleCount,
-      group_evaluated: groupRows.length,
-      group_eligible: groupEligibleCount
-    }
-  };
+  return buildEligibilityResult({
+    phaseId,
+    phaseName: phase.phase_name,
+    window,
+    individualTarget,
+    groupTargets,
+    individualEvaluated: individualRows.length,
+    individualEligible: individualEligibleCount,
+    groupEvaluated: groupRows.length,
+    groupEligible: groupEligibleCount
+  });
 };
 
 const getIndividualEligibility = async (phaseId, query = {}) => {
   const is_eligible = parseBooleanFilter(query.is_eligible);
-  return repo.getIndividualEligibility(phaseId, {
+  const rows = await repo.getIndividualEligibility(phaseId, {
     student_id: query.student_id,
     is_eligible
   });
+
+  return (rows || []).map((row) => ({
+    ...row,
+    department: expandDepartmentCode(row.department),
+    this_phase_base_points: Number(row.this_phase_base_points) || 0,
+    eligibility_multiplier:
+      row.eligibility_multiplier === undefined || row.eligibility_multiplier === null
+        ? null
+        : Number(row.eligibility_multiplier),
+    eligibility_awarded_points:
+      row.eligibility_awarded_points === undefined || row.eligibility_awarded_points === null
+        ? 0
+        : Number(row.eligibility_awarded_points)
+  }));
 };
 
 const getGroupEligibility = async (phaseId, query = {}) => {
   const is_eligible = parseBooleanFilter(query.is_eligible);
-  return repo.getGroupEligibility(phaseId, {
+  const rows = await repo.getGroupEligibility(phaseId, {
     group_id: query.group_id ? Number(query.group_id) : undefined,
     is_eligible
   });
+
+  return (rows || []).map((row) => ({
+    ...row,
+    this_phase_group_points: Number(row.this_phase_group_points) || 0,
+    eligibility_multiplier:
+      row.eligibility_multiplier === undefined || row.eligibility_multiplier === null
+        ? null
+        : Number(row.eligibility_multiplier),
+    eligibility_awarded_points:
+      row.eligibility_awarded_points === undefined || row.eligibility_awarded_points === null
+        ? 0
+        : Number(row.eligibility_awarded_points)
+  }));
 };
 
 const getMyIndividualEligibility = async (phaseId, userId) => {
   const student = await repo.getStudentByUserId(userId);
   if (!student) throw new Error("Student not found");
 
-  const rows = await repo.getIndividualEligibility(phaseId, {
+  const rows = await getIndividualEligibility(phaseId, {
     student_id: student.student_id
   });
   return rows[0] || null;
@@ -392,15 +650,41 @@ const overrideIndividualEligibility = async (phaseId, studentId, payload = {}) =
     payload.is_eligible ? "ADMIN_OVERRIDE_ELIGIBLE" : "ADMIN_OVERRIDE_NOT_ELIGIBLE"
   );
 
-  await repo.upsertIndividualEligibility([
-    {
-      student_id: studentId,
-      phase_id: phaseId,
-      this_phase_base_points: points,
-      is_eligible: payload.is_eligible,
-      reason_code: reasonCode
-    }
-  ]);
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    await repo.upsertIndividualEligibility(
+      [
+        {
+          student_id: studentId,
+          phase_id: phaseId,
+          this_phase_base_points: points,
+          is_eligible: payload.is_eligible,
+          reason_code: reasonCode
+        }
+      ],
+      conn
+    );
+    await syncEligibilityPointAllocations(
+      {
+        individualRows: [
+          {
+            student_id: studentId,
+            phase_id: phaseId,
+            this_phase_base_points: points,
+            is_eligible: payload.is_eligible
+          }
+        ]
+      },
+      conn
+    );
+    await conn.commit();
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
 
   return {
     phase_id: phaseId,
@@ -434,15 +718,46 @@ const overrideGroupEligibility = async (phaseId, groupId, payload = {}) => {
     payload.is_eligible ? "ADMIN_OVERRIDE_GROUP_ELIGIBLE" : "ADMIN_OVERRIDE_GROUP_NOT_ELIGIBLE"
   );
 
-  await repo.upsertGroupEligibility([
-    {
-      group_id: numericGroupId,
-      phase_id: phaseId,
-      this_phase_group_points: points,
-      is_eligible: payload.is_eligible,
-      reason_code: reasonCode
-    }
-  ]);
+  const allocationTier = String(current?.allocation_tier || current?.tier || group?.tier || "")
+    .trim()
+    .toUpperCase();
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    await repo.upsertGroupEligibility(
+      [
+        {
+          group_id: numericGroupId,
+          phase_id: phaseId,
+          this_phase_group_points: points,
+          is_eligible: payload.is_eligible,
+          reason_code: reasonCode
+        }
+      ],
+      conn
+    );
+    await syncEligibilityPointAllocations(
+      {
+        groupRows: [
+          {
+            group_id: numericGroupId,
+            phase_id: phaseId,
+            tier: allocationTier || null,
+            this_phase_group_points: points,
+            is_eligible: payload.is_eligible
+          }
+        ]
+      },
+      conn
+    );
+    await conn.commit();
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
 
   return {
     phase_id: phaseId,
@@ -459,9 +774,18 @@ const getMyIndividualEligibilityHistory = async (userId) => {
   if (!student) throw new Error("Student not found");
 
   const rows = await repo.getMyIndividualEligibilityHistory(student.student_id);
+
   return (rows || []).map((row) => ({
     ...row,
     this_phase_base_points: Number(row.this_phase_base_points) || 0,
+    eligibility_multiplier:
+      row.eligibility_multiplier === undefined || row.eligibility_multiplier === null
+        ? null
+        : Number(row.eligibility_multiplier),
+    eligibility_awarded_points:
+      row.eligibility_awarded_points === undefined || row.eligibility_awarded_points === null
+        ? 0
+        : Number(row.eligibility_awarded_points),
     target_points:
       row.target_points === undefined || row.target_points === null
         ? null
@@ -625,37 +949,78 @@ const getGroupEligibilitySummary = async (phaseId, groupId) => {
   const window = getPhaseWindow(phase);
   if (!startDate || !endDate || !window) throw new Error("Phase dates are invalid");
 
-  const [snapshot, groupTargets] = await Promise.all([
-    repo.getGroupPhaseSnapshot(groupId, window.start_at, window.end_at),
+  let [snapshot, groupTargets] = await Promise.all([
+    repo.getStoredGroupEligibilitySummary(phaseId, groupId),
     repo.getGroupTargets(phaseId)
   ]);
 
-  if (!snapshot) throw new Error("Group not found");
+  if (snapshot) {
+    return {
+      phase_id: phase.phase_id,
+      phase_name: phase.phase_name || null,
+      group_id: snapshot.group_id,
+      group_code: snapshot.group_code || null,
+      group_name: snapshot.group_name || null,
+      tier: snapshot.tier || null,
+      group_status: snapshot.group_status || null,
+      active_member_count: Number(snapshot.active_member_count) || 0,
+      earned_points: Number(snapshot.earned_points) || 0,
+      target_points:
+        snapshot.target_points === undefined || snapshot.target_points === null
+          ? null
+          : Number(snapshot.target_points),
+      eligibility_multiplier:
+        snapshot.eligibility_multiplier === undefined || snapshot.eligibility_multiplier === null
+          ? null
+          : Number(snapshot.eligibility_multiplier),
+      eligibility_awarded_points:
+        snapshot.eligibility_awarded_points === undefined ||
+        snapshot.eligibility_awarded_points === null
+          ? 0
+          : Number(snapshot.eligibility_awarded_points),
+      is_eligible:
+        snapshot.is_eligible === undefined || snapshot.is_eligible === null
+          ? null
+          : Boolean(snapshot.is_eligible),
+      reason_code: snapshot.reason_code || null,
+      evaluated_at: snapshot.evaluated_at || null
+    };
+  }
 
-  const tier = String(snapshot.tier || "").toUpperCase();
+  const liveSnapshot = await repo.getGroupPhaseSnapshot(groupId, window.start_at, window.end_at);
+  if (!liveSnapshot) throw new Error("Group not found");
+
+  const tier = String(liveSnapshot.tier || "").toUpperCase();
   const targetRow = (groupTargets || []).find(
     (row) => String(row?.tier || "").toUpperCase() === tier
   );
 
-  const earned = Number(snapshot.earned_points) || 0;
+  const earned = Number(liveSnapshot.earned_points) || 0;
   const target =
     targetRow?.group_target === undefined || targetRow?.group_target === null
       ? null
       : Number(targetRow.group_target);
   const hasTarget = Number.isFinite(target);
+  const multiplierBasis = GROUP_TIER_MULTIPLIER_BASIS[tier] || 10;
+  const isEligible = hasTarget ? earned >= target : null;
 
   return {
     phase_id: phase.phase_id,
     phase_name: phase.phase_name || null,
-    group_id: snapshot.group_id,
-    group_code: snapshot.group_code,
-    group_name: snapshot.group_name,
-    tier: snapshot.tier,
-    group_status: snapshot.group_status,
-    active_member_count: Number(snapshot.active_member_count) || 0,
+    group_id: liveSnapshot.group_id,
+    group_code: liveSnapshot.group_code,
+    group_name: liveSnapshot.group_name,
+    tier: liveSnapshot.tier,
+    group_status: liveSnapshot.group_status,
+    active_member_count: Number(liveSnapshot.active_member_count) || 0,
     earned_points: earned,
     target_points: hasTarget ? target : null,
-    is_eligible: hasTarget ? earned >= target : null
+    eligibility_multiplier: getMultiplierFromBasis(multiplierBasis),
+    eligibility_awarded_points:
+      isEligible === true ? calculateAwardedPoints(earned, multiplierBasis) : 0,
+    is_eligible: isEligible,
+    reason_code: null,
+    evaluated_at: null
   };
 };
 
@@ -664,32 +1029,137 @@ const getMyDashboardSummary = async (userId, fallbackName = null) => {
   if (!student) throw new Error("Student not found");
 
   const studentId = student.student_id;
-  const basePointsSummary = await repo.getStudentBasePoints(studentId);
-  const totalBasePoints = Number(basePointsSummary?.total_base_points) || 0;
+  const emptyMultiplierCounts = {
+    "1.1": 0,
+    "1.2": 0,
+    "1.3": 0,
+    "1.4": 0
+  };
+  const [studentStats, phase, activeGroupRow, activeTeamMembershipRows] = await Promise.all([
+    repo.getDashboardStudentStats(studentId),
+    repo.getCurrentPhase(),
+    membershipRepo.getActiveMembershipWithGroupByStudent(studentId),
+    teamRepo.getAllTeamMemberships({
+      student_id: studentId,
+      status: "ACTIVE"
+    })
+  ]);
+  const totalBasePoints = Number(studentStats?.total_base_points) || 0;
+  const totalEligibilityPoints = Number(studentStats?.eligibility_total_points) || 0;
+  const [activeGroupStats, rejoinDeadlineInfo] = await Promise.all([
+    activeGroupRow?.group_id ? repo.getDashboardGroupStats(activeGroupRow.group_id) : null,
+    activeGroupRow?.group_id ? null : membershipService.getRejoinDeadlineInfo(studentId)
+  ]);
+  const multiplierCounts = {
+    ...emptyMultiplierCounts,
+    "1.1":
+      (Number(studentStats?.multiplier_11_count) || 0) +
+      (Number(activeGroupStats?.multiplier_11_count) || 0),
+    "1.2":
+      (Number(studentStats?.multiplier_12_count) || 0) +
+      (Number(activeGroupStats?.multiplier_12_count) || 0),
+    "1.3":
+      (Number(studentStats?.multiplier_13_count) || 0) +
+      (Number(activeGroupStats?.multiplier_13_count) || 0),
+    "1.4":
+      (Number(studentStats?.multiplier_14_count) || 0) +
+      (Number(activeGroupStats?.multiplier_14_count) || 0)
+  };
+  const activeGroup = activeGroupRow
+    ? {
+        ...mapDashboardGroup(activeGroupRow),
+        eligibility_total_points: Number(activeGroupStats?.eligibility_total_points) || 0
+      }
+    : null;
+  const rejoinDeadline = rejoinDeadlineInfo
+    ? {
+        ...rejoinDeadlineInfo,
+        self_join_rule_enforced: true,
+        left_at: rejoinDeadlineInfo.left_at ? new Date(rejoinDeadlineInfo.left_at).toISOString() : null,
+        rejoin_deadline_at: rejoinDeadlineInfo.rejoin_deadline_at
+          ? new Date(rejoinDeadlineInfo.rejoin_deadline_at).toISOString()
+          : null
+      }
+    : null;
+  const allMemberships = (activeTeamMembershipRows || []).map(mapDashboardMembership);
+  const teams = allMemberships.filter(
+    (row) => String(row?.team_type || "").toUpperCase() === "TEAM"
+  );
+  const hubs = allMemberships.filter(
+    (row) => String(row?.team_type || "").toUpperCase() === "HUB"
+  );
+  const event_groups = allMemberships.filter(
+    (row) => String(row?.team_type || "").toUpperCase() === "EVENT"
+  );
 
-  const phase = await repo.getCurrentPhase();
   let thisPhaseBasePoints = 0;
-  let phaseId = null;
-  let phaseName = null;
-  let targetPoints = null;
-  let isEligible = null;
+  const thisPhaseEligibility = {
+    phase_id: phase?.phase_id || null,
+    phase_name: phase?.phase_name || null,
+    individual: {
+      earned_points: 0,
+      target_points: null,
+      is_eligible: null
+    },
+    group: activeGroup
+      ? {
+          group_id: activeGroup.group_id,
+          group_code: activeGroup.group_code,
+          group_name: activeGroup.group_name,
+          tier: activeGroup.tier || null,
+          active_member_count: Number(activeGroup.member_count) || 0,
+          earned_points: 0,
+          target_points: null,
+          is_eligible: null
+        }
+      : null
+  };
 
   if (phase?.phase_id && phase?.start_date && phase?.end_date) {
     const window = getPhaseWindow(phase);
 
     if (window) {
-      const [phasePointsRow, individualTarget] = await Promise.all([
+      const [phasePointsRow, individualTarget, groupTargets, groupSnapshot] = await Promise.all([
         repo.getStudentPhasePointsByStudent(studentId, window.start_at, window.end_at),
-        repo.getIndividualTarget(phase.phase_id)
+        repo.getIndividualTarget(phase.phase_id),
+        activeGroup?.group_id ? repo.getGroupTargets(phase.phase_id) : Promise.resolve([]),
+        activeGroup?.group_id
+          ? repo.getGroupPhaseSnapshot(activeGroup.group_id, window.start_at, window.end_at)
+          : Promise.resolve(null)
       ]);
 
       thisPhaseBasePoints = Number(phasePointsRow?.this_phase_base_points) || 0;
-      phaseId = phase.phase_id;
-      phaseName = phase.phase_name || null;
+      thisPhaseEligibility.individual.earned_points = thisPhaseBasePoints;
 
       if (individualTarget !== null && !Number.isNaN(Number(individualTarget))) {
-        targetPoints = Number(individualTarget);
-        isEligible = thisPhaseBasePoints >= targetPoints;
+        thisPhaseEligibility.individual.target_points = Number(individualTarget);
+        thisPhaseEligibility.individual.is_eligible =
+          thisPhaseBasePoints >= thisPhaseEligibility.individual.target_points;
+      }
+
+      if (thisPhaseEligibility.group) {
+        const resolvedTier = String(groupSnapshot?.tier || activeGroup?.tier || "").toUpperCase();
+        const groupTargetRow = (groupTargets || []).find(
+          (row) => String(row?.tier || "").toUpperCase() === resolvedTier
+        );
+        const groupTarget =
+          groupTargetRow?.group_target === undefined || groupTargetRow?.group_target === null
+            ? null
+            : Number(groupTargetRow.group_target);
+        const groupEarnedPoints = Number(groupSnapshot?.earned_points) || 0;
+        const hasGroupTarget = Number.isFinite(groupTarget);
+
+        thisPhaseEligibility.group = {
+          ...thisPhaseEligibility.group,
+          group_code: groupSnapshot?.group_code || activeGroup?.group_code || null,
+          group_name: groupSnapshot?.group_name || activeGroup?.group_name || null,
+          tier: groupSnapshot?.tier || activeGroup?.tier || null,
+          active_member_count:
+            Number(groupSnapshot?.active_member_count) || Number(activeGroup?.member_count) || 0,
+          earned_points: groupEarnedPoints,
+          target_points: hasGroupTarget ? groupTarget : null,
+          is_eligible: hasGroupTarget ? groupEarnedPoints >= groupTarget : null
+        };
       }
     }
   }
@@ -698,15 +1168,23 @@ const getMyDashboardSummary = async (userId, fallbackName = null) => {
     student_id: studentId,
     name: fallbackName || null,
     base_points: totalBasePoints,
+    eligibility_points: totalEligibilityPoints,
     this_phase_base_points: thisPhaseBasePoints,
-    total_points: totalBasePoints,
-    this_phase_eligibility: {
-      phase_id: phaseId,
-      phase_name: phaseName,
-      earned_points: thisPhaseBasePoints,
-      target_points: targetPoints,
-      is_eligible: isEligible
-    }
+    total_points: totalBasePoints + totalEligibilityPoints,
+    stats: {
+      active_team_count: teams.length,
+      active_hub_count: hubs.length,
+      active_event_team_count: event_groups.length,
+      individual_eligible_phase_count: Number(studentStats?.eligible_phase_count) || 0,
+      active_group_eligible_phase_count: Number(activeGroupStats?.eligible_phase_count) || 0
+    },
+    group: activeGroup,
+    teams,
+    hubs,
+    event_groups,
+    this_phase_eligibility: thisPhaseEligibility,
+    multiplier_counts: multiplierCounts,
+    rejoin_deadline: rejoinDeadline
   };
 };
 
@@ -719,6 +1197,7 @@ module.exports = {
   overrideGroupEligibility,
   getMyIndividualEligibility,
   getMyIndividualEligibilityHistory,
+  backfillMissingEligibilityPointAllocations,
   getStudentBasePoints,
   getAdminStudentOverview,
   getStudentLeaderboards,

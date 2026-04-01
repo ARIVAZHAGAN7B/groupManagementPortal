@@ -2,13 +2,41 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/png" href="/gmp_icon.png" />
+    <meta name="theme-color" content="#f8fafc" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      (() => {
+        const storageKey = "gmp-theme-mode";
+        const root = document.documentElement;
+        let storedMode = null;
+
+        try {
+          storedMode = window.localStorage.getItem(storageKey);
+        } catch {}
+
+        const themeMode = ["light", "dark", "system"].includes(storedMode)
+          ? storedMode
+          : "system";
+        const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+        const resolvedTheme = themeMode === "system" ? systemTheme : themeMode;
+        const themeColor = resolvedTheme === "dark" ? "#020617" : "#f8fafc";
+
+        root.dataset.themeMode = themeMode;
+        root.dataset.theme = resolvedTheme;
+        root.style.colorScheme = resolvedTheme;
+
+        const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+        themeColorMeta?.setAttribute("content", themeColor);
+      })();
+    </script>
        <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-    <title>client</title>
+    <title>GM Portal</title>
   </head>
   <body>
     <div id="root"></div>

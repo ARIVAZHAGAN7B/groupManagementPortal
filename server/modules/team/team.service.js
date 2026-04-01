@@ -1,6 +1,8 @@
 const db = require("../../config/db");
 const repo = require("./team.repository");
 const eventRepo = require("../event/event.repository");
+const { expandDepartmentCode } = require("../../utils/department.service");
+const { buildPaginatedResponse, parsePaginationQuery } = require("../../utils/pagination");
 
 const TEAM_TYPES = ["TEAM", "HUB", "SECTION", "EVENT"];
 const ADMIN_CREATABLE_TEAM_TYPES = ["TEAM", "HUB"];
@@ -184,6 +186,7 @@ const mapTeamRow = (row) => ({
 
 const mapMembershipRow = (row) => ({
   ...row,
+  department: expandDepartmentCode(row.department),
   team_membership_id: Number(row.team_membership_id),
   team_id: Number(row.team_id),
   event_id:
@@ -362,18 +365,65 @@ const getTeams = async (query = {}) => {
     query?.exclude_team_type,
     "exclude_team_type"
   );
+  const pagination = parsePaginationQuery(query, {
+    defaultLimit: 30,
+    maxLimit: 200
+  });
 
-  const rows = await repo.getAllTeams(filters);
-  return (rows || []).map(mapTeamRow);
+  if (!pagination.enabled) {
+    const rows = await repo.getAllTeams(filters);
+    return (rows || []).map(mapTeamRow);
+  }
+
+  const { rows, total } = await repo.getAllTeams(
+    filters,
+    {
+      paginate: true,
+      limit: pagination.limit,
+      offset: pagination.offset
+    }
+  );
+
+  return buildPaginatedResponse({
+    items: (rows || []).map(mapTeamRow),
+    total,
+    page: pagination.page,
+    limit: pagination.limit
+  });
 };
 
 const getTeamsByEvent = async (eventId, query = {}) => {
   await ensureEventExists(Number(eventId));
   const normalizedType = normalizeOptionalTeamType(query?.team_type, "team_type");
-  const rows = await repo.getTeamsByEventId(Number(eventId), {
+  const filters = {
     team_type: normalizedType || "EVENT"
+  };
+  const pagination = parsePaginationQuery(query, {
+    defaultLimit: 30,
+    maxLimit: 200
   });
-  return (rows || []).map(mapTeamRow);
+
+  if (!pagination.enabled) {
+    const rows = await repo.getTeamsByEventId(Number(eventId), filters);
+    return (rows || []).map(mapTeamRow);
+  }
+
+  const { rows, total } = await repo.getTeamsByEventId(
+    Number(eventId),
+    filters,
+    {
+      paginate: true,
+      limit: pagination.limit,
+      offset: pagination.offset
+    }
+  );
+
+  return buildPaginatedResponse({
+    items: (rows || []).map(mapTeamRow),
+    total,
+    page: pagination.page,
+    limit: pagination.limit
+  });
 };
 
 const getTeam = async (teamId) => {
@@ -436,7 +486,7 @@ const getTeamMemberships = async (teamId, query = {}) => {
 
 const getAllTeamMemberships = async (query = {}) => {
   const status = normalizeMembershipStatus(query.status);
-  const rows = await repo.getAllTeamMemberships({
+  const filters = {
     status,
     event_id: query.event_id ? Number(query.event_id) : undefined,
     team_id: query.team_id ? Number(query.team_id) : undefined,
@@ -446,9 +496,32 @@ const getAllTeamMemberships = async (query = {}) => {
       query?.exclude_team_type,
       "exclude_team_type"
     )
+  };
+  const pagination = parsePaginationQuery(query, {
+    defaultLimit: 30,
+    maxLimit: 200
   });
 
-  return (rows || []).map(mapMembershipRow);
+  if (!pagination.enabled) {
+    const rows = await repo.getAllTeamMemberships(filters);
+    return (rows || []).map(mapMembershipRow);
+  }
+
+  const { rows, total } = await repo.getAllTeamMemberships(
+    filters,
+    {
+      paginate: true,
+      limit: pagination.limit,
+      offset: pagination.offset
+    }
+  );
+
+  return buildPaginatedResponse({
+    items: (rows || []).map(mapMembershipRow),
+    total,
+    page: pagination.page,
+    limit: pagination.limit
+  });
 };
 
 const addTeamMember = async (teamId, payload = {}, actorUserId = null) => {

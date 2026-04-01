@@ -1,5 +1,6 @@
 const service = require("./groupTierRequest.service");
 const auditService = require("../audit/audit.service");
+const { broadcastGroupTierRequestChanged } = require("../../realtime/events");
 
 const applyTierChangeRequest = async (req, res) => {
   try {
@@ -12,6 +13,14 @@ const applyTierChangeRequest = async (req, res) => {
       entityType: "GROUP_TIER_CHANGE_REQUEST",
       entityId: result?.tier_change_request_id || null,
       details: result
+    });
+
+    broadcastGroupTierRequestChanged({
+      action: "GROUP_TIER_CHANGE_REQUEST_APPLIED",
+      requestId: result?.tier_change_request_id || null,
+      groupId: result?.group_id || req.body?.group_id || null,
+      status: result?.status || "PENDING",
+      requestedTier: result?.requested_tier || null
     });
 
     res.status(201).json(result);
@@ -43,6 +52,17 @@ const decideTierChangeRequest = async (req, res) => {
       entityId: requestId,
       reasonCode: decision_reason,
       details: result
+    });
+
+    broadcastGroupTierRequestChanged({
+      action:
+        String(status).toUpperCase() === "APPROVED"
+          ? "GROUP_TIER_CHANGE_REQUEST_APPROVED"
+          : "GROUP_TIER_CHANGE_REQUEST_REJECTED",
+      requestId: result?.tier_change_request_id || Number(requestId),
+      groupId: result?.group_id || null,
+      status: result?.status || String(status || "").toUpperCase(),
+      appliedTier: result?.applied_tier || null
     });
 
     res.json(result);
@@ -95,4 +115,3 @@ module.exports = {
   getMyTierChangeRequests,
   getAdminTierChangeNotifications
 };
-

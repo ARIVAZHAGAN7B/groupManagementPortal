@@ -1,8 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import AccessTimeRoundedIcon from "@mui/icons-material/AccessTimeRounded";
+import GroupOffRoundedIcon from "@mui/icons-material/GroupOffRounded";
+import { useAdaptiveNow } from "../../hooks/useAdaptiveNow";
+import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
+import { useRealtimeEvents } from "../../hooks/useRealtimeEvents";
+import { REALTIME_EVENTS } from "../../lib/realtime";
+import { useAppDispatch, useAppSelector } from "../../store/hooks";
+import { loadStudentMembership } from "../../store/slices/studentMembershipSlice";
+import { useAuth } from "../../utils/AuthContext";
 import {
   fetchGroupMembers,
-  fetchMyGroup,
-  leaveGroup
+  fetchGroupRankHistory,
+  fetchGroupRankRules,
+  leaveGroup,
+  updateGroupRankRules
 } from "../../service/membership.api";
 import {
   decideJoinRequest,
@@ -14,19 +25,142 @@ import {
 } from "../../service/leadershipRequests.api";
 import { fetchAllPhases } from "../../service/phase.api";
 import { fetchGroupEligibilitySummary } from "../../service/eligibility.api";
-import MyGroupEligibilitySection from "../components/myGroup/MyGroupEligibilitySection";
 import MyGroupHero from "../components/myGroup/MyGroupHero";
-import MyGroupLeadershipSection from "../components/myGroup/MyGroupLeadershipSection";
-import MyGroupMembersSection from "../components/myGroup/MyGroupMembersSection";
-import MyGroupRequestsSection from "../components/myGroup/MyGroupRequestsSection";
 import MyGroupTabs from "../components/myGroup/MyGroupTabs";
 import { getMissingLeadershipRoles } from "../../shared/components/LeadershipGapChips";
 
+const MyGroupEligibilitySection = lazy(() =>
+  import("../components/myGroup/MyGroupEligibilitySection")
+);
+const MyGroupLeadershipSection = lazy(() =>
+  import("../components/myGroup/MyGroupLeadershipSection")
+);
+const MyGroupMembersSection = lazy(() =>
+  import("../components/myGroup/MyGroupMembersSection")
+);
+const MyGroupRankSection = lazy(() => import("../components/myGroup/MyGroupRankSection"));
+const MyGroupRequestsSection = lazy(() => import("../components/myGroup/MyGroupRequestsSection"));
+
+const formatCountdown = (ms) => {
+  if (!Number.isFinite(ms)) return "Unavailable";
+  if (ms <= 0) return "Expired";
+
+  const totalSeconds = Math.floor(ms / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+};
+
+const formatRuleLabel = (rule) => {
+  if (!rule) return "Rejoin rule";
+  if (rule === "NEXT_WORKING_DAY_END") return "Next working day end";
+
+  return String(rule)
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
+    .join(" ");
+};
+
+const EmptyMyGroupState = ({ deadlineInfo, nowMs }) => {
+  const deadline = deadlineInfo?.rejoin_deadline_at
+    ? new Date(deadlineInfo.rejoin_deadline_at)
+    : null;
+  const hasValidDeadline = deadline instanceof Date && !Number.isNaN(deadline.getTime());
+  const remainingMs = hasValidDeadline ? deadline.getTime() - nowMs : NaN;
+  const expired =
+    Boolean(deadlineInfo?.is_expired) || (hasValidDeadline ? remainingMs <= 0 : false);
+
+  return (
+    <div className="flex min-h-[calc(100vh-11rem)] items-center justify-center p-4 md:p-6">
+      <div className="w-full max-w-xl rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-[0_20px_60px_-36px_rgba(15,23,42,0.35)]">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+          <GroupOffRoundedIcon sx={{ fontSize: 32 }} />
+        </div>
+
+        <div className="mt-5">
+          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+            My Group
+          </div>
+          <h1 className="mt-2 text-2xl font-bold text-slate-900">You&apos;re not in a group</h1>
+          <p className="mt-2 text-sm text-slate-500">
+            Join a group before the deadline to get back into team activities.
+          </p>
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-5">
+          <div className="flex items-center justify-center gap-2 text-sm font-semibold text-slate-700">
+            <AccessTimeRoundedIcon sx={{ fontSize: 18 }} />
+            <span>Time remaining to join</span>
+          </div>
+
+          {deadlineInfo?.has_rejoin_deadline ? (
+            <>
+              <div className={`mt-3 text-3xl font-black ${expired ? "text-rose-700" : "text-[#3211d4]"}`}>
+                {expired ? "Expired" : formatCountdown(remainingMs)}
+              </div>
+              <div className="mt-2 text-xs text-slate-500">
+                {hasValidDeadline
+                  ? `Join by ${deadline.toLocaleString()}`
+                  : "Join deadline unavailable"}
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                <span
+                  className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${
+                    deadlineInfo?.self_join_rule_enforced
+                      ? "border-amber-200 bg-amber-50 text-amber-700"
+                      : "border-slate-200 bg-white text-slate-500"
+                  }`}
+                >
+                  {deadlineInfo?.self_join_rule_enforced ? "Enforced" : "Not Enforced"}
+                </span>
+                <span className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-600">
+                  Rule: {formatRuleLabel(deadlineInfo?.rule)}
+                </span>
+                {expired ? (
+                  <span className="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-1 text-[10px] font-semibold text-rose-700">
+                    Admin approval required
+                  </span>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="mt-3 text-3xl font-black text-emerald-700">Open</div>
+              <div className="mt-2 text-xs text-slate-500">You can join a group right now.</div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SectionFallback = () => (
+  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+    Loading section...
+  </div>
+);
+
 const MyGroup = () => {
-  const [data, setData] = useState(null);
+  const dispatch = useAppDispatch();
+  const { user } = useAuth();
+  const {
+    group: data,
+    rejoinDeadline,
+    status: membershipStatus,
+    error: membershipError,
+    hasLoaded: membershipHasLoaded
+  } = useAppSelector((state) => state.studentMembership);
   const [members, setMembers] = useState([]);
   const [pending, setPending] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [detailsLoading, setDetailsLoading] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [decisionBusyId, setDecisionBusyId] = useState(null);
@@ -39,10 +173,20 @@ const MyGroup = () => {
   const [leadershipLoading, setLeadershipLoading] = useState(false);
   const [leadershipErr, setLeadershipErr] = useState("");
   const [leadershipSubmitting, setLeadershipSubmitting] = useState(false);
+  const [rankHistory, setRankHistory] = useState([]);
+  const [rankRules, setRankRules] = useState(null);
+  const [rankLoading, setRankLoading] = useState(false);
+  const [rankSaving, setRankSaving] = useState(false);
+  const [rankErr, setRankErr] = useState("");
   const [leadershipForm, setLeadershipForm] = useState({
     requested_role: "",
     request_reason: ""
   });
+  const rejoinTargetTimeMs = useMemo(() => {
+    if (data || !rejoinDeadline?.has_rejoin_deadline) return NaN;
+    return Date.parse(rejoinDeadline.rejoin_deadline_at);
+  }, [data, rejoinDeadline]);
+  const nowMs = useAdaptiveNow(rejoinTargetTimeMs);
 
   const currentRole = String(data?.role || "").toUpperCase();
   const isCaptain = currentRole === "CAPTAIN";
@@ -51,6 +195,16 @@ const MyGroup = () => {
     [members]
   );
   const canRequestLeadershipRole = currentRole === "MEMBER";
+  const activeLeadershipCount = useMemo(
+    () =>
+      members.filter((member) =>
+        ["CAPTAIN", "VICE_CAPTAIN", "STRATEGIST", "MANAGER"].includes(
+          String(member?.role || "").toUpperCase()
+        )
+      ).length,
+    [members]
+  );
+  const canCaptainOverrideRank = isCaptain && activeLeadershipCount > 2;
   const currentGroupLeadershipRequests = useMemo(
     () =>
       leadershipRequests.filter(
@@ -65,30 +219,36 @@ const MyGroup = () => {
       ) || null,
     [currentGroupLeadershipRequests]
   );
+  const loading = !membershipHasLoaded || membershipStatus === "loading" || detailsLoading;
+  const pageError = membershipError || error;
 
   const load = useCallback(async () => {
-    setLoading(true);
+    if (!user?.userId) return;
+
+    await dispatch(
+      loadStudentMembership({
+        force: true,
+        userId: user.userId
+      })
+    );
+  }, [dispatch, user?.userId]);
+
+  const loadGroupDetails = useCallback(async () => {
+    if (!data?.group_id) {
+      setMembers([]);
+      setPending([]);
+      setError("");
+      return;
+    }
+
+    setDetailsLoading(true);
     setError("");
 
     try {
-      const groupRes = await fetchMyGroup();
-      const myGroup = groupRes?.group ?? null;
-      setData(myGroup);
-
-      if (!myGroup) {
-        setMembers([]);
-        setPending([]);
-        setEligibility([]);
-        setEligibilityErr("");
-        setLeadershipRequests([]);
-        setLeadershipErr("");
-        return;
-      }
-
       const [memberData, pendingData] = await Promise.all([
-        fetchGroupMembers(myGroup.group_id),
-        String(myGroup.role || "").toUpperCase() === "CAPTAIN"
-          ? getPendingRequestsByGroup(myGroup.group_id)
+        fetchGroupMembers(data.group_id),
+        String(data.role || "").toUpperCase() === "CAPTAIN"
+          ? getPendingRequestsByGroup(data.group_id)
           : Promise.resolve([])
       ]);
 
@@ -96,14 +256,36 @@ const MyGroup = () => {
       setPending(Array.isArray(pendingData) ? pendingData : []);
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to load group details.");
+      setMembers([]);
+      setPending([]);
     } finally {
-      setLoading(false);
+      setDetailsLoading(false);
     }
-  }, []);
+  }, [data?.group_id, data?.role]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (!user?.userId) return;
+    dispatch(loadStudentMembership({ userId: user.userId }));
+  }, [dispatch, user?.userId]);
+
+  useEffect(() => {
+    if (!membershipHasLoaded) return;
+
+    if (!data?.group_id) {
+      setMembers([]);
+      setPending([]);
+      setEligibility([]);
+      setEligibilityErr("");
+      setLeadershipRequests([]);
+      setLeadershipErr("");
+      setRankHistory([]);
+      setRankRules(null);
+      setRankErr("");
+      return;
+    }
+
+    void loadGroupDetails();
+  }, [data?.group_id, loadGroupDetails, membershipHasLoaded]);
 
   const loadEligibility = useCallback(async () => {
     if (!data?.group_id) return;
@@ -133,6 +315,8 @@ const MyGroup = () => {
             phase_status: phase?.status || null,
             earned_points: 0,
             target_points: null,
+            eligibility_multiplier: null,
+            eligibility_awarded_points: 0,
             is_eligible: null,
             eligibility_error: ""
           };
@@ -168,6 +352,38 @@ const MyGroup = () => {
     }
   }, [data?.group_id]);
 
+  const loadRankData = useCallback(async () => {
+    if (!data?.group_id) {
+      setRankHistory([]);
+      setRankRules(null);
+      setRankErr("");
+      return;
+    }
+
+    setRankLoading(true);
+    setRankErr("");
+
+    try {
+      const [historyRows, rulesData] = await Promise.all([
+        fetchGroupRankHistory(data.group_id),
+        fetchGroupRankRules(data.group_id)
+      ]);
+
+      setRankHistory(Array.isArray(historyRows) ? historyRows : []);
+      setRankRules(rulesData || null);
+    } catch (err) {
+      setRankErr(
+        err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          "Failed to load rank overview."
+      );
+      setRankHistory([]);
+      setRankRules(null);
+    } finally {
+      setRankLoading(false);
+    }
+  }, [data?.group_id]);
+
   const loadLeadershipRequests = useCallback(async () => {
     if (!data?.group_id) {
       setLeadershipRequests([]);
@@ -197,6 +413,32 @@ const MyGroup = () => {
     }
   }, [data?.group_id]);
 
+  const handleRealtimeRefresh = useDebouncedCallback(() => {
+    void load();
+    void loadGroupDetails();
+
+    if (activeTab === "eligibility") {
+      void loadEligibility();
+    }
+    if (activeTab === "leadership") {
+      void loadLeadershipRequests();
+    }
+    if (activeTab === "rank") {
+      void loadRankData();
+    }
+  }, 300);
+
+  useRealtimeEvents(
+    [
+      REALTIME_EVENTS.JOIN_REQUESTS,
+      REALTIME_EVENTS.LEADERSHIP_REQUESTS,
+      REALTIME_EVENTS.MEMBERSHIPS,
+      REALTIME_EVENTS.POINTS,
+      REALTIME_EVENTS.ELIGIBILITY
+    ],
+    handleRealtimeRefresh
+  );
+
   useEffect(() => {
     if (activeTab !== "eligibility" || !data?.group_id) return;
     loadEligibility();
@@ -206,6 +448,11 @@ const MyGroup = () => {
     if (activeTab !== "leadership" || !data?.group_id) return;
     loadLeadershipRequests();
   }, [activeTab, data?.group_id, loadLeadershipRequests]);
+
+  useEffect(() => {
+    if (activeTab !== "rank" || !data?.group_id) return;
+    loadRankData();
+  }, [activeTab, data?.group_id, loadRankData]);
 
   useEffect(() => {
     if (!isCaptain && activeTab === "requests") {
@@ -263,7 +510,7 @@ const MyGroup = () => {
           ? "Approved by group captain"
           : "Rejected by group captain";
       await decideJoinRequest(requestId, status, reason);
-      await load();
+      await Promise.all([load(), loadGroupDetails()]);
     } catch (err) {
       setActionErr(err?.response?.data?.message || "Failed to update request.");
     } finally {
@@ -323,9 +570,49 @@ const MyGroup = () => {
     }
   };
 
+  const onSaveRankRules = async (payload) => {
+    if (!data?.group_id || !isCaptain) return;
+
+    setRankSaving(true);
+    setRankErr("");
+    setActionErr("");
+
+    try {
+      const result = await updateGroupRankRules(data.group_id, payload);
+      setRankRules(result || null);
+      await load();
+      await loadRankData();
+      setActiveTab("rank");
+    } catch (err) {
+      setRankErr(
+        err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          "Failed to save rank criteria."
+      );
+    } finally {
+      setRankSaving(false);
+    }
+  };
+
+  const refreshPage = useCallback(() => {
+    void load();
+    void loadGroupDetails();
+
+    if (activeTab === "eligibility") {
+      void loadEligibility();
+    }
+    if (activeTab === "leadership") {
+      void loadLeadershipRequests();
+    }
+    if (activeTab === "rank") {
+      void loadRankData();
+    }
+  }, [activeTab, load, loadEligibility, loadGroupDetails, loadLeadershipRequests, loadRankData]);
+
   const tabs = useMemo(
     () => [
       { key: "members", label: "Members", count: members.length },
+      { key: "rank", label: "Rank", count: null },
       { key: "eligibility", label: "Eligibility", count: null },
       ...(canRequestLeadershipRole || currentGroupLeadershipRequests.length > 0
         ? [
@@ -359,11 +646,11 @@ const MyGroup = () => {
     );
   }
 
-  if (error) {
+  if (pageError) {
     return (
       <div className="p-6">
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 shadow-sm">
-          {error}
+          {pageError}
         </div>
       </div>
     );
@@ -371,12 +658,7 @@ const MyGroup = () => {
 
   if (!data) {
     return (
-      <div className="p-6">
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h1 className="text-xl font-semibold text-slate-900">My Group</h1>
-          <p className="mt-2 text-slate-600">You are not part of any group yet.</p>
-        </div>
-      </div>
+      <EmptyMyGroupState deadlineInfo={rejoinDeadline} nowMs={nowMs} />
     );
   }
 
@@ -389,7 +671,7 @@ const MyGroup = () => {
         memberCount={Number(data.member_count || members.length || 0)}
         missingLeadershipRoles={missingLeadershipRoles}
         onLeave={onLeave}
-        onRefresh={load}
+        onRefresh={refreshPage}
       />
 
       {actionErr ? (
@@ -404,45 +686,64 @@ const MyGroup = () => {
         </div>
 
         <div className="p-4 md:p-6">
-          {activeTab === "members" ? (
-            <MyGroupMembersSection
-              currentStudentId={data?.student_id}
-              isCaptain={isCaptain}
-              members={members}
-              onChanged={load}
-            />
-          ) : activeTab === "eligibility" ? (
-            <MyGroupEligibilitySection
-              eligibility={eligibility}
-              eligibilityErr={eligibilityErr}
-              eligibilityLoading={eligibilityLoading}
-              onRefresh={loadEligibility}
-            />
-          ) : activeTab === "leadership" ? (
-            <MyGroupLeadershipSection
-              canRequest={canRequestLeadershipRole}
-              currentRole={currentRole}
-              form={leadershipForm}
-              loading={leadershipLoading}
-              missingRoles={missingLeadershipRoles}
-              onRefresh={loadLeadershipRequests}
-              onSubmit={onLeadershipSubmit}
-              onUpdateForm={updateLeadershipForm}
-              pendingRequest={pendingLeadershipRequest}
-              requests={currentGroupLeadershipRequests}
-              submitError={leadershipErr}
-              submitting={leadershipSubmitting}
-            />
-          ) : (
-            <MyGroupRequestsSection
-              busy={busy}
-              decisionBusyId={decisionBusyId}
-              loading={loading}
-              onDecision={onDecision}
-              onRefresh={load}
-              pending={pending}
-            />
-          )}
+          <Suspense fallback={<SectionFallback />}>
+            {activeTab === "members" ? (
+              <MyGroupMembersSection
+                currentStudentId={data?.student_id}
+                isCaptain={isCaptain}
+                canEditRank={canCaptainOverrideRank}
+                members={members}
+                onChanged={load}
+                showRankCriteria={false}
+                compactRank={true}
+              />
+            ) : activeTab === "rank" ? (
+              <MyGroupRankSection
+                currentStudentId={data?.student_id}
+                isCaptain={isCaptain}
+                canOverrideRank={canCaptainOverrideRank}
+                members={members}
+                rankHistory={rankHistory}
+                rankRules={rankRules}
+                loading={rankLoading}
+                saving={rankSaving}
+                error={rankErr}
+                onRefresh={loadRankData}
+                onSaveRules={onSaveRankRules}
+              />
+            ) : activeTab === "eligibility" ? (
+              <MyGroupEligibilitySection
+                eligibility={eligibility}
+                eligibilityErr={eligibilityErr}
+                eligibilityLoading={eligibilityLoading}
+                onRefresh={loadEligibility}
+              />
+            ) : activeTab === "leadership" ? (
+              <MyGroupLeadershipSection
+                canRequest={canRequestLeadershipRole}
+                currentRole={currentRole}
+                form={leadershipForm}
+                loading={leadershipLoading}
+                missingRoles={missingLeadershipRoles}
+                onRefresh={loadLeadershipRequests}
+                onSubmit={onLeadershipSubmit}
+                onUpdateForm={updateLeadershipForm}
+                pendingRequest={pendingLeadershipRequest}
+                requests={currentGroupLeadershipRequests}
+                submitError={leadershipErr}
+                submitting={leadershipSubmitting}
+              />
+            ) : (
+              <MyGroupRequestsSection
+                busy={busy}
+                decisionBusyId={decisionBusyId}
+                loading={loading}
+                onDecision={onDecision}
+                onRefresh={refreshPage}
+                pending={pending}
+              />
+            )}
+          </Suspense>
         </div>
       </div>
     </div>

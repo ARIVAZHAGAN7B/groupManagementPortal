@@ -1,10 +1,11 @@
+const http = require("http");
 const app = require("./app");
 const db = require("./config/db"); // import your MySQL pool
+const { startPhaseEndScheduler } = require("./jobs/phaseEndScheduler");
 const { startPhaseFinalizationCron } = require("./jobs/phaseFinalization.cron");
-const systemConfigRepo = require("./modules/systemConfig/systemConfig.repository");
-const auditRepo = require("./modules/audit/audit.repository");
-const eventRepo = require("./modules/event/event.repository");
-const groupPointRepo = require("./modules/groupPoint/groupPoint.repository");
+const { initializeRealtime } = require("./realtime/socket");
+const membershipService = require("./modules/membership/membership.service");
+const eligibilityService = require("./modules/eligibility/eligibility.service");
 require("dotenv").config();
 
 const PORT = process.env.PORT || 5000;
@@ -15,15 +16,21 @@ const startServer = async () => {
     const [rows] = await db.query("SELECT 1 + 1 AS result");
     console.log("DB connected, test query result:", rows[0].result);
 
-    await systemConfigRepo.ensureSchema();
-    await auditRepo.ensureSchema();
-    await eventRepo.ensureSchema();
-    await groupPointRepo.ensureSchema();
-
+    await startPhaseEndScheduler();
     startPhaseFinalizationCron();
 
+    void membershipService.syncPendingGroupRankReviews().catch((error) => {
+      console.error("Group rank review warmup failed:", error?.message || error);
+    });
+    void eligibilityService.backfillMissingEligibilityPointAllocations().catch((error) => {
+      console.error("Eligibility point backfill warmup failed:", error?.message || error);
+    });
+
+    const httpServer = http.createServer(app);
+    initializeRealtime(httpServer);
+
     // Start Express server
-    app.listen(PORT, () => {
+    httpServer.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });
   } catch (err) {

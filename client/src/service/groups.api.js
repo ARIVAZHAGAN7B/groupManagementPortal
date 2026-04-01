@@ -1,36 +1,61 @@
-import { api } from "../lib/api";
+import {
+  CLIENT_CACHE_TAGS,
+  CLIENT_CACHE_TTL,
+  cachedGet,
+  postWithInvalidation,
+  putWithInvalidation,
+  deleteWithInvalidation
+} from "../lib/api";
+
+const GROUP_INVALIDATION_TAGS = [
+  CLIENT_CACHE_TAGS.GROUPS,
+  CLIENT_CACHE_TAGS.GROUP_MEMBERSHIPS,
+  CLIENT_CACHE_TAGS.GROUP_RANKS,
+  CLIENT_CACHE_TAGS.LEADERBOARDS,
+  CLIENT_CACHE_TAGS.GROUP_ELIGIBILITY,
+  CLIENT_CACHE_TAGS.TEAM_TIER_CHANGE
+];
 
 export async function fetchGroups(params = {}) {
-  const { data } = await api.get("/api/groups", { params });
-  return data;
+  return cachedGet("/api/groups", { params }, {
+    tags: [CLIENT_CACHE_TAGS.GROUPS],
+    ttlMs: CLIENT_CACHE_TTL.MEDIUM
+  });
 }
 
 export async function fetchGroupById(id) {
-  const { data } = await api.get(`/api/groups/${id}`);
-  return data;
+  return cachedGet(`/api/groups/${id}`, {}, {
+    tags: [CLIENT_CACHE_TAGS.GROUPS],
+    ttlMs: CLIENT_CACHE_TTL.MEDIUM
+  });
 }
 
 export async function createGroup(payload) {
-  const { data } = await api.post("/api/groups", payload);
-  return data; // { message, id }
+  return postWithInvalidation("/api/groups", payload, {
+    invalidateTags: GROUP_INVALIDATION_TAGS
+  });
 }
 
 export async function updateGroup(id, payload) {
-  const { data } = await api.put(`/api/groups/${id}`, payload);
-  return data;
+  return putWithInvalidation(`/api/groups/${id}`, payload, {
+    invalidateTags: GROUP_INVALIDATION_TAGS
+  });
 }
 
 export async function activateGroup(id) {
-  const { data } = await api.put(`/api/groups/${id}/activate`);
-  return data;
+  return putWithInvalidation(`/api/groups/${id}/activate`, undefined, {
+    invalidateTags: GROUP_INVALIDATION_TAGS
+  });
 }
 
 export async function freezeGroup(id) {
-  const { data } = await api.put(`/api/groups/${id}/freeze`);
-  return data;
+  return putWithInvalidation(`/api/groups/${id}/freeze`, undefined, {
+    invalidateTags: GROUP_INVALIDATION_TAGS
+  });
 }
 
 export async function deleteGroup(id) {
-  const { data } = await api.delete(`/api/groups/${id}`);
-  return data;
+  return deleteWithInvalidation(`/api/groups/${id}`, {}, {
+    invalidateTags: GROUP_INVALIDATION_TAGS
+  });
 }

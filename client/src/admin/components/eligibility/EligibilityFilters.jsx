@@ -25,15 +25,16 @@ function FilterSelect({ children, onChange, value }) {
 }
 
 export default function EligibilityFilters({
-  filteredCount,
   phases,
   q,
   selectedPhaseId,
   setQ,
   setSelectedPhaseId,
   setViewMode,
-  totalCount,
-  viewMode
+  setYearFilter,
+  viewMode,
+  yearFilter,
+  yearOptions
 }) {
   return (
     <section className="flex flex-col items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row">
@@ -54,7 +55,7 @@ export default function EligibilityFilters({
         />
       </div>
 
-      <div className="flex w-full items-center gap-3 md:w-auto">
+      <div className="flex w-full flex-wrap items-center gap-3 md:w-auto">
         <FilterSelect
           value={selectedPhaseId}
           onChange={(event) => setSelectedPhaseId(event.target.value)}
@@ -80,9 +81,20 @@ export default function EligibilityFilters({
           ))}
         </FilterSelect>
 
-        <p className="hidden whitespace-nowrap text-xs font-medium text-slate-500 lg:block">
-          Showing {filteredCount} of {totalCount}
-        </p>
+        {viewMode === "individual" ? (
+          <FilterSelect
+            value={yearFilter}
+            onChange={(event) => setYearFilter(event.target.value)}
+          >
+            <option value="ALL">All Years</option>
+            {yearOptions.map((year) => (
+              <option key={year} value={year}>
+                Year {year}
+              </option>
+            ))}
+          </FilterSelect>
+        ) : null}
+
       </div>
     </section>
   );

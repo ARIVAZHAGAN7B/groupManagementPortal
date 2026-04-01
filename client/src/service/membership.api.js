@@ -1,18 +1,57 @@
-import { api } from "../lib/api";
+import {
+  api,
+  CLIENT_CACHE_TAGS,
+  CLIENT_CACHE_STORAGE,
+  CLIENT_CACHE_TTL,
+  cachedGet,
+  postWithInvalidation,
+  putWithInvalidation,
+  deleteWithInvalidation
+} from "../lib/api";
+
+const MEMBERSHIP_INVALIDATION_TAGS = [
+  CLIENT_CACHE_TAGS.GROUPS,
+  CLIENT_CACHE_TAGS.GROUP_MEMBERSHIPS,
+  CLIENT_CACHE_TAGS.GROUP_RANKS,
+  CLIENT_CACHE_TAGS.LEADERBOARDS,
+  CLIENT_CACHE_TAGS.GROUP_ELIGIBILITY,
+  CLIENT_CACHE_TAGS.TEAM_TIER_CHANGE
+];
 
 export async function joinGroup(groupId, role) {
-  const { data } = await api.post(`/api/membership/join/${groupId}`, role ? { role } : {});
-  return data;
+  return postWithInvalidation(`/api/membership/join/${groupId}`, role ? { role } : {}, {
+    invalidateTags: MEMBERSHIP_INVALIDATION_TAGS
+  });
 }
 
 export async function leaveGroup(groupId) {
-  const { data } = await api.post("/api/membership/leave", { groupId });
-  return data;
+  return postWithInvalidation("/api/membership/leave", { groupId }, {
+    invalidateTags: MEMBERSHIP_INVALIDATION_TAGS
+  });
 }
 
 export async function fetchGroupMembers(groupId) {
-  const { data } = await api.get(`/api/membership/group/${groupId}`);
+  const data = await cachedGet(`/api/membership/group/${groupId}`, {}, {
+    storage: CLIENT_CACHE_STORAGE.MEMORY,
+    tags: [CLIENT_CACHE_TAGS.GROUP_MEMBERSHIPS],
+    ttlMs: CLIENT_CACHE_TTL.SHORT
+  });
   return data; // array
+}
+
+export async function fetchGroupRankHistory(groupId) {
+  const data = await cachedGet(`/api/membership/group/${groupId}/rank-history`, {}, {
+    tags: [CLIENT_CACHE_TAGS.GROUP_RANKS],
+    ttlMs: CLIENT_CACHE_TTL.MEDIUM
+  });
+  return data; // array
+}
+
+export async function fetchGroupRankRules(groupId) {
+  return cachedGet(`/api/membership/group/${groupId}/rank-rules`, {}, {
+    tags: [CLIENT_CACHE_TAGS.GROUP_RANKS],
+    ttlMs: CLIENT_CACHE_TTL.MEDIUM
+  });
 }
 
 export async function fetchMyGroup() {
@@ -20,19 +59,33 @@ export async function fetchMyGroup() {
   return data; // { group }
 }
 
-export async function fetchAllMemberships() {
-  const { data } = await api.get("/api/membership");
-  return data; // array
+export async function fetchAllMemberships(params = {}) {
+  const { data } = await api.get("/api/membership", { params });
+  return data;
 }
 
 export async function deleteMembership(membershipId, reason) {
-  const { data } = await api.delete(`/api/membership/${membershipId}`, {
+  return deleteWithInvalidation(`/api/membership/${membershipId}`, {
     data: { reason }
+  }, {
+    invalidateTags: MEMBERSHIP_INVALIDATION_TAGS
   });
-  return data;
 }
 
 export async function updateMemberRole(membershipId, role) {
-  const { data } = await api.put(`/api/membership/${membershipId}/role`, { role });
-  return data;
+  return putWithInvalidation(`/api/membership/${membershipId}/role`, { role }, {
+    invalidateTags: MEMBERSHIP_INVALIDATION_TAGS
+  });
+}
+
+export async function updateMemberRank(membershipId, rank) {
+  return putWithInvalidation(`/api/membership/${membershipId}/rank`, { rank }, {
+    invalidateTags: MEMBERSHIP_INVALIDATION_TAGS
+  });
+}
+
+export async function updateGroupRankRules(groupId, payload) {
+  return putWithInvalidation(`/api/membership/group/${groupId}/rank-rules`, payload, {
+    invalidateTags: MEMBERSHIP_INVALIDATION_TAGS
+  });
 }

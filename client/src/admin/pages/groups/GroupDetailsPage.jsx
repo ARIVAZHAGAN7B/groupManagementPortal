@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
+import { useRealtimeEvents } from "../../../hooks/useRealtimeEvents";
+import { REALTIME_EVENTS, matchesRealtimeScope } from "../../../lib/realtime";
 import { fetchGroupById } from "../../../service/groups.api";
 import { useAuth } from "../../../utils/AuthContext";
 
@@ -22,7 +24,6 @@ import {
 } from "../../../service/leadershipRequests.api";
 
 import {
-  formatGroupPoints,
   getStatusConfig,
   getTierBadgeClass,
 } from "../../components/groups/groupManagement.constants";
@@ -136,6 +137,8 @@ const formatDateTime = (value) => {
   return d.toLocaleString();
 };
 
+const formatMetric = (value) => (Number(value) || 0).toLocaleString();
+
 export default function GroupDetailsPage() {
   const { id } = useParams();
   const nav = useNavigate();
@@ -231,6 +234,23 @@ export default function GroupDetailsPage() {
     loadPending();
     loadPendingLeadership();
   }, [id]);
+
+  useRealtimeEvents(
+    [
+      REALTIME_EVENTS.JOIN_REQUESTS,
+      REALTIME_EVENTS.LEADERSHIP_REQUESTS,
+      REALTIME_EVENTS.MEMBERSHIPS,
+      REALTIME_EVENTS.POINTS,
+      REALTIME_EVENTS.ELIGIBILITY
+    ],
+    (payload) => {
+      if (!matchesRealtimeScope(payload, { groupId: id })) return;
+
+      void loadAll();
+      void loadPending();
+      void loadPendingLeadership();
+    }
+  );
 
   const isAdminLike = useMemo(
     () => ["ADMIN", "SYSTEM_ADMIN"].includes(String(user?.role || "").toUpperCase()),
@@ -396,7 +416,13 @@ export default function GroupDetailsPage() {
                 {members.length} Active
               </span>
               <span className="inline-flex items-center rounded-full border border-white/80 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700">
-                {formatGroupPoints(group)} Points
+                Base {formatMetric(group?.lifetime_base_points)}
+              </span>
+              <span className="inline-flex items-center rounded-full border border-white/80 bg-white/90 px-3 py-1 text-xs font-semibold text-[#1754cf]">
+                Bonus {formatMetric(group?.eligibility_bonus_points)}
+              </span>
+              <span className="inline-flex items-center rounded-full border border-white/80 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700">
+                Total {formatMetric(group?.lifetime_total_points)}
               </span>
             </div>
           </div>
@@ -704,11 +730,13 @@ export default function GroupDetailsPage() {
         <GroupMembersTable
           members={members}
           canEditRole={["CAPTAIN", "ADMIN", "SYSTEM_ADMIN"].includes(String(user?.role || "").toUpperCase())}
+          canEditRank={["CAPTAIN", "ADMIN", "SYSTEM_ADMIN"].includes(String(user?.role || "").toUpperCase())}
           canRemoveMember={["CAPTAIN", "ADMIN", "SYSTEM_ADMIN"].includes(String(user?.role || "").toUpperCase())}
           onChanged={loadAll}
           highlightStudentId={highlightStudentId}
           highlightMembershipId={highlightMembershipId}
           showMembershipId={false}
+          showRankCriteria={false}
         />
       </SectionCard>
     </div>

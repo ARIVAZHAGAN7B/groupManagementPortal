@@ -1,41 +1,65 @@
-import { api } from "../lib/api";
+import {
+  CLIENT_CACHE_TAGS,
+  CLIENT_CACHE_TTL,
+  cachedGet,
+  postWithInvalidation,
+  putWithInvalidation,
+  deleteWithInvalidation
+} from "../lib/api";
+
+const EVENT_INVALIDATION_TAGS = [
+  CLIENT_CACHE_TAGS.EVENTS,
+  CLIENT_CACHE_TAGS.TEAMS,
+  CLIENT_CACHE_TAGS.TEAM_MEMBERSHIPS
+];
 
 export async function fetchEvents() {
-  const { data } = await api.get("/api/events");
+  const data = await cachedGet("/api/events", {}, {
+    tags: [CLIENT_CACHE_TAGS.EVENTS],
+    ttlMs: CLIENT_CACHE_TTL.MEDIUM
+  });
   return Array.isArray(data) ? data : [];
 }
 
 export async function fetchEventById(id) {
-  const { data } = await api.get(`/api/events/${id}`);
-  return data;
+  return cachedGet(`/api/events/${id}`, {}, {
+    tags: [CLIENT_CACHE_TAGS.EVENTS],
+    ttlMs: CLIENT_CACHE_TTL.MEDIUM
+  });
 }
 
 export async function createEvent(payload) {
-  const { data } = await api.post("/api/events", payload);
-  return data;
+  return postWithInvalidation("/api/events", payload, {
+    invalidateTags: EVENT_INVALIDATION_TAGS
+  });
 }
 
 export async function updateEvent(id, payload) {
-  const { data } = await api.put(`/api/events/${id}`, payload);
-  return data;
+  return putWithInvalidation(`/api/events/${id}`, payload, {
+    invalidateTags: EVENT_INVALIDATION_TAGS
+  });
 }
 
 export async function activateEvent(id) {
-  const { data } = await api.put(`/api/events/${id}/activate`);
-  return data;
+  return putWithInvalidation(`/api/events/${id}/activate`, undefined, {
+    invalidateTags: EVENT_INVALIDATION_TAGS
+  });
 }
 
 export async function closeEvent(id) {
-  const { data } = await api.put(`/api/events/${id}/close`);
-  return data;
+  return putWithInvalidation(`/api/events/${id}/close`, undefined, {
+    invalidateTags: EVENT_INVALIDATION_TAGS
+  });
 }
 
 export async function archiveEvent(id) {
-  const { data } = await api.put(`/api/events/${id}/archive`);
-  return data;
+  return putWithInvalidation(`/api/events/${id}/archive`, undefined, {
+    invalidateTags: EVENT_INVALIDATION_TAGS
+  });
 }
 
 export async function deleteEvent(id) {
-  const { data } = await api.delete(`/api/events/${id}`);
-  return data;
+  return deleteWithInvalidation(`/api/events/${id}`, {}, {
+    invalidateTags: EVENT_INVALIDATION_TAGS
+  });
 }

@@ -1,44 +1,16 @@
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import {
-  formatPercentLabel,
   getPhaseLabel,
-  getPhaseStatusPillClass,
-  getViewLabel
+  getPhaseStatusPillClass
 } from "./eligibility.constants";
 
-function StatPill({ accentClass, detail, label, value }) {
-  return (
-    <article className="rounded-lg border border-white/80 bg-white/90 px-3 py-2.5 shadow-sm">
-      <div className="flex items-center gap-2">
-        <span className={`h-2 w-2 shrink-0 rounded-full ${accentClass}`} />
-        <p className="text-sm font-semibold text-slate-700">
-          {label}: <span className="text-slate-900">{value}</span>
-        </p>
-      </div>
-      <p className="mt-1 pl-4 text-[11px] font-medium text-slate-500">{detail}</p>
-    </article>
-  );
-}
-
 export default function EligibilityHero({
-  filteredCount,
   loading,
   onRefresh,
   phase,
   stats,
   viewMode
 }) {
-  const total = Number(stats?.total) || 0;
-  const eligible = Number(stats?.eligible) || 0;
-  const notEligible = Number(stats?.notEligible) || 0;
-  const overrides = Number(stats?.overrides) || 0;
-  const viewLabel = getViewLabel(viewMode);
-
-  const headerSummary =
-    typeof filteredCount === "number" && filteredCount !== total
-      ? `Showing ${filteredCount} of ${total} ${viewLabel}`
-      : `${total} ${viewLabel} in workspace`;
-
   return (
     <section className="relative overflow-hidden rounded-2xl border border-[#1754cf]/10 bg-[#1754cf]/5 p-4 md:p-5">
       <div className="relative z-10 flex flex-col gap-3">
@@ -66,7 +38,6 @@ export default function EligibilityHero({
                 </span>
               ) : null}
             </div>
-            <p className="mt-1 text-xs font-medium text-slate-600">{headerSummary}</p>
           </div>
 
           <button
@@ -78,33 +49,6 @@ export default function EligibilityHero({
             <RefreshRoundedIcon sx={{ fontSize: 18 }} />
             {loading ? "Refreshing..." : "Refresh"}
           </button>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-          <StatPill
-            accentClass="bg-[#1754cf]"
-            detail={phase ? getPhaseLabel(phase) : "No phase selected"}
-            label="Total"
-            value={total}
-          />
-          <StatPill
-            accentClass="bg-green-500"
-            detail={formatPercentLabel(eligible, total)}
-            label="Eligible"
-            value={eligible}
-          />
-          <StatPill
-            accentClass="bg-red-400"
-            detail={formatPercentLabel(notEligible, total)}
-            label="Not Eligible"
-            value={notEligible}
-          />
-          <StatPill
-            accentClass="bg-amber-500"
-            detail="Reason code contains OVERRIDE"
-            label="Overrides"
-            value={overrides}
-          />
         </div>
       </div>
 

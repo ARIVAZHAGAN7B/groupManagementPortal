@@ -33,8 +33,7 @@ export default function MembershipManagementDesktopTable({
   actionBusyId,
   onManage,
   onRemove,
-  rows,
-  totalCount
+  rows
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -114,13 +113,6 @@ export default function MembershipManagementDesktopTable({
             )}
           </tbody>
         </table>
-      </div>
-
-      <div className="flex items-center justify-between bg-slate-50 px-6 py-4">
-        <p className="text-xs font-medium text-slate-500">
-          Showing {rows.length} of {totalCount} memberships
-        </p>
-        <p className="text-xs font-medium text-slate-500">All matching records are listed</p>
       </div>
     </section>
   );

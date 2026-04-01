@@ -1,9 +1,9 @@
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import {
   STATUS_STYLES,
   TYPE_STYLES,
-  formatDate,
   formatTeamTypeLabel,
   getActionDisabledState
 } from "./teamManagement.constants";
@@ -36,8 +36,10 @@ export default function TeamManagementMobileCards({
   onDeactivate,
   onEdit,
   onFreeze,
+  onViewMembers,
   rows,
-  scopeConfig
+  scopeConfig,
+  viewBusyTeamId
 }) {
   const isEventGroupScope = scopeConfig.scope === "EVENT_GROUP";
 
@@ -47,6 +49,32 @@ export default function TeamManagementMobileCards({
         rows.map((row) => {
           const busy = actionBusyId === Number(row.team_id);
           const disabled = getActionDisabledState(row.status);
+          const statusActions = [
+            {
+              key: "activate",
+              label: "Activate",
+              onClick: () => onActivate(row),
+              className: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+            },
+            {
+              key: "freeze",
+              label: "Freeze",
+              onClick: () => onFreeze(row),
+              className: "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
+            },
+            {
+              key: "archive",
+              label: "Delete",
+              onClick: () => onArchive(row),
+              className: "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+            },
+            {
+              key: "inactive",
+              label: "Inactive",
+              onClick: () => onDeactivate(row),
+              className: "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+            }
+          ].filter((action) => !disabled[action.key]);
           const typeClass =
             TYPE_STYLES[String(row.team_type || "").toUpperCase()] ||
             "border-slate-200 bg-slate-100 text-slate-600";
@@ -62,14 +90,26 @@ export default function TeamManagementMobileCards({
                   <h3 className="mt-1 text-lg font-bold text-slate-900">{row.team_name || "-"}</h3>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => onEdit(row)}
-                  disabled={busy}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <EditRoundedIcon sx={{ fontSize: 18 }} />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onViewMembers(row)}
+                    disabled={viewBusyTeamId === Number(row.team_id)}
+                    title="View members"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onEdit(row)}
+                    disabled={busy}
+                    title="Edit"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <EditRoundedIcon sx={{ fontSize: 18 }} />
+                  </button>
+                </div>
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
@@ -85,46 +125,34 @@ export default function TeamManagementMobileCards({
                 </Pill>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-600">
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
-                    {isEventGroupScope ? "Event" : "Type"}
-                  </p>
-                  <p className="mt-1 font-medium text-slate-800">
-                    {isEventGroupScope ? row.event_code || "-" : formatTeamTypeLabel(row.team_type)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Updated</p>
-                  <p className="mt-1 font-medium text-slate-800">{formatDate(row.updated_at)}</p>
-                </div>
+              <div className="mt-4 text-sm text-slate-600">
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                  {isEventGroupScope ? "Event" : "Type"}
+                </p>
+                <p className="mt-1 font-medium text-slate-800">
+                  {isEventGroupScope ? row.event_code || "-" : formatTeamTypeLabel(row.team_type)}
+                </p>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <ActionButton
-                  label="Activate"
-                  onClick={() => onActivate(row)}
-                  disabled={busy || disabled.activate}
-                  className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                />
-                <ActionButton
-                  label="Freeze"
-                  onClick={() => onFreeze(row)}
-                  disabled={busy || disabled.freeze}
-                  className="border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
-                />
-                <ActionButton
-                  label="Archive"
-                  onClick={() => onArchive(row)}
-                  disabled={busy || disabled.archive}
-                  className="border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
-                />
-                <ActionButton
-                  label={busy ? "Working..." : "Set Inactive"}
-                  onClick={() => onDeactivate(row)}
-                  disabled={busy || disabled.inactive}
-                  className="border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-                />
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                  Description
+                </p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  {row.description || "No description added."}
+                </p>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {statusActions.map((action) => (
+                  <ActionButton
+                    key={action.key}
+                    label={action.label}
+                    onClick={action.onClick}
+                    disabled={busy}
+                    className={action.className}
+                  />
+                ))}
               </div>
             </article>
           );

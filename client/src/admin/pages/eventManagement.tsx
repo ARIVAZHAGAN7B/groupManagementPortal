@@ -117,23 +117,6 @@ const Badge = ({
   );
 };
 
-const StatCard = ({
-  accent,
-  label,
-  value
-}: {
-  accent?: string;
-  label: string;
-  value: number;
-}) => (
-  <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-    <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-wider text-gray-400">
-      {label}
-    </p>
-    <p className={`text-xl font-bold ${accent ?? "text-gray-800"}`}>{value}</p>
-  </div>
-);
-
 const toInputDate = (value: string | null | undefined) => (value ? String(value).slice(0, 10) : "");
 
 const toInputNumber = (value: number | null | undefined) =>
@@ -278,35 +261,6 @@ export default function EventManagement() {
     );
   }, [rows, query]);
 
-  const counts = useMemo(() => {
-    const byStatus: Record<string, number> = {};
-    let openRegistration = 0;
-
-    for (const row of rows) {
-      const statusKey = String(row.status || "").toUpperCase();
-      byStatus[statusKey] = (byStatus[statusKey] || 0) + 1;
-
-      const now = new Date();
-      const start = row.registration_start_date ? new Date(row.registration_start_date) : null;
-      const end = row.registration_end_date ? new Date(row.registration_end_date) : null;
-      const afterStart =
-        !start || Number.isNaN(start.getTime()) || now >= new Date(start.setHours(0, 0, 0, 0));
-      const beforeEnd =
-        !end || Number.isNaN(end.getTime()) || now <= new Date(end.setHours(23, 59, 59, 999));
-
-      if (afterStart && beforeEnd) {
-        openRegistration += 1;
-      }
-    }
-
-    return {
-      total: rows.length,
-      active: byStatus.ACTIVE || 0,
-      openRegistration,
-      archived: byStatus.ARCHIVED || 0
-    };
-  }, [rows]);
-
   return (
     <div className="max-w-screen-xl space-y-5 p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -324,17 +278,6 @@ export default function EventManagement() {
         >
           {loading ? "Loading..." : "Refresh"}
         </button>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Total" value={counts.total} />
-        <StatCard label="Active" value={counts.active} accent="text-emerald-600" />
-        <StatCard
-          label="Registration Open"
-          value={counts.openRegistration}
-          accent="text-blue-600"
-        />
-        <StatCard label="Archived" value={counts.archived} accent="text-amber-600" />
       </div>
 
       <form onSubmit={onSubmit} className="rounded-xl border border-gray-100 bg-white p-5 space-y-4">

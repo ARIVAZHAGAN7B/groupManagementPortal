@@ -11,7 +11,9 @@ import GroupManagementDesktopTable from "../../components/groups/GroupManagement
 import GroupManagementFilters from "../../components/groups/GroupManagementFilters";
 import GroupManagementHero from "../../components/groups/GroupManagementHero";
 import GroupManagementMobileCards from "../../components/groups/GroupManagementMobileCards";
+import AdminPaginationBar from "../../components/ui/AdminPaginationBar";
 import { GROUP_TIER_OPTIONS } from "../../components/groups/groupManagement.constants";
+import useClientPagination from "../../../hooks/useClientPagination";
 
 export default function GroupManagementPage() {
   const nav = useNavigate();
@@ -84,6 +86,19 @@ export default function GroupManagementPage() {
         .some((value) => value.includes(search));
     });
   }, [groups, q, tierFilter, statusFilter]);
+
+  const {
+    limit,
+    page,
+    pageCount,
+    pagedItems: pagedGroups,
+    setLimit,
+    setPage
+  } = useClientPagination(filtered);
+
+  useEffect(() => {
+    setPage(1);
+  }, [q, setPage, statusFilter, tierFilter]);
 
   const stats = useMemo(() => {
     const all = Array.isArray(groups) ? groups : [];
@@ -205,7 +220,7 @@ export default function GroupManagementPage() {
       ) : (
         <>
           <GroupManagementMobileCards
-            groups={filtered}
+            groups={pagedGroups}
             onActivate={(groupId) =>
               runAction(activateGroup, groupId, "The group has been activated.")
             }
@@ -219,7 +234,7 @@ export default function GroupManagementPage() {
 
           <div className="hidden lg:block">
             <GroupManagementDesktopTable
-              groups={filtered}
+              groups={pagedGroups}
               onActivate={(groupId) =>
                 runAction(activateGroup, groupId, "The group has been activated.")
               }
@@ -229,11 +244,22 @@ export default function GroupManagementPage() {
                 runAction(freezeGroup, groupId, "The group has been frozen.")
               }
               onView={(groupId) => nav(`/groups/${groupId}`)}
-              totalCount={stats.total}
             />
           </div>
         </>
       )}
+
+      <AdminPaginationBar
+        itemLabel="groups"
+        limit={limit}
+        loading={loading}
+        onLimitChange={setLimit}
+        onPageChange={setPage}
+        page={page}
+        pageCount={pageCount}
+        shownCount={pagedGroups.length}
+        totalCount={filtered.length}
+      />
       </div>
 
       <GroupManagementActionModal

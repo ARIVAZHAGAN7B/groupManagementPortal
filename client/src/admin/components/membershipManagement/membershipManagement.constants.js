@@ -66,16 +66,18 @@ export const formatDate = (value) => {
 
 export const filterMembershipRows = (
   rows,
-  { query = "", roleFilter = "ALL", statusFilter = "ALL" }
+  { query = "", roleFilter = "ALL", statusFilter = "ALL", yearFilter = "ALL" }
 ) => {
   const search = String(query || "").trim().toLowerCase();
 
   return (Array.isArray(rows) ? rows : []).filter((row) => {
     const role = normalizeBadgeKey(row?.role);
     const status = normalizeBadgeKey(row?.membership_status);
+    const year = String(row?.year ?? "").trim();
 
     if (roleFilter !== "ALL" && role !== roleFilter) return false;
     if (statusFilter !== "ALL" && status !== statusFilter) return false;
+    if (yearFilter !== "ALL" && year !== yearFilter) return false;
 
     if (!search) return true;
 
@@ -84,6 +86,7 @@ export const filterMembershipRows = (
       row?.student_id,
       row?.student_name,
       row?.student_email,
+      row?.year,
       row?.group_name,
       row?.group_tier,
       row?.role,

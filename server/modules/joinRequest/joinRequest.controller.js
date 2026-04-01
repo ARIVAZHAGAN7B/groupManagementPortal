@@ -1,5 +1,6 @@
 const service = require("./joinRequest.service");
 const auditService = require("../audit/audit.service");
+const { broadcastJoinRequestChanged } = require("../../realtime/events");
 
 exports.applyJoinRequest = async (req, res) => {
   try {
@@ -20,6 +21,14 @@ exports.applyJoinRequest = async (req, res) => {
         student_id: studentId,
         group_id
       }
+    });
+
+    await broadcastJoinRequestChanged({
+      action: "JOIN_REQUEST_APPLIED",
+      requestId: result?.request_id || null,
+      groupId: result?.group_id || group_id,
+      studentId: result?.student_id || studentId,
+      status: result?.status || "PENDING"
     });
 
     res.status(201).json(result);
@@ -49,6 +58,19 @@ exports.decideJoinRequest = async (req, res) => {
       entityId: requestId,
       reasonCode: decision_reason || null,
       details: { status, decision_reason, approved_role: approved_role || null }
+    });
+
+    await broadcastJoinRequestChanged({
+      action:
+        String(status || "").toUpperCase() === "APPROVED"
+          ? "JOIN_REQUEST_APPROVED"
+          : "JOIN_REQUEST_REJECTED",
+      requestId: result?.request_id || Number(requestId),
+      groupId: result?.group_id || null,
+      studentId: result?.student_id || null,
+      status: result?.status || String(status || "").toUpperCase(),
+      approvedRole: result?.approved_role || null,
+      membershipChanged: String(result?.status || status || "").toUpperCase() === "APPROVED"
     });
 
     res.json(result);

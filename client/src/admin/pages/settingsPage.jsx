@@ -12,6 +12,8 @@ import { inputClass } from "../components/groups/groupManagement.constants";
 import ChangeDayManagementSectionShell from "../components/ChangeDayManagementSectionShell";
 import IncubationConfigurationPolicySection from "../components/incubation/IncubationConfigurationPolicySection";
 import IncubationConfigurationToggleCard from "../components/incubation/IncubationConfigurationToggleCard";
+import { useAppDispatch } from "../../store/hooks";
+import { sharedApi } from "../../store/api/sharedApi";
 import {
   fetchCurrentPhase,
   fetchPhaseTargets,
@@ -160,21 +162,7 @@ function StatusBanner({ message, tone }) {
   return <div className={`rounded-2xl border px-4 py-3 text-sm ${toneClass}`}>{message}</div>;
 }
 
-function StatPill({ accentClass, detail, label, value }) {
-  return (
-    <article className="rounded-xl border border-white/80 bg-white/90 px-3 py-3 shadow-sm">
-      <div className="flex items-center gap-2">
-        <span className={`h-2 w-2 shrink-0 rounded-full ${accentClass}`} />
-        <p className="text-sm font-semibold text-slate-700">
-          {label}: <span className="text-slate-900">{value}</span>
-        </p>
-      </div>
-      <p className="mt-1 pl-4 text-[11px] font-medium text-slate-500">{detail}</p>
-    </article>
-  );
-}
-
-function SettingsHero({ loading, onRefresh, stats }) {
+function SettingsHero({ loading, onRefresh }) {
   return (
     <section className="relative overflow-hidden rounded-2xl border border-[#1754cf]/10 bg-[#1754cf]/5 p-4 md:p-5">
       <div className="relative z-10 flex flex-col gap-3">
@@ -199,32 +187,6 @@ function SettingsHero({ loading, onRefresh, stats }) {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
-          <StatPill
-            accentClass="bg-[#1754cf]"
-            detail="Editable global policy controls"
-            label="Policy Toggles"
-            value={`${stats.enabledPolicyCount}/${stats.totalPolicyCount}`}
-          />
-          <StatPill
-            accentClass="bg-emerald-500"
-            detail="Current phase in settings workspace"
-            label="Active Phase"
-            value={stats.activePhaseLabel}
-          />
-          <StatPill
-            accentClass="bg-amber-500"
-            detail="Calendar dates excluded from working days"
-            label="Holidays"
-            value={stats.holidayCount}
-          />
-          <StatPill
-            accentClass="bg-sky-500"
-            detail="Current group size policy window"
-            label="Member Window"
-            value={stats.memberWindowLabel}
-          />
-        </div>
       </div>
 
       <div className="absolute -bottom-10 -right-10 h-48 w-48 rounded-full bg-[#1754cf]/10 blur-3xl" />
@@ -362,6 +324,7 @@ function HolidayRow({ deleteBusy, editBusy, holiday, onDelete, onEdit }) {
 }
 
 export default function SettingsPage() {
+  const dispatch = useAppDispatch();
   const [policyForm, setPolicyForm] = useState(DEFAULT_POLICY_FORM);
   const [lastSavedPolicyForm, setLastSavedPolicyForm] = useState(DEFAULT_POLICY_FORM);
   const [currentPhase, setCurrentPhase] = useState(null);
@@ -596,6 +559,7 @@ export default function SettingsPage() {
     try {
       await updatePhaseChangeDay(currentPhase.phase_id, selectedChangeDay);
       await loadPhase();
+      dispatch(sharedApi.util.invalidateTags([{ type: "PhaseContext", id: "CURRENT" }]));
       setSuccess("Change day updated.");
     } catch (err) {
       setError(err?.response?.data?.error || "Failed to update change day");
@@ -636,6 +600,7 @@ export default function SettingsPage() {
         end_time: phaseSettingsForm.end_time
       });
       await loadPhase();
+      dispatch(sharedApi.util.invalidateTags([{ type: "PhaseContext", id: "CURRENT" }]));
       setSuccess("Active phase settings updated.");
     } catch (err) {
       setError(err?.response?.data?.error || "Failed to update phase settings");
@@ -685,6 +650,7 @@ export default function SettingsPage() {
     try {
       await setPhaseTargets(currentPhase.phase_id, payload, parsedIndividualTarget);
       await loadPhase();
+      dispatch(sharedApi.util.invalidateTags([{ type: "PhaseContext", id: "CURRENT" }]));
       setSuccess("Active phase targets updated.");
     } catch (err) {
       setError(err?.response?.data?.error || "Failed to update phase targets");

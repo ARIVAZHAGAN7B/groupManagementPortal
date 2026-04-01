@@ -319,6 +319,8 @@ const decideLeadershipRoleRequest = async (requestId, status, decisionReason, ac
 
     return {
       message: `Leadership role request ${normalizedStatus} successfully`,
+      group_id: request.group_id,
+      student_id: request.student_id,
       status: normalizedStatus,
       leadership_request_id: Number(requestId),
       requested_role: normalizedStatus === "APPROVED" ? request.requested_role : null,
@@ -337,9 +339,9 @@ const getPendingLeadershipRequestsByGroup = async (groupId, actorUser) => {
   return repo.findPendingByGroup(groupId);
 };
 
-const getAllPendingLeadershipRequests = async (actorUser) => {
+const getAllPendingLeadershipRequests = async (actorUser, filters = {}) => {
   await ensureAdminActor(db, actorUser);
-  return repo.findAllPending();
+  return repo.findAllPending(filters);
 };
 
 const getMyLeadershipRoleRequests = async (actorUser) => {

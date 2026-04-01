@@ -2,6 +2,8 @@ import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import StudentGroupHero from "../groups/StudentGroupHero";
 import MyGroupBadge from "./MyGroupBadge";
 
+const formatMetric = (value) => (Number(value) || 0).toLocaleString();
+
 export default function MyGroupHero({
   actionsDisabled = false,
   data,
@@ -44,6 +46,15 @@ export default function MyGroupHero({
       <MyGroupBadge value={data?.role || "Member"} />
       <span className="inline-flex items-center rounded-full border border-white/80 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700">
         {memberCount} Member{memberCount === 1 ? "" : "s"}
+      </span>
+      <span className="inline-flex items-center rounded-full border border-white/80 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700">
+        Base {formatMetric(data?.lifetime_base_points)}
+      </span>
+      <span className="inline-flex items-center rounded-full border border-white/80 bg-white/90 px-3 py-1 text-xs font-semibold text-[#1754cf]">
+        Bonus {formatMetric(data?.eligibility_bonus_points)}
+      </span>
+      <span className="inline-flex items-center rounded-full border border-white/80 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700">
+        Total {formatMetric(data?.lifetime_total_points)}
       </span>
     </>
   );

@@ -22,6 +22,22 @@ const toExcludedStatusSet = (value) => {
   return new Set(values.map((item) => String(item).toUpperCase()));
 };
 
+const toOptionalBoolean = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value === "boolean") return value;
+
+  const normalized = String(value).trim().toLowerCase();
+  if (["true", "1", "yes"].includes(normalized)) return true;
+  if (["false", "0", "no"].includes(normalized)) return false;
+  return null;
+};
+
+const toOptionalNumber = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 const addDiscoveryFields = (group, policy, options = {}) => {
   if (!group) return group;
 
@@ -33,6 +49,18 @@ const addDiscoveryFields = (group, policy, options = {}) => {
     group.total_points === undefined || group.total_points === null
       ? 0
       : Number(group.total_points);
+  const lifetimeBasePoints =
+    group.lifetime_base_points === undefined || group.lifetime_base_points === null
+      ? 0
+      : Number(group.lifetime_base_points);
+  const eligibilityBonusPoints =
+    group.eligibility_bonus_points === undefined || group.eligibility_bonus_points === null
+      ? 0
+      : Number(group.eligibility_bonus_points);
+  const lifetimeTotalPoints =
+    group.lifetime_total_points === undefined || group.lifetime_total_points === null
+      ? lifetimeBasePoints + eligibilityBonusPoints
+      : Number(group.lifetime_total_points);
   const maxMembers = Number(policy.max_group_members);
   const vacancies =
     activeMemberCount === null || Number.isNaN(maxMembers)
@@ -51,6 +79,9 @@ const addDiscoveryFields = (group, policy, options = {}) => {
         ? null
         : Number(group.captain_points),
     total_points: Number.isNaN(totalPoints) ? 0 : totalPoints,
+    lifetime_base_points: Number.isNaN(lifetimeBasePoints) ? 0 : lifetimeBasePoints,
+    eligibility_bonus_points: Number.isNaN(eligibilityBonusPoints) ? 0 : eligibilityBonusPoints,
+    lifetime_total_points: Number.isNaN(lifetimeTotalPoints) ? 0 : lifetimeTotalPoints,
     vacancies,
     accepting_applications: acceptingApplications,
     current_phase_id: options.currentPhaseId || null,
@@ -77,6 +108,14 @@ exports.getGroups = async (options = {}) => {
     phaseRepo.getCurrentPhase().catch(() => null)
   ]);
   const excludedStatuses = toExcludedStatusSet(options.exclude_status);
+  const searchQuery = String(options.q || "").trim().toLowerCase();
+  const tierFilter = String(options.tier || "").trim().toUpperCase();
+  const statusFilter = String(options.status || "").trim().toUpperCase();
+  const captainFilter = String(options.captain || "").trim().toLowerCase();
+  const acceptingFilter = toOptionalBoolean(options.accepting);
+  const hasVacancyFilter = toOptionalBoolean(options.has_vacancy);
+  const minPoints = toOptionalNumber(options.min_points);
+  const eligibilityStatusFilter = String(options.eligibility_status || "").trim().toUpperCase();
 
   let eligibilityByGroupId = new Map();
   if (currentPhase?.phase_id) {
@@ -99,7 +138,67 @@ exports.getGroups = async (options = {}) => {
         eligibilityStatus:
           eligibilityByGroupId.get(String(group.group_id)) || "NOT_EVALUATED"
       })
-    );
+    )
+    .filter((group) => {
+      if (tierFilter && String(group?.tier || "").toUpperCase() !== tierFilter) {
+        return false;
+      }
+
+      if (statusFilter && String(group?.status || "").toUpperCase() !== statusFilter) {
+        return false;
+      }
+
+      if (
+        eligibilityStatusFilter &&
+        String(group?.current_phase_eligibility_status || "").toUpperCase() !==
+          eligibilityStatusFilter
+      ) {
+        return false;
+      }
+
+      if (acceptingFilter !== null && Boolean(group?.accepting_applications) !== acceptingFilter) {
+        return false;
+      }
+
+      if (hasVacancyFilter !== null) {
+        const vacancies = Number(group?.vacancies);
+        if (hasVacancyFilter && !(Number.isFinite(vacancies) && vacancies > 0)) {
+          return false;
+        }
+        if (!hasVacancyFilter && !(Number.isFinite(vacancies) && vacancies === 0)) {
+          return false;
+        }
+      }
+
+      if (minPoints !== null) {
+        const totalPoints = Number(group?.total_points);
+        if (!Number.isFinite(totalPoints) || totalPoints < minPoints) {
+          return false;
+        }
+      }
+
+      if (searchQuery) {
+        const haystack = [group?.group_id, group?.group_code, group?.group_name]
+          .map((value) => String(value || "").toLowerCase())
+          .join(" ");
+
+        if (!haystack.includes(searchQuery)) {
+          return false;
+        }
+      }
+
+      if (captainFilter) {
+        const captainHaystack = [group?.captain_name]
+          .map((value) => String(value || "").toLowerCase())
+          .join(" ");
+
+        if (!captainHaystack.includes(captainFilter)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
 };
 
 exports.getGroup = async (id) => {

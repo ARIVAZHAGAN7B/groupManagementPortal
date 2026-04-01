@@ -1,34 +1,15 @@
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 
-function TeamPageHeroStatPill({ accentClass, detail, label, value }) {
-  return (
-    <article className="rounded-lg border border-white/80 bg-white/90 px-3 py-2.5 shadow-sm">
-      <div className="flex items-center gap-2">
-        <span className={`h-2 w-2 shrink-0 rounded-full ${accentClass}`} />
-        <p className="text-sm font-semibold leading-5 text-slate-700">
-          {label}: <span className="break-words text-slate-900">{value ?? "-"}</span>
-        </p>
-      </div>
-      {detail ? (
-        <p className="mt-1 pl-4 text-[11px] font-medium text-slate-500">{detail}</p>
-      ) : null}
-    </article>
-  );
-}
-
 export default function TeamPageHero({
   loading = false,
   onRefresh,
   eyebrow = "Team Workspace",
   title,
-  summary,
   description,
   actions,
   actionLabel = "Refresh",
-  actionBusyLabel = "Refreshing...",
-  stats = []
+  actionBusyLabel = "Refreshing..."
 }) {
-  const visibleStats = Array.isArray(stats) ? stats.filter(Boolean) : [];
   const hasActionArea = Boolean(actions) || Boolean(onRefresh);
 
   return (
@@ -40,9 +21,6 @@ export default function TeamPageHero({
               {eyebrow}
             </span>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">{title}</h1>
-            {summary ? (
-              <p className="mt-1 text-xs font-medium text-slate-600">{summary}</p>
-            ) : null}
             {description ? (
               <p className="mt-2 max-w-2xl text-sm text-slate-600">{description}</p>
             ) : null}
@@ -66,20 +44,6 @@ export default function TeamPageHero({
             </div>
           ) : null}
         </div>
-
-        {visibleStats.length > 0 ? (
-          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-            {visibleStats.map((stat) => (
-              <TeamPageHeroStatPill
-                key={stat.key || stat.label}
-                accentClass={stat.accentClass || "bg-[#1754cf]"}
-                detail={stat.detail}
-                label={stat.label}
-                value={stat.value}
-              />
-            ))}
-          </div>
-        ) : null}
       </div>
 
       <div className="absolute -bottom-10 -right-10 h-48 w-48 rounded-full bg-[#1754cf]/10 blur-3xl" />

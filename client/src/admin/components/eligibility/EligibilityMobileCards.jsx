@@ -1,6 +1,10 @@
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import {
-  formatDateTime,
+  getAwardValue,
+  formatDate,
   getEligibilityStatusConfig,
+  getMultiplierLabel,
+  getOverrideOptions,
   getRowBusyKey,
   getRowKey,
   getScoreValue,
@@ -19,6 +23,7 @@ function DetailRow({ label, value, valueClassName = "font-bold text-slate-900" }
 export default function EligibilityMobileCards({
   overrideBusyKey,
   onOverride,
+  onViewReason,
   rows,
   selectedPhaseId,
   type
@@ -37,6 +42,7 @@ export default function EligibilityMobileCards({
         const busyKey = getRowBusyKey(type, selectedPhaseId, row);
         const isBusy = overrideBusyKey === busyKey;
         const statusConfig = getEligibilityStatusConfig(row.is_eligible);
+        const overrideOptions = getOverrideOptions(row.is_eligible);
 
         return (
           <article
@@ -82,31 +88,45 @@ export default function EligibilityMobileCards({
             ) : null}
 
             <DetailRow label="Score" value={getScoreValue(type, row)} />
-            <DetailRow label="Reason" value={row.reason_code || "-"} valueClassName="text-right text-slate-700" />
+            <DetailRow
+              label="Bonus"
+              value={`${getAwardValue(row)} (${getMultiplierLabel(row)})`}
+            />
             <DetailRow
               label="Evaluated"
-              value={formatDateTime(row.evaluated_at)}
+              value={formatDate(row.evaluated_at)}
               valueClassName="text-right text-slate-600"
             />
 
-            <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-100 pt-4">
+            <div
+              className={`mt-4 grid gap-2 border-t border-slate-100 pt-4 ${
+                overrideOptions.length > 1 ? "grid-cols-3" : "grid-cols-2"
+              }`}
+            >
               <button
                 type="button"
-                onClick={() => onOverride(type, row, true)}
-                disabled={isBusy}
-                className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs font-bold text-green-600 disabled:opacity-60"
+                onClick={() => onViewReason(type, row)}
+                className="flex flex-col items-center gap-1 rounded-lg bg-slate-50 px-1.5 py-2 text-slate-600 transition hover:bg-slate-100"
               >
-                {isBusy ? "Saving..." : "Eligible"}
+                <VisibilityOutlinedIcon sx={{ fontSize: 16 }} />
+                <span className="text-[8px] font-bold uppercase">Reason</span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => onOverride(type, row, false)}
-                disabled={isBusy}
-                className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-600 disabled:opacity-60"
-              >
-                {isBusy ? "Saving..." : "Not Eligible"}
-              </button>
+              {overrideOptions.map((option) => (
+                <button
+                  key={option.label}
+                  type="button"
+                  onClick={() => onOverride(type, row, option.isEligible)}
+                  disabled={isBusy}
+                  className={`rounded-lg border px-2 py-2 text-xs font-bold disabled:opacity-60 ${
+                    option.isEligible
+                      ? "border-green-200 bg-green-50 text-green-600"
+                      : "border-red-200 bg-red-50 text-red-600"
+                  }`}
+                >
+                  {isBusy ? "Saving..." : option.label}
+                </button>
+              ))}
             </div>
           </article>
         );

@@ -1,84 +1,8 @@
 const db = require("../../config/db");
 
 const getExecutor = (executor) => executor || db;
-const REQUIRED_PHASE_STATUSES = ["ACTIVE", "INACTIVE", "COMPLETED"];
-let ensurePhaseStatusColumnPromise = null;
-
-const parseEnumValues = (columnType) => {
-  const matches = String(columnType || "").match(/'((?:''|[^'])*)'/g) || [];
-  return matches.map((token) => token.slice(1, -1).replace(/''/g, "'"));
-};
-
-const escapeSqlString = (value) => String(value).replace(/'/g, "''");
-
-const ensurePhaseStatusColumn = async () => {
-  if (ensurePhaseStatusColumnPromise) return ensurePhaseStatusColumnPromise;
-
-  ensurePhaseStatusColumnPromise = (async () => {
-    const [rows] = await db.execute(
-      `SELECT DATA_TYPE, COLUMN_TYPE, COLUMN_DEFAULT, IS_NULLABLE
-       FROM information_schema.COLUMNS
-       WHERE TABLE_SCHEMA = DATABASE()
-         AND TABLE_NAME = 'phases'
-         AND COLUMN_NAME = 'status'
-       LIMIT 1`
-    );
-
-    const column = rows?.[0];
-    if (!column) return;
-    if (String(column.DATA_TYPE || "").toLowerCase() !== "enum") return;
-
-    const existingValues = parseEnumValues(column.COLUMN_TYPE);
-    if (existingValues.length === 0) return;
-
-    const existingUpper = new Set(existingValues.map((value) => String(value).toUpperCase()));
-    const mergedValues = [...existingValues];
-    for (const status of REQUIRED_PHASE_STATUSES) {
-      if (!existingUpper.has(status)) {
-        mergedValues.push(status);
-      }
-    }
-
-    if (mergedValues.length === existingValues.length) return;
-
-    const currentDefault =
-      column.COLUMN_DEFAULT === null || column.COLUMN_DEFAULT === undefined
-        ? null
-        : String(column.COLUMN_DEFAULT);
-    const defaultValue =
-      currentDefault &&
-      mergedValues.find(
-        (value) => String(value).toUpperCase() === String(currentDefault).toUpperCase()
-      );
-    const effectiveDefault =
-      defaultValue ||
-      mergedValues.find((value) => String(value).toUpperCase() === "INACTIVE") ||
-      mergedValues[0];
-    const isNullable = String(column.IS_NULLABLE || "").toUpperCase() === "YES";
-
-    const enumValuesSql = mergedValues
-      .map((value) => `'${escapeSqlString(value)}'`)
-      .join(", ");
-    const nullabilitySql = isNullable ? "NULL" : "NOT NULL";
-    const defaultSql =
-      effectiveDefault === null || effectiveDefault === undefined
-        ? ""
-        : ` DEFAULT '${escapeSqlString(effectiveDefault)}'`;
-
-    await db.execute(
-      `ALTER TABLE phases
-       MODIFY COLUMN status ENUM(${enumValuesSql}) ${nullabilitySql}${defaultSql}`
-    );
-  })().catch((error) => {
-    ensurePhaseStatusColumnPromise = null;
-    throw error;
-  });
-
-  return ensurePhaseStatusColumnPromise;
-};
 
 exports.insertPhase = async (phase, executor) => {
-  await ensurePhaseStatusColumn();
   const sql = `
     INSERT INTO phases (
       phase_id,
@@ -109,7 +33,6 @@ exports.insertPhase = async (phase, executor) => {
 };
 
 exports.deactivateActivePhases = async (executor) => {
-  await ensurePhaseStatusColumn();
   await getExecutor(executor).execute(
     `UPDATE phases SET status = 'INACTIVE' WHERE status = 'ACTIVE'`
   );
@@ -229,12 +152,157 @@ exports.getDueInactivePhases = async (todayDate, executor) => {
 };
 
 exports.updatePhaseStatus = async (phase_id, status, executor) => {
-  await ensurePhaseStatusColumn();
   const exec = getExecutor(executor);
   await exec.execute(
     `UPDATE phases SET status = ? WHERE phase_id = ?`,
     [status, phase_id]
   );
+};
+
+exports.upsertPhaseEndJob = async ({ phase_id, run_at, status = "PENDING" }, executor) => {
+  const exec = getExecutor(executor);
+  await exec.execute(
+    `INSERT INTO phase_end_jobs (
+       phase_id,
+       run_at,
+       status,
+       attempts,
+       last_error,
+       locked_by,
+       locked_at,
+       completed_at
+     )
+     VALUES (?, ?, ?, 0, NULL, NULL, NULL, CASE WHEN ? = 'COMPLETED' THEN CURRENT_TIMESTAMP ELSE NULL END)
+     ON DUPLICATE KEY UPDATE
+       run_at = VALUES(run_at),
+       status = VALUES(status),
+       attempts = CASE WHEN VALUES(status) = 'PENDING' THEN 0 ELSE attempts END,
+       last_error = NULL,
+       locked_by = NULL,
+       locked_at = NULL,
+       completed_at = CASE
+         WHEN VALUES(status) = 'COMPLETED' THEN CURRENT_TIMESTAMP
+         WHEN VALUES(status) = 'PENDING' THEN NULL
+         ELSE completed_at
+       END`,
+    [phase_id, run_at, status, status]
+  );
+};
+
+exports.getNextPendingPhaseEndJob = async (executor) => {
+  const exec = getExecutor(executor);
+  const [rows] = await exec.execute(
+    `SELECT *
+     FROM phase_end_jobs
+     WHERE status = 'PENDING'
+     ORDER BY run_at ASC, job_id ASC
+     LIMIT 1`
+  );
+  return rows[0] || null;
+};
+
+exports.listDuePhaseEndJobs = async (runAt, limit = 25, executor) => {
+  const exec = getExecutor(executor);
+  const normalizedLimit = Math.max(1, Number(limit) || 25);
+  const [rows] = await exec.execute(
+    `SELECT *
+     FROM phase_end_jobs
+     WHERE status = 'PENDING'
+       AND run_at <= ?
+     ORDER BY run_at ASC, job_id ASC
+     LIMIT ${normalizedLimit}`,
+    [runAt]
+  );
+  return rows;
+};
+
+exports.claimPhaseEndJob = async (jobId, workerId, executor) => {
+  const exec = getExecutor(executor);
+  const [result] = await exec.execute(
+    `UPDATE phase_end_jobs
+     SET status = 'RUNNING',
+         attempts = attempts + 1,
+         locked_by = ?,
+         locked_at = CURRENT_TIMESTAMP,
+         last_error = NULL
+     WHERE job_id = ?
+       AND status = 'PENDING'`,
+    [workerId, jobId]
+  );
+  return Number(result?.affectedRows) === 1;
+};
+
+exports.completePhaseEndJob = async (jobId, executor) => {
+  const exec = getExecutor(executor);
+  await exec.execute(
+    `UPDATE phase_end_jobs
+     SET status = 'COMPLETED',
+         locked_by = NULL,
+         locked_at = NULL,
+         last_error = NULL,
+         completed_at = CURRENT_TIMESTAMP
+     WHERE job_id = ?`,
+    [jobId]
+  );
+};
+
+exports.completePhaseEndJobByPhaseId = async (phaseId, executor) => {
+  const exec = getExecutor(executor);
+  await exec.execute(
+    `UPDATE phase_end_jobs
+     SET status = 'COMPLETED',
+         locked_by = NULL,
+         locked_at = NULL,
+         last_error = NULL,
+         completed_at = CURRENT_TIMESTAMP
+     WHERE phase_id = ?`,
+    [phaseId]
+  );
+};
+
+exports.cancelPhaseEndJobByPhaseId = async (phaseId, reason = null, executor) => {
+  const exec = getExecutor(executor);
+  await exec.execute(
+    `UPDATE phase_end_jobs
+     SET status = 'CANCELLED',
+         locked_by = NULL,
+         locked_at = NULL,
+         last_error = ?,
+         completed_at = NULL
+     WHERE phase_id = ?`,
+    [reason, phaseId]
+  );
+};
+
+exports.reschedulePhaseEndJob = async (jobId, runAt, errorMessage = null, executor) => {
+  const exec = getExecutor(executor);
+  await exec.execute(
+    `UPDATE phase_end_jobs
+     SET status = 'PENDING',
+         run_at = ?,
+         locked_by = NULL,
+         locked_at = NULL,
+         completed_at = NULL,
+         last_error = ?
+     WHERE job_id = ?`,
+    [runAt, errorMessage, jobId]
+  );
+};
+
+exports.requeueStaleRunningPhaseEndJobs = async (lockedBefore, executor) => {
+  const exec = getExecutor(executor);
+  const [result] = await exec.execute(
+    `UPDATE phase_end_jobs
+     SET status = 'PENDING',
+         locked_by = NULL,
+         locked_at = NULL,
+         last_error = COALESCE(last_error, 'Recovered stale phase end job')
+     WHERE status = 'RUNNING'
+       AND locked_at IS NOT NULL
+       AND locked_at <= ?`,
+    [lockedBefore]
+  );
+  return Number(result?.affectedRows) || 0;
 };
 
 exports.getAllPhases = async () => {

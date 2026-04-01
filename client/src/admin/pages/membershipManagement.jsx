@@ -1,16 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useRealtimeEvents } from "../../hooks/useRealtimeEvents";
+import { REALTIME_EVENTS } from "../../lib/realtime";
 import MembershipManagementDesktopTable from "../components/membershipManagement/MembershipManagementDesktopTable";
 import MembershipManagementFilters from "../components/membershipManagement/MembershipManagementFilters";
 import MembershipManagementHero from "../components/membershipManagement/MembershipManagementHero";
 import MembershipManagementMobileCards from "../components/membershipManagement/MembershipManagementMobileCards";
 import MembershipRemovalModal from "../components/membershipManagement/MembershipRemovalModal";
+import AdminPaginationBar from "../components/ui/AdminPaginationBar";
+import { DEFAULT_PAGE_SIZE } from "../../shared/constants/pagination";
 import {
+  ROLE_STYLES,
   buildMembershipStatCards,
-  filterMembershipRows,
-  normalizeBadgeKey
+  filterMembershipRows
 } from "../components/membershipManagement/membershipManagement.constants";
 import { deleteMembership, fetchAllMemberships } from "../../service/membership.api";
+
+const DEFAULT_YEAR_OPTIONS = ["1", "2", "3", "4"];
+const DEFAULT_LIMIT = DEFAULT_PAGE_SIZE;
 
 export default function MembershipManagement() {
   const nav = useNavigate();
@@ -20,6 +27,11 @@ export default function MembershipManagement() {
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [yearFilter, setYearFilter] = useState("ALL");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(DEFAULT_LIMIT);
+  const [totalCount, setTotalCount] = useState(0);
+  const [pageCount, setPageCount] = useState(1);
   const [actionBusyId, setActionBusyId] = useState(null);
   const [removeDialog, setRemoveDialog] = useState({
     row: null,
@@ -27,40 +39,81 @@ export default function MembershipManagement() {
     error: ""
   });
 
-  const loadMemberships = async () => {
-    setLoading(true);
+  const loadMemberships = async ({ nextPage = page, nextLimit = limit, showLoader = true } = {}) => {
+    if (showLoader) setLoading(true);
     setError("");
 
     try {
-      const data = await fetchAllMemberships();
-      setRows(Array.isArray(data) ? data : []);
+      const data = await fetchAllMemberships({
+        page: nextPage,
+        limit: nextLimit,
+        status: statusFilter !== "ALL" ? statusFilter : undefined,
+        role: roleFilter !== "ALL" ? roleFilter : undefined
+      });
+      const items = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+      const resolvedTotal = Array.isArray(data) ? items.length : Number(data?.total) || items.length;
+      const resolvedLimit = Array.isArray(data) ? nextLimit : Number(data?.limit) || nextLimit;
+      const resolvedPageCount = Array.isArray(data)
+        ? 1
+        : Math.max(1, Number(data?.total_pages) || Math.ceil(resolvedTotal / resolvedLimit) || 1);
+      const resolvedPage = Array.isArray(data)
+        ? nextPage
+        : Math.min(Math.max(1, Number(data?.page) || nextPage), resolvedPageCount);
+
+      if (items.length === 0 && resolvedTotal > 0 && nextPage > resolvedPageCount) {
+        setPage(resolvedPageCount);
+        return;
+      }
+
+      setRows(items);
+      setTotalCount(resolvedTotal);
+      setPageCount(resolvedPageCount);
+      if (resolvedPage !== page) setPage(resolvedPage);
+      if (resolvedLimit !== limit) setLimit(resolvedLimit);
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to load memberships");
       setRows([]);
+      setTotalCount(0);
+      setPageCount(1);
     } finally {
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadMemberships();
-  }, []);
+    void loadMemberships();
+  }, [page, limit, roleFilter, statusFilter]);
+
+  useRealtimeEvents(REALTIME_EVENTS.MEMBERSHIPS, () => {
+    void loadMemberships({ showLoader: false });
+  });
 
   const roleOptions = useMemo(
+    () => Object.keys(ROLE_STYLES),
+    []
+  );
+
+  const yearOptions = useMemo(
     () =>
       Array.from(
         new Set(
-          rows
-            .map((row) => normalizeBadgeKey(row?.role))
-            .filter(Boolean)
+          [...DEFAULT_YEAR_OPTIONS, ...rows
+            .map((row) => String(row?.year ?? "").trim())
+            .filter(Boolean)]
         )
-      ).sort(),
+      ).sort((a, b) => Number(a) - Number(b)),
     [rows]
   );
 
+  useEffect(() => {
+    if (yearFilter === "ALL") return;
+    if (yearOptions.includes(yearFilter)) return;
+    setYearFilter("ALL");
+  }, [yearFilter, yearOptions]);
+
   const filteredRows = useMemo(
-    () => filterMembershipRows(rows, { query, roleFilter, statusFilter }),
-    [rows, query, roleFilter, statusFilter]
+    () => filterMembershipRows(rows, { query, roleFilter, statusFilter, yearFilter }),
+    [rows, query, roleFilter, statusFilter, yearFilter]
   );
 
   const statCards = useMemo(() => buildMembershipStatCards(rows), [rows]);
@@ -113,7 +166,7 @@ export default function MembershipManagement() {
     try {
       await deleteMembership(row.membership_id, reason);
       closeRemoveDialog();
-      await loadMemberships();
+      await loadMemberships({ showLoader: false });
     } catch (err) {
       const message = err?.response?.data?.message || "Failed to remove membership";
       setRemoveDialog((prev) => ({
@@ -125,27 +178,43 @@ export default function MembershipManagement() {
     }
   };
 
+  const handleRoleFilterChange = (value) => {
+    setRoleFilter(value);
+    setPage(1);
+  };
+
+  const handleStatusFilterChange = (value) => {
+    setStatusFilter(value);
+    setPage(1);
+  };
+
+  const handleLimitChange = (value) => {
+    setLimit(value);
+    setPage(1);
+  };
+
   return (
     <>
       <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-5 font-[Inter] md:px-6">
         <MembershipManagementHero
           filteredCount={filteredRows.length}
           loading={loading}
-          onRefresh={loadMemberships}
+          onRefresh={() => loadMemberships()}
           statCards={statCards}
-          totalCount={rows.length}
+          totalCount={totalCount}
         />
 
         <MembershipManagementFilters
-          filteredCount={filteredRows.length}
           query={query}
           roleFilter={roleFilter}
           roleOptions={roleOptions}
           setQuery={setQuery}
-          setRoleFilter={setRoleFilter}
-          setStatusFilter={setStatusFilter}
+          setRoleFilter={handleRoleFilterChange}
+          setStatusFilter={handleStatusFilterChange}
+          setYearFilter={setYearFilter}
           statusFilter={statusFilter}
-          totalCount={rows.length}
+          yearFilter={yearFilter}
+          yearOptions={yearOptions}
         />
 
         {error ? (
@@ -172,11 +241,22 @@ export default function MembershipManagement() {
                 onManage={onManage}
                 onRemove={openRemoveDialog}
                 rows={filteredRows}
-                totalCount={rows.length}
               />
             </div>
           </>
         )}
+
+        <AdminPaginationBar
+          itemLabel="memberships"
+          limit={limit}
+          loading={loading}
+          onLimitChange={handleLimitChange}
+          onPageChange={setPage}
+          page={page}
+          pageCount={pageCount}
+          shownCount={filteredRows.length}
+          totalCount={totalCount}
+        />
       </div>
 
       <MembershipRemovalModal

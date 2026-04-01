@@ -1,46 +1,73 @@
-import { api } from "../lib/api";
+import {
+  CLIENT_CACHE_TAGS,
+  CLIENT_CACHE_TTL,
+  cachedGet,
+  postWithInvalidation,
+  putWithInvalidation,
+  deleteWithInvalidation
+} from "../lib/api";
+
+const SYSTEM_CONFIG_INVALIDATION_TAGS = [
+  CLIENT_CACHE_TAGS.SYSTEM_CONFIG,
+  CLIENT_CACHE_TAGS.HOLIDAYS,
+  CLIENT_CACHE_TAGS.PHASES
+];
 
 export async function fetchOperationalPolicy() {
-  const { data } = await api.get("/api/system-config/policy");
-  return data;
+  return cachedGet("/api/system-config/policy", {}, {
+    tags: [CLIENT_CACHE_TAGS.SYSTEM_CONFIG],
+    ttlMs: CLIENT_CACHE_TTL.LONG
+  });
 }
 
 export async function updateOperationalPolicy(payload) {
-  const { data } = await api.put("/api/system-config/policy", payload);
-  return data;
+  return putWithInvalidation("/api/system-config/policy", payload, {
+    invalidateTags: SYSTEM_CONFIG_INVALIDATION_TAGS
+  });
 }
 
 export async function fetchIncubationConfig() {
-  const { data } = await api.get("/api/system-config/incubation");
-  return data;
+  return cachedGet("/api/system-config/incubation", {}, {
+    tags: [CLIENT_CACHE_TAGS.SYSTEM_CONFIG],
+    ttlMs: CLIENT_CACHE_TTL.LONG
+  });
 }
 
 export async function updateIncubationConfig(payload) {
-  const { data } = await api.put("/api/system-config/incubation", payload);
-  return data;
+  return putWithInvalidation("/api/system-config/incubation", payload, {
+    invalidateTags: SYSTEM_CONFIG_INVALIDATION_TAGS
+  });
 }
 
 export async function fetchHolidays() {
-  const { data } = await api.get("/api/system-config/holidays");
+  const data = await cachedGet("/api/system-config/holidays", {}, {
+    tags: [CLIENT_CACHE_TAGS.HOLIDAYS],
+    ttlMs: CLIENT_CACHE_TTL.LONG
+  });
   return Array.isArray(data) ? data : [];
 }
 
 export async function fetchHolidayById(holidayId) {
-  const { data } = await api.get(`/api/system-config/holidays/${holidayId}`);
-  return data;
+  return cachedGet(`/api/system-config/holidays/${holidayId}`, {}, {
+    tags: [CLIENT_CACHE_TAGS.HOLIDAYS],
+    ttlMs: CLIENT_CACHE_TTL.LONG
+  });
 }
 
 export async function createHoliday(payload) {
-  const { data } = await api.post("/api/system-config/holidays", payload);
-  return data;
+  return postWithInvalidation("/api/system-config/holidays", payload, {
+    invalidateTags: SYSTEM_CONFIG_INVALIDATION_TAGS
+  });
 }
 
 export async function updateHoliday(holidayId, payload) {
-  const { data } = await api.put(`/api/system-config/holidays/${holidayId}`, payload);
-  return data;
+  return putWithInvalidation(`/api/system-config/holidays/${holidayId}`, payload, {
+    invalidateTags: SYSTEM_CONFIG_INVALIDATION_TAGS
+  });
 }
 
 export async function deleteHoliday(holidayId) {
-  const { data } = await api.delete(`/api/system-config/holidays/${holidayId}`);
-  return data;
+  return deleteWithInvalidation(`/api/system-config/holidays/${holidayId}`, {}, {
+    invalidateTags: SYSTEM_CONFIG_INVALIDATION_TAGS
+  });
 }

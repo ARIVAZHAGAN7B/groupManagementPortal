@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import { useNavigate, useParams } from "react-router-dom";
+import { useRealtimeEvents } from "../../hooks/useRealtimeEvents";
+import { REALTIME_EVENTS, matchesRealtimeScope } from "../../lib/realtime";
 import { fetchGroupById } from "../../service/groups.api";
 import { fetchGroupMembers } from "../../service/membership.api";
 import { applyJoinRequest, getStudentIdByUserId } from "../../service/joinRequests.api";
@@ -11,6 +13,8 @@ import StudentGroupHero from "../components/groups/StudentGroupHero";
 import MyGroupEligibilitySection from "../components/myGroup/MyGroupEligibilitySection";
 import MyGroupMembersSection from "../components/myGroup/MyGroupMembersSection";
 import MyGroupBadge from "../components/myGroup/MyGroupBadge";
+
+const formatMetric = (value) => (Number(value) || 0).toLocaleString();
 
 const GroupDetails = () => {
   const { id } = useParams();
@@ -102,6 +106,8 @@ const GroupDetails = () => {
             tier: group?.tier || null,
             earned_points: 0,
             target_points: null,
+            eligibility_multiplier: null,
+            eligibility_awarded_points: 0,
             is_eligible: null,
             eligibility_error: ""
           };
@@ -142,6 +148,23 @@ const GroupDetails = () => {
     loadEligibility();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, id]);
+
+  useRealtimeEvents(
+    [
+      REALTIME_EVENTS.JOIN_REQUESTS,
+      REALTIME_EVENTS.MEMBERSHIPS,
+      REALTIME_EVENTS.POINTS,
+      REALTIME_EVENTS.ELIGIBILITY
+    ],
+    (payload) => {
+      if (!matchesRealtimeScope(payload, { groupId: id })) return;
+
+      void load();
+      if (activeTab === "eligibility") {
+        void loadEligibility();
+      }
+    }
+  );
 
   const onJoin = async () => {
     setBusy(true);
@@ -203,6 +226,15 @@ const GroupDetails = () => {
       <span className="inline-flex items-center rounded-full border border-white/80 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700">
         {memberCount} Member{memberCount === 1 ? "" : "s"}
       </span>
+      <span className="inline-flex items-center rounded-full border border-white/80 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700">
+        Base {formatMetric(group?.lifetime_base_points)}
+      </span>
+      <span className="inline-flex items-center rounded-full border border-white/80 bg-white/90 px-3 py-1 text-xs font-semibold text-[#1754cf]">
+        Bonus {formatMetric(group?.eligibility_bonus_points)}
+      </span>
+      <span className="inline-flex items-center rounded-full border border-white/80 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700">
+        Total {formatMetric(group?.lifetime_total_points)}
+      </span>
     </>
   );
 
@@ -255,11 +287,12 @@ const GroupDetails = () => {
               <MyGroupMembersSection
                 currentStudentId={currentStudentId}
                 members={members}
+                showRankCriteria={false}
               />
             </div>
           ) : (
             <MyGroupEligibilitySection
-              description="Last 5 completed phase eligibility with target progress and final status."
+              description="Last 5 completed phase eligibility with target progress, final status, and bonus points."
               eligibility={eligibility}
               eligibilityErr={eligibilityErr}
               eligibilityLoading={eligibilityLoading}

@@ -31,14 +31,14 @@ const SideBar = ({ onNavigate }) => {
 
   const linkClass = ({ isActive }) =>
     [
-      "group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors",
+      "group relative flex w-full cursor-pointer items-center gap-3 overflow-hidden rounded-none px-5 py-3 text-sm font-medium transition-[background-color,color,transform] duration-200 ease-out after:absolute after:right-0 after:top-0 after:h-full after:w-[4px] after:origin-bottom after:scale-y-0 after:bg-[#3211d4] after:transition-transform after:duration-200 after:ease-out after:content-['']",
       isActive
-        ? "bg-[#3211d4] text-white shadow-md shadow-[#3211d4]/20"
-        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+        ? "bg-[#3211d4]/12 font-bold text-[#2b0fb8] shadow-[inset_0_0_0_1px_rgba(50,17,212,0.08)] after:scale-y-100"
+        : "text-slate-600 hover:bg-slate-100/80 hover:text-[#3211d4]",
     ].join(" ");
 
   const utilityButtonClass =
-    "flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900";
+    "flex w-full cursor-pointer items-center gap-3 rounded-none px-5 py-3 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100/80 hover:text-[#3211d4]";
 
   const handleLogout = async () => {
     try {
@@ -50,21 +50,37 @@ const SideBar = ({ onNavigate }) => {
   };
 
   return (
-    <div className="flex h-full flex-col p-4">
-      <nav className="space-y-1">
+    <div className="flex h-full flex-col">
+      <nav className="pt-3">
         {menuItems.map(({ name, path, icon: Icon, end, badge }) => (
           <NavLink key={name} to={path} end={end} onClick={() => onNavigate?.()} className={linkClass}>
             {({ isActive }) => (
               <>
-                <span className={isActive ? "text-white" : "text-slate-500 group-hover:text-slate-700"}>
+                <span
+                  className={
+                    isActive
+                      ? "relative z-10 scale-105 text-[#2b0fb8] transition-all duration-200"
+                      : "relative z-10 text-slate-500 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-[#3211d4]"
+                  }
+                >
                   <Icon fontSize="small" />
                 </span>
-                <span className="truncate">{name}</span>
+                <span
+                  className={
+                    isActive
+                      ? "relative z-10 truncate translate-x-0.5 transition-transform duration-200"
+                      : "relative z-10 truncate transition-transform duration-200 group-hover:translate-x-0.5"
+                  }
+                >
+                  {name}
+                </span>
                 {badge ? (
                   <span
                     className={[
-                      "ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold",
-                      isActive ? "bg-white/20 text-white" : "bg-[#3211d4]/10 text-[#3211d4]",
+                      "relative z-10 ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold transition-colors duration-200",
+                      isActive
+                        ? "bg-[#3211d4]/12 text-[#2b0fb8]"
+                        : "bg-slate-100 text-slate-600",
                     ].join(" ")}
                   >
                     {badge}
@@ -76,7 +92,7 @@ const SideBar = ({ onNavigate }) => {
         ))}
       </nav>
 
-      <div className="mt-6 space-y-1 border-t border-slate-100 pt-6">
+      <div className="mt-5 border-t border-slate-200 pt-5">
         {utilityItems.map(({ name, icon: Icon }) => (
           <button key={name} type="button" className={utilityButtonClass}>
             <span className="text-slate-500">
@@ -89,7 +105,7 @@ const SideBar = ({ onNavigate }) => {
         <button
           type="button"
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-red-500 transition-colors hover:bg-red-50"
+          className="flex w-full cursor-pointer items-center gap-3 rounded-none px-5 py-3 text-sm font-medium text-red-500 transition-colors hover:bg-red-50"
         >
           <span>
             <LogoutRoundedIcon fontSize="small" />

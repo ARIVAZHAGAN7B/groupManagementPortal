@@ -2,8 +2,20 @@ const repo = require("./phase.repository");
 const db = require("../../config/db");
 const { v4: uuidv4 } = require("uuid");
 const eligibilityService = require("../eligibility/eligibility.service");
+const { completePhaseWithEvaluation } = require("./phase.finalization");
+const { syncPhaseEndSchedule } = require("../../jobs/phaseEndScheduler");
+const { broadcastPhaseChanged } = require("../../realtime/events");
 
 const REQUIRED_TIERS = ["D", "C", "B", "A"];
+const HOLIDAY_CACHE_TTL_MS = Math.max(
+  1000,
+  Number(process.env.HOLIDAY_CACHE_TTL_MS) || 5 * 60 * 1000
+);
+let holidayCache = {
+  expiresAt: 0,
+  holidays: [],
+  holidaySet: new Set()
+};
 
 const pad2 = (value) => String(value).padStart(2, "0");
 
@@ -45,7 +57,8 @@ const formatDateTime = (date) => {
 const isWorkingDay = (date, holidays) => {
   const day = date.getDay();
   const formatted = formatDateOnly(date);
-  return day !== 0 && day !== 6 && !holidays.includes(formatted);
+  const isHoliday = holidays instanceof Set ? holidays.has(formatted) : holidays.includes(formatted);
+  return day !== 0 && day !== 6 && !isHoliday;
 };
 
 const toStartOfDay = (value) => {
@@ -183,11 +196,6 @@ const ensureNoPhaseWindowOverlap = async ({
   }
 };
 
-const completePhaseWithEvaluation = async (phaseId) => {
-  await eligibilityService.evaluatePhaseEligibility(phaseId);
-  await repo.updatePhaseStatus(phaseId, "COMPLETED");
-};
-
 const finalizeExpiredActivePhases = async () => {
   const now = formatDateTime(new Date());
   const nowDate = new Date();
@@ -237,16 +245,34 @@ const finalizeExpiredActivePhases = async () => {
     }
 
     await repo.updatePhaseStatus(duePhase.phase_id, "ACTIVE");
+    broadcastPhaseChanged({
+      action: "PHASE_ACTIVATED",
+      phaseId: duePhase.phase_id,
+      status: "ACTIVE"
+    });
   }
 };
 
 const getHolidayDateList = async () => {
+  const now = Date.now();
+  if (holidayCache.expiresAt > now) {
+    return holidayCache;
+  }
+
   const [holidayRows] = await db.query(`SELECT holiday_date FROM holidays`);
-  return holidayRows.map((h) => toDateOnly(h.holiday_date)).filter(Boolean);
+  const holidays = holidayRows.map((h) => toDateOnly(h.holiday_date)).filter(Boolean);
+
+  holidayCache = {
+    expiresAt: now + HOLIDAY_CACHE_TTL_MS,
+    holidays,
+    holidaySet: new Set(holidays)
+  };
+
+  return holidayCache;
 };
 
 const calculatePhaseDates = async (startDate, totalDays, changeDayNumber) => {
-  const holidays = await getHolidayDateList();
+  const { holidaySet } = await getHolidayDateList();
 
   let count = 0;
   let currentDate = new Date(startDate);
@@ -254,7 +280,7 @@ const calculatePhaseDates = async (startDate, totalDays, changeDayNumber) => {
   let endDate = null;
 
   while (count < totalDays) {
-    if (isWorkingDay(currentDate, holidays)) {
+    if (isWorkingDay(currentDate, holidaySet)) {
       count += 1;
       if (count === changeDayNumber) {
         changeDay = new Date(currentDate);
@@ -270,13 +296,13 @@ const calculatePhaseDates = async (startDate, totalDays, changeDayNumber) => {
 };
 
 const calculateChangeDayNumberForDate = async (startDate, changeDayDate) => {
-  const holidays = await getHolidayDateList();
+  const { holidaySet } = await getHolidayDateList();
 
   let count = 0;
   const currentDate = new Date(startDate);
 
   while (currentDate <= changeDayDate) {
-    if (isWorkingDay(currentDate, holidays)) {
+    if (isWorkingDay(currentDate, holidaySet)) {
       count += 1;
     }
     currentDate.setDate(currentDate.getDate() + 1);
@@ -286,12 +312,12 @@ const calculateChangeDayNumberForDate = async (startDate, changeDayDate) => {
 };
 
 const calculateWorkingDaysInRange = async (startDate, endDate) => {
-  const holidays = await getHolidayDateList();
+  const { holidaySet } = await getHolidayDateList();
   let count = 0;
   const currentDate = new Date(startDate);
 
   while (currentDate <= endDate) {
-    if (isWorkingDay(currentDate, holidays)) {
+    if (isWorkingDay(currentDate, holidaySet)) {
       count += 1;
     }
     currentDate.setDate(currentDate.getDate() + 1);
@@ -301,20 +327,20 @@ const calculateWorkingDaysInRange = async (startDate, endDate) => {
 };
 
 const calculateWorkingDaysMetricsInRange = async (startDate, endDate) => {
-  const holidays = await getHolidayDateList();
+  const { holidaySet } = await getHolidayDateList();
   let totalWorkingDays = 0;
   let holidayCount = 0;
   const currentDate = new Date(startDate);
 
   while (currentDate <= endDate) {
     const formatted = formatDateOnly(currentDate);
-    const isHoliday = holidays.includes(formatted);
+    const isHoliday = holidaySet.has(formatted);
 
     if (isHoliday && currentDate.getDay() !== 0 && currentDate.getDay() !== 6) {
       holidayCount += 1;
     }
 
-    if (isWorkingDay(currentDate, holidays)) {
+    if (isWorkingDay(currentDate, holidaySet)) {
       totalWorkingDays += 1;
     }
 
@@ -328,12 +354,12 @@ const calculateWorkingDaysMetricsInRange = async (startDate, endDate) => {
 };
 
 const calculateChangeDayDateByNumber = async (startDate, changeDayNumber) => {
-  const holidays = await getHolidayDateList();
+  const { holidaySet } = await getHolidayDateList();
   let count = 0;
   const currentDate = new Date(startDate);
 
   while (count < changeDayNumber) {
-    if (isWorkingDay(currentDate, holidays)) {
+    if (isWorkingDay(currentDate, holidaySet)) {
       count += 1;
     }
     if (count === changeDayNumber) {
@@ -541,6 +567,27 @@ const createPhase = async (data) => {
     connection.release();
   }
 
+  for (const activePhase of Array.isArray(activePhasesToClose) ? activePhasesToClose : []) {
+    if (!activePhase?.phase_id) continue;
+    await syncPhaseEndSchedule({
+      ...activePhase,
+      status: "COMPLETED"
+    });
+    await completePhaseWithEvaluation(activePhase.phase_id, {
+      broadcast: false
+    });
+  }
+
+  await syncPhaseEndSchedule(phase, {
+    forcePending: phase.status === "COMPLETED"
+  });
+
+  if (phase.status === "COMPLETED") {
+    await completePhaseWithEvaluation(phase.phase_id, {
+      broadcast: false
+    });
+  }
+
   return phase;
 };
 
@@ -575,13 +622,10 @@ const getPhaseTargets = async (phase_id) => {
   };
 };
 const getCurrentPhase = async () => {
-  await finalizeExpiredActivePhases();
-
   const phase = await repo.getCurrentPhase();
   if (!phase) return null;
 
-  const [holidayRows] = await db.query(`SELECT holiday_date FROM holidays`);
-  const holidays = holidayRows.map((h) => toDateOnly(h.holiday_date)).filter(Boolean);
+  const { holidaySet } = await getHolidayDateList();
 
   const today = toStartOfDay(new Date());
   const startDate = toStartOfDay(phase.start_date);
@@ -605,7 +649,7 @@ const getCurrentPhase = async () => {
   let remainingWorkingDays = 0;
 
   while (current <= endDate) {
-    if (isWorkingDay(current, holidays)) {
+    if (isWorkingDay(current, holidaySet)) {
       remainingWorkingDays += 1;
     }
     current.setDate(current.getDate() + 1);
@@ -617,12 +661,10 @@ const getCurrentPhase = async () => {
   };
 };
 const getPhaseById = async (phase_id) => {
-  await finalizeExpiredActivePhases();
   return repo.getPhaseById(phase_id);
 };
 
 const getAllPhases = async () => {
-  await finalizeExpiredActivePhases();
   return repo.getAllPhases();
 };
 
@@ -707,7 +749,12 @@ const updatePhaseSettings = async (phase_id, payload = {}) => {
   // when the phase end window is moved to the past.
   await finalizeExpiredActivePhases();
 
-  return repo.getPhaseById(phase_id);
+  const updatedPhase = await repo.getPhaseById(phase_id);
+  if (updatedPhase) {
+    await syncPhaseEndSchedule(updatedPhase);
+  }
+
+  return updatedPhase;
 };
 
 const updatePhaseChangeDay = async (phase_id, change_day) => {

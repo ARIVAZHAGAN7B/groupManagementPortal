@@ -2,6 +2,7 @@ const express = require("express");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const { authenticate } = require("./middlewares/auth.middleware");
+const { getCorsConfig } = require("./config/runtime");
 
 const authRoutes = require("./routes/auth.routes");
 const registerRoutes = require("./routes/register.routes");
@@ -26,14 +27,7 @@ const app = express();
 
 app.use(express.json());
 app.use(cookieParser());
-app.use(cors({
-  origin: "http://localhost:5173", // your frontend URL
-  credentials: true
-}) );
-
-// Example Express endpoint
-
-
+app.use(cors(getCorsConfig()));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/register", registerRoutes);

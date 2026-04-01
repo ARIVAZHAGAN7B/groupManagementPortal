@@ -11,7 +11,7 @@ import {
   TIER_STYLES
 } from "./studentManagement.constants";
 
-export default function StudentManagementDesktopTable({ students, totalCount }) {
+export default function StudentManagementDesktopTable({ students }) {
   return (
     <section className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:block">
       <div className="overflow-x-auto">
@@ -91,13 +91,6 @@ export default function StudentManagementDesktopTable({ students, totalCount }) 
             )}
           </tbody>
         </table>
-      </div>
-
-      <div className="flex items-center justify-between bg-slate-50 px-6 py-4">
-        <p className="text-xs font-medium text-slate-500">
-          Showing {students.length} of {totalCount} students
-        </p>
-        <p className="text-xs font-medium text-slate-500">All matching students are listed</p>
       </div>
     </section>
   );

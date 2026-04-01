@@ -1,10 +1,12 @@
 // hooks/useAxios.js
 import { useState } from "react";
 import axios from "axios";
+import { API_BASE_URL } from "../lib/api";
 
 // Pre-configured Axios instance
 const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_BACKEND_API, // your backend URL
+  baseURL: API_BASE_URL,
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },

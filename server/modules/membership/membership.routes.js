@@ -47,6 +47,28 @@ router.get(
   controller.getGroupMembers
 );
 
+// View stored group-rank review history
+router.get(
+  "/group/:groupId/rank-history",
+  authenticate,
+  authorize("ADMIN", "CAPTAIN", "STUDENT", "SYSTEM_ADMIN"),
+  controller.getGroupRankHistory
+);
+
+router.get(
+  "/group/:groupId/rank-rules",
+  authenticate,
+  authorize("ADMIN", "CAPTAIN", "STUDENT", "SYSTEM_ADMIN"),
+  controller.getGroupRankRules
+);
+
+router.put(
+  "/group/:groupId/rank-rules",
+  authenticate,
+  authorize("CAPTAIN", "ADMIN", "SYSTEM_ADMIN"),
+  controller.updateGroupRankRules
+);
+
 // Update role (Captain/Admin)
 router.put(
   "/:membershipId/role",
@@ -54,6 +76,15 @@ router.put(
   authorize("STUDENT","CAPTAIN","ADMIN","SYSTEM_ADMIN"),
   validation.validateRole,
   controller.updateRole
+);
+
+// Update rank (Captain/Admin)
+router.put(
+  "/:membershipId/rank",
+  authenticate,
+  authorize("STUDENT", "CAPTAIN", "ADMIN", "SYSTEM_ADMIN"),
+  validation.validateRank,
+  controller.updateRank
 );
 
 // Admin: mark membership as left

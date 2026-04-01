@@ -3,6 +3,8 @@ import StudentManagementDesktopTable from "../components/students/StudentManagem
 import StudentManagementFilters from "../components/students/StudentManagementFilters";
 import StudentManagementHero from "../components/students/StudentManagementHero";
 import StudentManagementMobileCards from "../components/students/StudentManagementMobileCards";
+import AdminPaginationBar from "../components/ui/AdminPaginationBar";
+import useClientPagination from "../../hooks/useClientPagination";
 import {
   getMembershipState
 } from "../components/students/studentManagement.constants";
@@ -80,6 +82,19 @@ export default function StudentManagement() {
     });
   }, [groupFilter, q, rows, yearFilter]);
 
+  const {
+    limit,
+    page,
+    pageCount,
+    pagedItems: pagedRows,
+    setLimit,
+    setPage
+  } = useClientPagination(filteredRows);
+
+  useEffect(() => {
+    setPage(1);
+  }, [groupFilter, q, setPage, yearFilter]);
+
   const stats = useMemo(() => {
     const totalStudents = rows.length;
     const inGroup = rows.filter((row) => Boolean(row?.group_id)).length;
@@ -136,13 +151,22 @@ export default function StudentManagement() {
         </div>
       ) : (
         <>
-          <StudentManagementMobileCards students={filteredRows} />
-          <StudentManagementDesktopTable
-            students={filteredRows}
-            totalCount={stats.totalStudents}
-          />
+          <StudentManagementMobileCards students={pagedRows} />
+          <StudentManagementDesktopTable students={pagedRows} />
         </>
       )}
+
+      <AdminPaginationBar
+        itemLabel="students"
+        limit={limit}
+        loading={loading}
+        onLimitChange={setLimit}
+        onPageChange={setPage}
+        page={page}
+        pageCount={pageCount}
+        shownCount={pagedRows.length}
+        totalCount={filteredRows.length}
+      />
     </section>
   );
 }

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import axios from "axios";
-import { API_BASE_URL, api } from "../lib/api";
+import { API_BASE_URL, api, clearClientCache } from "../lib/api";
+import { connectRealtime, disconnectRealtime } from "../lib/realtime";
 
 const AuthContext = createContext(null);
 
@@ -47,6 +48,7 @@ const clearLogoutTimer = (logoutTimerRef) => {
 
 const clearUserSession = (logoutTimerRef, setUserState) => {
   clearLogoutTimer(logoutTimerRef);
+  clearClientCache();
   setUserState(null);
 };
 
@@ -69,7 +71,6 @@ export const AuthProvider = ({ children }) => {
       const res = await axios.get(`${API_BASE_URL}/api/auth/me`, {
         withCredentials: true,
       });
-      console.log("User data refreshed:", res.data);
       const nextUser = normalizeUser(res.data);
       setUserState(nextUser);
       return nextUser;
@@ -155,6 +156,16 @@ export const AuthProvider = ({ children }) => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
+
+  useEffect(() => {
+    if (user?.userId) {
+      connectRealtime();
+      return undefined;
+    }
+
+    disconnectRealtime();
+    return undefined;
+  }, [user?.userId]);
 
   return (
     <AuthContext.Provider

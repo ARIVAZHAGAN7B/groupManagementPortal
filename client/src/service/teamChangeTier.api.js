@@ -1,19 +1,38 @@
-import { api } from "../lib/api";
+import {
+  CLIENT_CACHE_TAGS,
+  CLIENT_CACHE_STORAGE,
+  CLIENT_CACHE_TTL,
+  cachedGet,
+  postWithInvalidation
+} from "../lib/api";
 
 export async function fetchPhaseTierChangePreview(phaseId) {
-  const { data } = await api.get(`/api/team-change-tier/phases/${phaseId}/preview`);
-  return data;
+  return cachedGet(`/api/team-change-tier/phases/${phaseId}/preview`, {}, {
+    storage: CLIENT_CACHE_STORAGE.MEMORY,
+    tags: [CLIENT_CACHE_TAGS.TEAM_TIER_CHANGE],
+    ttlMs: CLIENT_CACHE_TTL.SHORT
+  });
 }
 
 export async function fetchPhaseWiseTeamChangeTier(phaseId) {
-  const { data } = await api.get(`/api/team-change-tier/phases/${phaseId}`);
-  return data;
+  return cachedGet(`/api/team-change-tier/phases/${phaseId}`, {}, {
+    storage: CLIENT_CACHE_STORAGE.MEMORY,
+    tags: [CLIENT_CACHE_TAGS.TEAM_TIER_CHANGE],
+    ttlMs: CLIENT_CACHE_TTL.SHORT
+  });
 }
 
 export async function applyTeamChangeTier(phaseId, groupId, payload = {}) {
-  const { data } = await api.post(
+  return postWithInvalidation(
     `/api/team-change-tier/phases/${phaseId}/groups/${groupId}/apply`,
-    payload
+    payload,
+    {
+      invalidateTags: [
+        CLIENT_CACHE_TAGS.TEAM_TIER_CHANGE,
+        CLIENT_CACHE_TAGS.GROUPS,
+        CLIENT_CACHE_TAGS.LEADERBOARDS,
+        CLIENT_CACHE_TAGS.GROUP_ELIGIBILITY
+      ]
+    }
   );
-  return data;
 }

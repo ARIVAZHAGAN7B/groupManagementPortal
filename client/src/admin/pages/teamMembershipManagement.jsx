@@ -1,88 +1,189 @@
 import { useEffect, useMemo, useState } from "react";
+import { useRealtimeEvents } from "../../hooks/useRealtimeEvents";
+import { REALTIME_EVENTS } from "../../lib/realtime";
+import GroupManagementActionModal from "../components/groups/GroupManagementActionModal";
+import TeamMembershipManagementDesktopTable from "../components/teamMembershipManagement/TeamMembershipManagementDesktopTable";
+import TeamMembershipManagementFilters from "../components/teamMembershipManagement/TeamMembershipManagementFilters";
+import TeamMembershipManagementHero from "../components/teamMembershipManagement/TeamMembershipManagementHero";
+import TeamMembershipManagementMobileCards from "../components/teamMembershipManagement/TeamMembershipManagementMobileCards";
+import AdminPaginationBar from "../components/ui/AdminPaginationBar";
+import { DEFAULT_PAGE_SIZE } from "../../shared/constants/pagination";
+import {
+  MEMBERSHIP_STATUS_ORDER,
+  buildTeamMembershipStatCards,
+  filterTeamMembershipRows,
+  formatLabel,
+  getTeamMembershipScopeConfig,
+  normalizeTeamMembershipKey,
+  sortByPreferredOrder
+} from "../components/teamMembershipManagement/teamMembershipManagement.constants";
 import {
   fetchAllTeamMemberships,
   leaveTeamMembership,
   updateTeamMembership
 } from "../../service/teams.api";
 
-const formatDate = (value) => {
-  if (!value) return "-";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleDateString();
-};
+const DEFAULT_LIMIT = DEFAULT_PAGE_SIZE;
 
-const TEAM_ROLES = ["CAPTAIN", "VICE_CAPTAIN", "MEMBER", "STRATEGIST", "MANAGER"];
-
-export default function TeamMembershipManagement() {
+export default function TeamMembershipManagement({ scope = "TEAM" }) {
+  const scopeConfig = getTeamMembershipScopeConfig(scope);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(DEFAULT_LIMIT);
+  const [totalCount, setTotalCount] = useState(0);
+  const [pageCount, setPageCount] = useState(1);
   const [editedRoleByMembershipId, setEditedRoleByMembershipId] = useState({});
   const [busyMembershipId, setBusyMembershipId] = useState(null);
+  const [busyAction, setBusyAction] = useState(null);
+  const [modalState, setModalState] = useState({
+    open: false,
+    mode: "alert",
+    tone: "error",
+    title: "",
+    message: "",
+    confirmLabel: "OK",
+    cancelLabel: "Cancel",
+    onConfirm: null
+  });
 
-  const loadMemberships = async () => {
-    setLoading(true);
+  const loadMemberships = async ({
+    nextPage = page,
+    nextLimit = limit,
+    showLoader = true
+  } = {}) => {
+    if (showLoader) setLoading(true);
     setError("");
+
     try {
-      const params =
-        statusFilter === "ALL"
-          ? {}
-          : {
-              status: statusFilter
-            };
-      const data = await fetchAllTeamMemberships(params);
-      setRows(Array.isArray(data) ? data : []);
-      setEditedRoleByMembershipId((prev) => {
-        const next = { ...prev };
-        for (const row of Array.isArray(data) ? data : []) {
-          if (!next[row.team_membership_id]) {
-            next[row.team_membership_id] = String(row.role || "MEMBER").toUpperCase();
-          }
-        }
-        return next;
+      const data = await fetchAllTeamMemberships({
+        team_type: scopeConfig.teamType,
+        page: nextPage,
+        limit: nextLimit,
+        status: statusFilter !== "ALL" ? statusFilter : undefined
       });
+      const normalizedRows = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.items)
+          ? data.items
+          : [];
+      const resolvedTotal = Array.isArray(data)
+        ? normalizedRows.length
+        : Number(data?.total) || normalizedRows.length;
+      const resolvedLimit = Array.isArray(data) ? nextLimit : Number(data?.limit) || nextLimit;
+      const resolvedPageCount = Array.isArray(data)
+        ? 1
+        : Math.max(1, Number(data?.total_pages) || Math.ceil(resolvedTotal / resolvedLimit) || 1);
+      const resolvedPage = Array.isArray(data)
+        ? nextPage
+        : Math.min(Math.max(1, Number(data?.page) || nextPage), resolvedPageCount);
+
+      if (normalizedRows.length === 0 && resolvedTotal > 0 && nextPage > resolvedPageCount) {
+        setPage(resolvedPageCount);
+        return;
+      }
+
+      setRows(normalizedRows);
+      setTotalCount(resolvedTotal);
+      setPageCount(resolvedPageCount);
+      if (resolvedPage !== page) setPage(resolvedPage);
+      if (resolvedLimit !== limit) setLimit(resolvedLimit);
+      setEditedRoleByMembershipId(
+        normalizedRows.reduce((acc, row) => {
+          acc[row.team_membership_id] = normalizeTeamMembershipKey(row.role) || "MEMBER";
+          return acc;
+        }, {})
+      );
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to load team memberships");
+      setError(
+        err?.response?.data?.message ||
+          `Failed to load ${String(scopeConfig.scopeLabelPlural || "team memberships").toLowerCase()}`
+      );
       setRows([]);
+      setTotalCount(0);
+      setPageCount(1);
     } finally {
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadMemberships();
-  }, [statusFilter]);
+    void loadMemberships();
+  }, [scopeConfig.teamType, page, limit, statusFilter]);
 
-  const filteredRows = useMemo(() => {
-    const q = String(query || "").trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((row) =>
-      [
-        row.team_membership_id,
-        row.student_id,
-        row.student_name,
-        row.student_email,
-        row.team_code,
-        row.team_name,
-        row.team_type,
-        row.status,
-        row.role,
-        row.event_name,
-        row.event_code
-      ]
-        .map((v) => String(v ?? "").toLowerCase())
-        .join(" ")
-        .includes(q)
-    );
-  }, [rows, query]);
+  useRealtimeEvents(REALTIME_EVENTS.TEAM_MEMBERSHIPS, () => {
+    void loadMemberships({ showLoader: false });
+  });
 
-  const activeCount = useMemo(
-    () => rows.filter((row) => String(row.status || "").toUpperCase() === "ACTIVE").length,
-    [rows]
+  const filteredRows = useMemo(
+    () => filterTeamMembershipRows(rows, { query, statusFilter }),
+    [rows, query, statusFilter]
   );
+
+  const statCards = useMemo(() => buildTeamMembershipStatCards(rows, scopeConfig), [rows, scopeConfig]);
+
+  const statusOptions = useMemo(
+    () => sortByPreferredOrder(MEMBERSHIP_STATUS_ORDER, MEMBERSHIP_STATUS_ORDER),
+    []
+  );
+
+  const closeModal = () => {
+    if (busyMembershipId !== null) return;
+
+    setModalState((prev) => ({
+      ...prev,
+      open: false,
+      onConfirm: null
+    }));
+  };
+
+  const openAlertModal = ({ message, title, tone = "error" }) => {
+    setModalState({
+      open: true,
+      mode: "alert",
+      tone,
+      title,
+      message,
+      confirmLabel: "OK",
+      cancelLabel: "Cancel",
+      onConfirm: null
+    });
+  };
+
+  const runMembershipAction = async ({
+    membershipId,
+    actionType,
+    errorFallback,
+    perform,
+    successMessage,
+    successTitle
+  }) => {
+    setBusyMembershipId(Number(membershipId));
+    setBusyAction(actionType);
+    setError("");
+
+    try {
+      await perform();
+      await loadMemberships({ showLoader: false });
+      openAlertModal({
+        title: successTitle,
+        message: successMessage,
+        tone: "success"
+      });
+    } catch (err) {
+      openAlertModal({
+        title: "Action failed",
+        message: err?.response?.data?.message || errorFallback,
+        tone: "error"
+      });
+    } finally {
+      setBusyMembershipId(null);
+      setBusyAction(null);
+    }
+  };
 
   const onRoleChange = (membershipId, role) => {
     setEditedRoleByMembershipId((prev) => ({
@@ -91,212 +192,163 @@ export default function TeamMembershipManagement() {
     }));
   };
 
+  const handleStatusFilterChange = (value) => {
+    setStatusFilter(value);
+    setPage(1);
+  };
+
+  const handleLimitChange = (value) => {
+    setLimit(value);
+    setPage(1);
+  };
+
   const onSaveRole = async (row) => {
     const membershipId = row?.team_membership_id;
     if (!membershipId) return;
-    const nextRole = String(editedRoleByMembershipId[membershipId] || row.role || "MEMBER").toUpperCase();
-    if (nextRole === String(row.role || "").toUpperCase()) return;
 
-    setBusyMembershipId(Number(membershipId));
-    setError("");
-    try {
-      await updateTeamMembership(membershipId, { role: nextRole });
-      await loadMemberships();
-    } catch (err) {
-      setError(err?.response?.data?.message || "Failed to update team membership role");
-    } finally {
-      setBusyMembershipId(null);
-    }
+    const currentRole = normalizeTeamMembershipKey(row.role) || "MEMBER";
+    const nextRole =
+      normalizeTeamMembershipKey(editedRoleByMembershipId[membershipId]) || currentRole;
+
+    if (nextRole === currentRole) return;
+
+    await runMembershipAction({
+      membershipId,
+      actionType: "role",
+      errorFallback: "Failed to update team membership role",
+      perform: () => updateTeamMembership(membershipId, { role: nextRole }),
+      successMessage: `${row.student_name || "Membership"} is now ${formatLabel(
+        nextRole,
+        "Member"
+      )} in ${row.team_name || `the selected ${String(scopeConfig.scopeSearchLabel || "team")}`}.`,
+      successTitle: "Role updated"
+    });
   };
 
-  const onMarkLeft = async (row) => {
+  const requestMarkLeft = (row) => {
     const membershipId = row?.team_membership_id;
     if (!membershipId) return;
-    if (!window.confirm(`Mark membership #${membershipId} as LEFT?`)) return;
 
-    setBusyMembershipId(Number(membershipId));
-    setError("");
-    try {
-      await leaveTeamMembership(membershipId);
-      await loadMemberships();
-    } catch (err) {
-      setError(err?.response?.data?.message || "Failed to mark team membership as LEFT");
-    } finally {
-      setBusyMembershipId(null);
+    setModalState({
+      open: true,
+      mode: "confirm",
+      tone: "danger",
+      title: "Mark membership as left?",
+      message: `${row.student_name || "This student"} will be moved to LEFT for ${
+        row.team_name || `this ${String(scopeConfig.scopeSearchLabel || "team")}`
+      }. This screen does not provide an undo action.`,
+      confirmLabel: "Mark Left",
+      cancelLabel: "Cancel",
+      onConfirm: async () => {
+        await runMembershipAction({
+          membershipId,
+          actionType: "leave",
+          errorFallback: "Failed to mark team membership as LEFT",
+          perform: () => leaveTeamMembership(membershipId),
+          successMessage: `${row.student_name || "The student"} has been marked LEFT in ${
+            row.team_name || `the selected ${String(scopeConfig.scopeSearchLabel || "team")}`
+          }.`,
+          successTitle: "Membership updated"
+        });
+      }
+    });
+  };
+
+  const handleModalConfirm = async () => {
+    if (typeof modalState.onConfirm !== "function") {
+      closeModal();
+      return;
     }
+
+    await modalState.onConfirm();
   };
 
   return (
-    <div className="p-6 space-y-5 max-w-screen-xl">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-base font-bold text-gray-900">Team Membership Management</h1>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Manage team and event-group memberships.
-          </p>
-        </div>
-        <button
-          onClick={loadMemberships}
-          className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors w-fit"
-        >
-          Refresh
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-          <p className="text-[10.5px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
-            Total Memberships
-          </p>
-          <p className="text-xl font-bold text-gray-800">{rows.length}</p>
-        </div>
-        <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-          <p className="text-[10.5px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
-            Active Memberships
-          </p>
-          <p className="text-xl font-bold text-emerald-600">{activeCount}</p>
-        </div>
-        <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-          <p className="text-[10.5px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
-            Filtered
-          </p>
-          <p className="text-xl font-bold text-blue-600">{filteredRows.length}</p>
-        </div>
-      </div>
-
-      <div className="flex flex-col md:flex-row gap-3">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="w-full md:max-w-md border border-gray-200 rounded-lg px-3 py-1.5 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 transition"
-          placeholder="Search by student, team, event, role..."
+    <>
+      <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-5 font-[Inter] md:px-6">
+        <TeamMembershipManagementHero
+          filteredCount={filteredRows.length}
+          loading={loading}
+          onRefresh={() => loadMemberships()}
+          scopeConfig={scopeConfig}
+          statCards={statCards}
+          totalCount={totalCount}
         />
 
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="w-full md:w-[180px] border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 transition"
-        >
-          <option value="ALL">All Statuses</option>
-          <option value="ACTIVE">ACTIVE</option>
-          <option value="LEFT">LEFT</option>
-        </select>
+        <TeamMembershipManagementFilters
+          filteredCount={filteredRows.length}
+          query={query}
+          scopeConfig={scopeConfig}
+          setQuery={setQuery}
+          setStatusFilter={handleStatusFilterChange}
+          statusFilter={statusFilter}
+          statusOptions={statusOptions}
+          totalCount={totalCount}
+        />
+
+        {error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        ) : null}
+
+        {loading ? (
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500 shadow-sm">
+            {`Loading ${String(scopeConfig.scopeLabelPlural || "team memberships").toLowerCase()}...`}
+          </div>
+        ) : (
+          <>
+            <TeamMembershipManagementMobileCards
+              busyAction={busyAction}
+              busyMembershipId={busyMembershipId}
+              editedRoleByMembershipId={editedRoleByMembershipId}
+              onMarkLeft={requestMarkLeft}
+              onRoleChange={onRoleChange}
+              onSaveRole={onSaveRole}
+              scopeConfig={scopeConfig}
+              rows={filteredRows}
+            />
+
+            <div className="hidden lg:block">
+              <TeamMembershipManagementDesktopTable
+                busyAction={busyAction}
+                busyMembershipId={busyMembershipId}
+                editedRoleByMembershipId={editedRoleByMembershipId}
+                onMarkLeft={requestMarkLeft}
+                onRoleChange={onRoleChange}
+                onSaveRole={onSaveRole}
+                rows={filteredRows}
+                scopeConfig={scopeConfig}
+              />
+            </div>
+          </>
+        )}
+
+        <AdminPaginationBar
+          itemLabel="memberships"
+          limit={limit}
+          loading={loading}
+          onLimitChange={handleLimitChange}
+          onPageChange={setPage}
+          page={page}
+          pageCount={pageCount}
+          shownCount={filteredRows.length}
+          totalCount={totalCount}
+        />
       </div>
 
-      {error ? (
-        <div className="px-4 py-2.5 rounded-lg border border-red-200 bg-red-50 text-sm text-red-700">
-          {error}
-        </div>
-      ) : null}
-
-      {loading ? (
-        <div className="py-10 text-center text-sm text-gray-400">Loading team memberships...</div>
-      ) : (
-        <div className="overflow-auto rounded-xl border border-gray-100">
-          <table className="min-w-[1300px] w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                {[
-                  "Membership ID",
-                  "Student",
-                  "Team",
-                  "Event",
-                  "Role",
-                  "Status",
-                  "Joined",
-                  "Left",
-                  "Actions"
-                ].map((h) => (
-                  <th
-                    key={h}
-                    className="text-left px-4 py-2.5 text-[10.5px] font-semibold uppercase tracking-wider text-gray-400 whitespace-nowrap"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filteredRows.map((row) => {
-                const membershipId = Number(row.team_membership_id);
-                const currentRole = String(row.role || "MEMBER").toUpperCase();
-                const selectedRole = String(
-                  editedRoleByMembershipId[membershipId] || currentRole
-                ).toUpperCase();
-                const busy = busyMembershipId === membershipId;
-                const isActive = String(row.status || "").toUpperCase() === "ACTIVE";
-
-                return (
-                  <tr key={membershipId} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs text-gray-600">{membershipId}</td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-gray-800">{row.student_name || "-"}</div>
-                      <div className="text-[11px] text-gray-400">{row.student_id || "-"}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-gray-800">{row.team_name || "-"}</div>
-                      <div className="text-[11px] text-gray-400">
-                        {row.team_code || "-"} | {row.team_type || "-"}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">
-                      {row.event_id ? `${row.event_name || "-"} (${row.event_code || "-"})` : "-"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <select
-                        value={selectedRole}
-                        onChange={(e) => onRoleChange(membershipId, e.target.value)}
-                        disabled={!isActive || busy}
-                        className="border border-gray-200 rounded-md px-2 py-1 text-xs bg-white"
-                      >
-                        {TEAM_ROLES.map((role) => (
-                          <option key={role} value={role}>
-                            {role}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-4 py-3 text-xs font-semibold text-gray-700">
-                      {row.status || "-"}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">{formatDate(row.join_date)}</td>
-                    <td className="px-4 py-3 text-xs text-gray-500">{formatDate(row.leave_date)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => onSaveRole(row)}
-                          disabled={!isActive || busy || selectedRole === currentRole}
-                          className="px-2.5 py-1 rounded-md border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        >
-                          {busy ? "Working..." : "Save Role"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onMarkLeft(row)}
-                          disabled={!isActive || busy}
-                          className="px-2.5 py-1 rounded-md border border-red-200 bg-red-50 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        >
-                          {busy ? "Working..." : "Mark LEFT"}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-
-              {filteredRows.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-sm text-gray-400">
-                    No team memberships found.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+      <GroupManagementActionModal
+        busy={busyMembershipId !== null}
+        cancelLabel={modalState.cancelLabel}
+        confirmLabel={modalState.confirmLabel}
+        message={modalState.message}
+        mode={modalState.mode}
+        onCancel={closeModal}
+        onConfirm={handleModalConfirm}
+        open={modalState.open}
+        title={modalState.title}
+        tone={modalState.tone}
+      />
+    </>
   );
 }

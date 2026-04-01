@@ -1,5 +1,6 @@
 const phaseService = require("./phase.service");
 const auditService = require("../audit/audit.service");
+const { broadcastEligibilityChanged, broadcastPhaseChanged } = require("../../realtime/events");
 
 const createPhase = async (req, res) => {
   try {
@@ -12,6 +13,12 @@ const createPhase = async (req, res) => {
       entityType: "PHASE",
       entityId: phase?.phase_id,
       details: phase
+    });
+
+    broadcastPhaseChanged({
+      action: "PHASE_CREATED",
+      phaseId: phase?.phase_id || null,
+      status: phase?.status || null
     });
 
     res.status(201).json({ message: "Phase created", phase });
@@ -37,6 +44,16 @@ const setPhaseTargets = async (req, res) => {
         targets,
         individual_target
       }
+    });
+
+    broadcastPhaseChanged({
+      action: "PHASE_TARGETS_UPDATED",
+      phaseId: phase_id
+    });
+    broadcastEligibilityChanged({
+      action: "PHASE_TARGETS_UPDATED",
+      scope: "PHASE",
+      phaseId: phase_id
     });
 
     res.json({ message: "Targets configured successfully" });
@@ -123,6 +140,12 @@ const updatePhaseChangeDay = async (req, res) => {
       }
     });
 
+    broadcastPhaseChanged({
+      action: "PHASE_CHANGE_DAY_UPDATED",
+      phaseId: phase_id,
+      status: phase?.status || null
+    });
+
     res.json({
       message: "Change day updated successfully",
       phase
@@ -155,6 +178,12 @@ const updatePhaseSettings = async (req, res) => {
         start_time: phase?.start_time ?? null,
         end_time: phase?.end_time ?? null
       }
+    });
+
+    broadcastPhaseChanged({
+      action: "PHASE_SETTINGS_UPDATED",
+      phaseId: phase_id,
+      status: phase?.status || null
     });
 
     res.json({

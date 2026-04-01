@@ -69,8 +69,7 @@ export default function LeadershipManagementDesktopTable({
   onApprove,
   onOpenGroup,
   onReject,
-  rows,
-  totalCount
+  rows
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -167,13 +166,6 @@ export default function LeadershipManagementDesktopTable({
             )}
           </tbody>
         </table>
-      </div>
-
-      <div className="flex items-center justify-between bg-slate-50 px-6 py-4">
-        <p className="text-xs font-medium text-slate-500">
-          Showing {rows.length} of {totalCount} requests
-        </p>
-        <p className="text-xs font-medium text-slate-500">All matching requests are listed</p>
       </div>
     </section>
   );

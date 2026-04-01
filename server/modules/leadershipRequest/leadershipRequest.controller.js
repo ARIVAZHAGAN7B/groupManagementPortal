@@ -1,5 +1,6 @@
 const service = require("./leadershipRequest.service");
 const auditService = require("../audit/audit.service");
+const { broadcastLeadershipRequestChanged } = require("../../realtime/events");
 
 const applyLeadershipRoleRequest = async (req, res) => {
   try {
@@ -17,6 +18,15 @@ const applyLeadershipRoleRequest = async (req, res) => {
         requested_role: result?.requested_role,
         leadership_alert_triggered: result?.leadership_alert_triggered
       }
+    });
+
+    await broadcastLeadershipRequestChanged({
+      action: "LEADERSHIP_ROLE_REQUEST_APPLIED",
+      requestId: result?.leadership_request_id || null,
+      groupId: result?.group_id || req.body?.group_id || null,
+      studentId: result?.student_id || null,
+      status: "PENDING",
+      requestedRole: result?.requested_role || null
     });
 
     res.status(201).json(result);
@@ -50,6 +60,19 @@ const decideLeadershipRoleRequest = async (req, res) => {
       details: result
     });
 
+    await broadcastLeadershipRequestChanged({
+      action:
+        String(status).toUpperCase() === "APPROVED"
+          ? "LEADERSHIP_ROLE_REQUEST_APPROVED"
+          : "LEADERSHIP_ROLE_REQUEST_REJECTED",
+      requestId: result?.leadership_request_id || Number(requestId),
+      groupId: result?.group_id || null,
+      studentId: result?.student_id || null,
+      status: result?.status || String(status || "").toUpperCase(),
+      requestedRole: result?.requested_role || null,
+      membershipChanged: String(result?.status || status || "").toUpperCase() === "APPROVED"
+    });
+
     res.json(result);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -67,7 +90,7 @@ const getPendingLeadershipRequestsByGroup = async (req, res) => {
 
 const getAllPendingLeadershipRequests = async (req, res) => {
   try {
-    const data = await service.getAllPendingLeadershipRequests(req.user);
+    const data = await service.getAllPendingLeadershipRequests(req.user, req.query || {});
     res.json(data);
   } catch (error) {
     res.status(400).json({ message: error.message });

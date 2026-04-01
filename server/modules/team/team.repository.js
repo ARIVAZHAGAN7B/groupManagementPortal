@@ -2,6 +2,20 @@ const db = require("../../config/db");
 
 const getExecutor = (executor) => executor || db;
 
+const appendPaginationClause = (sql, values, options = {}) => {
+  if (!options?.paginate) {
+    return {
+      sql,
+      values
+    };
+  }
+
+  return {
+    sql: `${sql} LIMIT ? OFFSET ?`,
+    values: [...values, Math.max(1, Number(options.limit) || 50), Math.max(0, Number(options.offset) || 0)]
+  };
+};
+
 const TEAM_SELECT_WITH_COUNTS = `
   SELECT
     t.team_id,
@@ -69,7 +83,7 @@ const createTeam = async (team, executor) => {
   return result;
 };
 
-const getAllTeams = async (filters = {}, executor) => {
+const getAllTeams = async (filters = {}, options = {}, executor) => {
   const clauses = ["1=1"];
   const values = [];
 
@@ -92,16 +106,32 @@ const getAllTeams = async (filters = {}, executor) => {
     values.push(String(filters.exclude_team_type).toUpperCase());
   }
 
-  const [rows] = await getExecutor(executor).query(
-    `${TEAM_SELECT_WITH_COUNTS}
-     WHERE ${clauses.join(" AND ")}
-     ${TEAM_ORDER_BY}`,
+  const baseSql = `
+    ${TEAM_SELECT_WITH_COUNTS}
+    WHERE ${clauses.join(" AND ")}
+    ${TEAM_ORDER_BY}
+  `;
+
+  if (!options?.paginate) {
+    const [rows] = await getExecutor(executor).query(baseSql, values);
+    return rows;
+  }
+
+  const [[countRow]] = await getExecutor(executor).query(
+    `SELECT COUNT(*) AS total
+     FROM teams t
+     WHERE ${clauses.join(" AND ")}`,
     values
   );
-  return rows;
+  const paginated = appendPaginationClause(baseSql, values, options);
+  const [rows] = await getExecutor(executor).query(paginated.sql, paginated.values);
+  return {
+    rows,
+    total: Number(countRow?.total) || 0
+  };
 };
 
-const getTeamsByEventId = async (eventId, filters = {}, executor) => {
+const getTeamsByEventId = async (eventId, filters = {}, options = {}, executor) => {
   const clauses = ["t.event_id = ?"];
   const values = [eventId];
 
@@ -115,13 +145,29 @@ const getTeamsByEventId = async (eventId, filters = {}, executor) => {
     values.push(String(filters.exclude_team_type).toUpperCase());
   }
 
-  const [rows] = await getExecutor(executor).query(
-    `${TEAM_SELECT_WITH_COUNTS}
-     WHERE ${clauses.join(" AND ")}
-     ${TEAM_ORDER_BY}`,
+  const baseSql = `
+    ${TEAM_SELECT_WITH_COUNTS}
+    WHERE ${clauses.join(" AND ")}
+    ${TEAM_ORDER_BY}
+  `;
+
+  if (!options?.paginate) {
+    const [rows] = await getExecutor(executor).query(baseSql, values);
+    return rows;
+  }
+
+  const [[countRow]] = await getExecutor(executor).query(
+    `SELECT COUNT(*) AS total
+     FROM teams t
+     WHERE ${clauses.join(" AND ")}`,
     values
   );
-  return rows;
+  const paginated = appendPaginationClause(baseSql, values, options);
+  const [rows] = await getExecutor(executor).query(paginated.sql, paginated.values);
+  return {
+    rows,
+    total: Number(countRow?.total) || 0
+  };
 };
 
 const getTeamById = async (teamId, executor) => {
@@ -372,7 +418,7 @@ const getTeamMembershipsByTeamId = async (teamId, filters = {}, executor) => {
   return rows;
 };
 
-const getAllTeamMemberships = async (filters = {}, executor) => {
+const getAllTeamMemberships = async (filters = {}, options = {}, executor) => {
   const clauses = ["1=1"];
   const values = [];
 
@@ -406,45 +452,62 @@ const getAllTeamMemberships = async (filters = {}, executor) => {
     values.push(String(filters.exclude_team_type).toUpperCase());
   }
 
-  const [rows] = await getExecutor(executor).query(
-    `SELECT
-       tm.team_membership_id,
-       tm.team_id,
-       tm.student_id,
-       tm.role,
-       tm.status,
-       tm.join_date,
-       tm.leave_date,
-       tm.assigned_by,
-       tm.notes,
-       tm.created_at,
-       tm.updated_at,
-       t.event_id,
-       t.team_code,
-       t.team_name,
-       t.team_type,
-       t.status AS team_status,
-       e.event_code,
-       e.event_name,
-       e.status AS event_status,
-       e.start_date AS event_start_date,
-       e.end_date AS event_end_date,
-       s.name AS student_name,
-       s.email AS student_email,
-       s.department,
-       s.year
+  const baseSql = `
+    SELECT
+      tm.team_membership_id,
+      tm.team_id,
+      tm.student_id,
+      tm.role,
+      tm.status,
+      tm.join_date,
+      tm.leave_date,
+      tm.assigned_by,
+      tm.notes,
+      tm.created_at,
+      tm.updated_at,
+      t.event_id,
+      t.team_code,
+      t.team_name,
+      t.team_type,
+      t.status AS team_status,
+      e.event_code,
+      e.event_name,
+      e.status AS event_status,
+      e.start_date AS event_start_date,
+      e.end_date AS event_end_date,
+      s.name AS student_name,
+      s.email AS student_email,
+      s.department,
+      s.year
+    FROM team_membership tm
+    INNER JOIN teams t ON t.team_id = tm.team_id
+    LEFT JOIN events e ON e.event_id = t.event_id
+    INNER JOIN students s ON s.student_id = tm.student_id
+    WHERE ${clauses.join(" AND ")}
+    ORDER BY
+      CASE tm.status WHEN 'ACTIVE' THEN 1 ELSE 2 END,
+      tm.join_date DESC,
+      tm.team_membership_id DESC
+  `;
+
+  if (!options?.paginate) {
+    const [rows] = await getExecutor(executor).query(baseSql, values);
+    return rows;
+  }
+
+  const [[countRow]] = await getExecutor(executor).query(
+    `SELECT COUNT(*) AS total
      FROM team_membership tm
      INNER JOIN teams t ON t.team_id = tm.team_id
-     LEFT JOIN events e ON e.event_id = t.event_id
-     INNER JOIN students s ON s.student_id = tm.student_id
-     WHERE ${clauses.join(" AND ")}
-     ORDER BY
-       CASE tm.status WHEN 'ACTIVE' THEN 1 ELSE 2 END,
-       tm.join_date DESC,
-       tm.team_membership_id DESC`,
+     WHERE ${clauses.join(" AND ")}`,
     values
   );
-  return rows;
+  const paginated = appendPaginationClause(baseSql, values, options);
+  const [rows] = await getExecutor(executor).query(paginated.sql, paginated.values);
+  return {
+    rows,
+    total: Number(countRow?.total) || 0
+  };
 };
 
 const updateTeamMembership = async (membershipId, payload, executor) => {

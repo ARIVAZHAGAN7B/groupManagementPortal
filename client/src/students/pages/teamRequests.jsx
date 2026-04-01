@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
+import { useRealtimeEvents } from "../../hooks/useRealtimeEvents";
+import { REALTIME_EVENTS, matchesRealtimeScope } from "../../lib/realtime";
 import AllGroupsBadge from "../components/allGroups/AllGroupsBadge";
 import {
   TeamDesktopTableShell,
@@ -112,6 +115,20 @@ export default function TeamRequestsPage() {
     if (activeTab !== "captain" || !selectedTeamId) return;
     loadPending(selectedTeamId);
   }, [activeTab, loadPending, selectedTeamId]);
+
+  const handleRealtimeRefresh = useDebouncedCallback((payload) => {
+    if (activeTab === "captain" && !matchesRealtimeScope(payload, { teamId: selectedTeamId })) {
+      return;
+    }
+
+    void loadBase();
+    if (selectedTeamId) {
+      void loadPending(selectedTeamId);
+    }
+  }, 300);
+
+  useRealtimeEvents(REALTIME_EVENTS.EVENT_JOIN_REQUESTS, handleRealtimeRefresh);
+  useRealtimeEvents(REALTIME_EVENTS.TEAM_MEMBERSHIPS, handleRealtimeRefresh);
 
   const onDecision = useCallback(
     async (requestId, status) => {

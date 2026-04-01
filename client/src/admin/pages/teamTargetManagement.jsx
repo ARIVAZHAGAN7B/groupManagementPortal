@@ -80,19 +80,6 @@ export default function TeamTargetManagement() {
     );
   }, [rows, query]);
 
-  const stats = useMemo(() => {
-    const configuredCount = rows.filter((row) => row.target_configured).length;
-    const metCount = rows.filter((row) => {
-      if (!row.target_configured) return false;
-      return Number(row.active_member_count) >= Number(row.target_member_count);
-    }).length;
-    return {
-      total: rows.length,
-      configured: configuredCount,
-      met: metCount
-    };
-  }, [rows]);
-
   const onChangeTarget = (teamId, value) => {
     setEditedTargetByTeamId((prev) => ({
       ...prev,
@@ -148,27 +135,6 @@ export default function TeamTargetManagement() {
         >
           Refresh
         </button>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-          <p className="text-[10.5px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
-            Teams
-          </p>
-          <p className="text-xl font-bold text-gray-800">{stats.total}</p>
-        </div>
-        <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-          <p className="text-[10.5px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
-            Targets Configured
-          </p>
-          <p className="text-xl font-bold text-blue-600">{stats.configured}</p>
-        </div>
-        <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-          <p className="text-[10.5px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
-            Target Met
-          </p>
-          <p className="text-xl font-bold text-emerald-600">{stats.met}</p>
-        </div>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-3">

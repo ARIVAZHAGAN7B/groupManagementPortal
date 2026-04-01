@@ -1,5 +1,6 @@
 const service = require("./groupPoint.service");
 const auditService = require("../audit/audit.service");
+const { broadcastEligibilityChanged, broadcastPointsChanged } = require("../../realtime/events");
 
 const recordGroupPoint = async (req, res) => {
   try {
@@ -12,6 +13,20 @@ const recordGroupPoint = async (req, res) => {
       entityType: "GROUP_POINT",
       entityId: data?.group_point_id || null,
       details: data
+    });
+
+    broadcastPointsChanged({
+      action: "GROUP_POINTS_RECORDED",
+      studentId: data?.student_id || req.body?.student_id || null,
+      groupId: data?.group_id || req.body?.group_id || null,
+      membershipId: data?.membership_id || req.body?.membership_id || null,
+      groupPointId: data?.group_point_id || null
+    });
+    broadcastEligibilityChanged({
+      action: "GROUP_POINTS_RECORDED",
+      scope: "GROUP",
+      studentId: data?.student_id || req.body?.student_id || null,
+      groupId: data?.group_id || req.body?.group_id || null
     });
 
     res.status(201).json({

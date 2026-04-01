@@ -1,5 +1,3 @@
-USE test;
-
 -- Manual schema for group tier promotion/demotion approval workflow (DB-managed, not executed by backend).
 -- Match the column types to your existing tables before adding FKs.
 -- In many setups here:
@@ -53,4 +51,5 @@ CREATE TABLE IF NOT EXISTS group_tier_change_requests (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- If your table already exists, run ALTER TABLE after fixing orphan rows/type mismatches.
+
 

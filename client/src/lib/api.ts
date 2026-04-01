@@ -12,10 +12,6 @@ const getApiBaseUrl = () => {
   }
 
   if (typeof window !== "undefined") {
-    if (import.meta.env.DEV) {
-      return "http://localhost:5000";
-    }
-
     return trimTrailingSlash(window.location.origin);
   }
 

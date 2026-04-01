@@ -1,7 +1,5 @@
-const path = require("path");
-require("dotenv").config({ path: path.resolve(__dirname, ".env") });
-
 const http = require("http");
+const env = require("./config/env");
 const app = require("./app");
 const db = require("./config/db"); // import your MySQL pool
 const { startPhaseEndScheduler } = require("./jobs/phaseEndScheduler");
@@ -10,7 +8,7 @@ const { initializeRealtime } = require("./realtime/socket");
 const membershipService = require("./modules/membership/membership.service");
 const eligibilityService = require("./modules/eligibility/eligibility.service");
 
-const PORT = process.env.PORT || 5000;
+const PORT = env.port;
 
 const startServer = async () => {
   try {

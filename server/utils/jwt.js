@@ -1,8 +1,9 @@
 const jwt = require("jsonwebtoken");
+const env = require("../config/env");
 
-const SESSION_DURATION_HOURS = 4;
-const SESSION_DURATION_MS = SESSION_DURATION_HOURS * 60 * 60 * 1000;
-const SESSION_EXPIRES_IN = `${SESSION_DURATION_HOURS}h`;
+const SESSION_DURATION_MS = env.jwtExpiresInMs;
+const SESSION_DURATION_HOURS = SESSION_DURATION_MS / (60 * 60 * 1000);
+const SESSION_EXPIRES_IN = env.jwtExpiresIn;
 
 const getSessionExpiresAt = (decodedToken) => {
   const expiryCandidates = [];
@@ -35,7 +36,7 @@ const isSessionExpired = (decodedToken) => {
 const generateToken = (user) => {
   return jwt.sign(
     { userId: user.user_id, role: user.role, name: user.name },
-    process.env.JWT_SECRET,
+    env.jwtSecret,
     { expiresIn: SESSION_EXPIRES_IN }
   );
 };

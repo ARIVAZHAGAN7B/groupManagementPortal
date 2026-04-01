@@ -23,6 +23,7 @@ server/dist/
 .env.production
 server/.env
 client/.env
+deployment-env.txt
 
 # ===============================
 # Logs

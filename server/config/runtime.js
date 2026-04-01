@@ -1,30 +1,18 @@
+const env = require("./env");
+
 const normalizeOrigin = (value) => String(value || "").trim().replace(/\/+$/, "");
-
-const splitOrigins = (value) =>
-  String(value || "")
-    .split(",")
-    .map((origin) => normalizeOrigin(origin))
-    .filter(Boolean);
-
-const toBoolean = (value, fallback) => {
-  if (value === undefined || value === null || value === "") return fallback;
-  const normalized = String(value).trim().toLowerCase();
-  if (["true", "1", "yes", "on"].includes(normalized)) return true;
-  if (["false", "0", "no", "off"].includes(normalized)) return false;
-  return fallback;
-};
 
 const getAllowedOrigins = () => {
   const configuredOrigins = [
-    ...splitOrigins(process.env.CORS_ALLOWED_ORIGINS),
-    ...splitOrigins(process.env.FRONTEND_ORIGIN)
+    ...env.corsAllowedOrigins,
+    ...env.frontendOrigins
   ];
 
   if (configuredOrigins.length > 0) {
     return Array.from(new Set(configuredOrigins));
   }
 
-  return ["http://localhost:5173", "http://localhost:8080"];
+  throw new Error("Set CORS_ALLOWED_ORIGINS or FRONTEND_ORIGIN in the environment");
 };
 
 const isAllowedOrigin = (origin) => {
@@ -47,23 +35,11 @@ const getCorsConfig = () => ({
 });
 
 const getCookieOptions = () => {
-  const requestedSameSite = String(process.env.COOKIE_SAME_SITE || "strict")
-    .trim()
-    .toLowerCase();
-  const sameSite = ["lax", "strict", "none"].includes(requestedSameSite)
-    ? requestedSameSite
-    : "strict";
-  const secure = toBoolean(
-    process.env.COOKIE_SECURE,
-    String(process.env.NODE_ENV || "").toLowerCase() === "production" || sameSite === "none"
-  );
-  const cookieDomain = String(process.env.COOKIE_DOMAIN || "").trim();
-
   return {
     httpOnly: true,
-    secure,
-    sameSite,
-    ...(cookieDomain ? { domain: cookieDomain } : {})
+    secure: env.cookieSecure,
+    sameSite: env.cookieSameSite,
+    ...(env.cookieDomain ? { domain: env.cookieDomain } : {})
   };
 };
 

@@ -1,5 +1,6 @@
 const cron = require("node-cron");
 const phaseService = require("../modules/phase/phase.service");
+const env = require("../config/env");
 
 let phaseFinalizationTask = null;
 let isRunning = false;
@@ -20,13 +21,12 @@ const runPhaseFinalizationSweep = async (trigger = "cron") => {
 const startPhaseFinalizationCron = () => {
   if (phaseFinalizationTask) return phaseFinalizationTask;
 
-  const enabled = String(process.env.PHASE_FINALIZER_CRON_ENABLED || "true").toLowerCase() !== "false";
-  if (!enabled) {
+  if (!env.phaseFinalizerCronEnabled) {
     console.log("Phase finalization cron disabled (PHASE_FINALIZER_CRON_ENABLED=false)");
     return null;
   }
 
-  const expression = process.env.PHASE_FINALIZER_CRON || "*/15 * * * * *";
+  const expression = env.phaseFinalizerCron;
   if (!cron.validate(expression)) {
     throw new Error(`Invalid PHASE_FINALIZER_CRON expression: ${expression}`);
   }

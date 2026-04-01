@@ -2,6 +2,7 @@ const { Server } = require("socket.io");
 const cookie = require("cookie");
 const jwt = require("jsonwebtoken");
 
+const env = require("../config/env");
 const { isSessionExpired } = require("../utils/jwt");
 const realtimeRepo = require("./realtime.repository");
 const { createCorsOriginResolver } = require("../config/runtime");
@@ -43,7 +44,7 @@ const authenticateSocket = (socket, next) => {
       return next(new Error("Not authenticated"));
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, env.jwtSecret);
     if (isSessionExpired(decoded)) {
       return next(new Error("Invalid or expired token"));
     }

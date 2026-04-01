@@ -5,12 +5,10 @@ const eligibilityService = require("../eligibility/eligibility.service");
 const { completePhaseWithEvaluation } = require("./phase.finalization");
 const { syncPhaseEndSchedule } = require("../../jobs/phaseEndScheduler");
 const { broadcastPhaseChanged } = require("../../realtime/events");
+const env = require("../../config/env");
 
 const REQUIRED_TIERS = ["D", "C", "B", "A"];
-const HOLIDAY_CACHE_TTL_MS = Math.max(
-  1000,
-  Number(process.env.HOLIDAY_CACHE_TTL_MS) || 5 * 60 * 1000
-);
+const HOLIDAY_CACHE_TTL_MS = env.holidayCacheTtlMs;
 let holidayCache = {
   expiresAt: 0,
   holidays: [],

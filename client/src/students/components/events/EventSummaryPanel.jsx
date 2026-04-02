@@ -7,11 +7,15 @@ import AllGroupsBadge from "../allGroups/AllGroupsBadge";
 import TeamPageDetailTile from "../teams/TeamPageDetailTile";
 import { formatLabel } from "../teams/teamPage.utils";
 import {
+  getEventCategoryLabel,
   getEventDateRangeLabel,
+  getEventLevelLabel,
   getEventLocationLabel,
   getEventMemberLimitLabel,
+  getEventOrganizerLabel,
   getEventRegistrationDateRangeLabel,
   getEventRegistrationStatus,
+  getEventStudentApplyLabel,
   getNormalizedExternalUrl
 } from "./events.constants";
 
@@ -54,8 +58,32 @@ export default function EventSummaryPanel({
             {event.event_code || "No code"}
           </span>
           <AllGroupsBadge value={formatLabel(event.status, "Unknown")} />
-          <AllGroupsBadge value={registrationStatus.label} />
+          <AllGroupsBadge value={formatLabel(registrationStatus.key, "Open")} />
+          <AllGroupsBadge value={getEventStudentApplyLabel(event)} />
         </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <TeamPageDetailTile
+          label="Organizer"
+          value={getEventOrganizerLabel(event)}
+          subtext="Event organizer"
+        />
+        <TeamPageDetailTile
+          label="Category"
+          value={getEventCategoryLabel(event)}
+          subtext="Event category"
+        />
+        <TeamPageDetailTile
+          label="Level"
+          value={getEventLevelLabel(event)}
+          subtext="Competition or event level"
+        />
+        <TeamPageDetailTile
+          label="Location"
+          value={getEventLocationLabel(event)}
+          subtext="Venue or event location"
+        />
       </div>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
@@ -98,7 +126,7 @@ export default function EventSummaryPanel({
         <TeamPageDetailTile
           label="Registration"
           value={getEventRegistrationDateRangeLabel(event)}
-          subtext={registrationStatus.label}
+          subtext={formatLabel(registrationStatus.key, "Open")}
         />
         <TeamPageDetailTile
           label="Member Limits"
@@ -126,10 +154,10 @@ export default function EventSummaryPanel({
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
             <Groups2RoundedIcon sx={{ fontSize: 16 }} />
-            Member Limits
+            Student Apply
           </div>
           <p className="mt-2 text-sm font-semibold text-slate-900">
-            {getEventMemberLimitLabel(event)}
+            {getEventStudentApplyLabel(event)}
           </p>
         </div>
       </div>

@@ -155,6 +155,28 @@ const ensureEventTeamCapacity = (teamLike) => {
   }
 };
 
+const ensureEventStudentApplicationsAllowed = (eventLike) => {
+  if (!eventLike) return;
+
+  const applyByStudent = getEventDateValue(
+    eventLike,
+    "apply_by_student",
+    "event_apply_by_student"
+  );
+
+  if (applyByStudent === null || applyByStudent === undefined || applyByStudent === "") {
+    return;
+  }
+
+  if (
+    applyByStudent === false ||
+    Number(applyByStudent) === 0 ||
+    String(applyByStudent).trim().toLowerCase() === "false"
+  ) {
+    throw new Error("Student applications are disabled for this event");
+  }
+};
+
 const normalizePayload = (payload = {}) => {
   const team_code = normalizeCode(payload.team_code);
   const team_name = normalizeText(payload.team_name);
@@ -313,6 +335,7 @@ const createTeamInEventByStudent = async (eventId, payload, actorUserId) => {
     await conn.beginTransaction();
 
     const event = await ensureEventActive(normalized.event_id, conn);
+    ensureEventStudentApplicationsAllowed(event);
     ensureEventRegistrationWindowOpen(event);
     await ensureNoActiveEventTeamMembership(student.student_id, normalized.event_id, conn);
     await ensureUniqueTeamCode(normalized.team_code);

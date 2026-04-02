@@ -33,6 +33,7 @@ const TEAM_SELECT_WITH_COUNTS = `
     e.status AS event_status,
     e.location AS event_location,
     e.registration_link AS event_registration_link,
+    e.apply_by_student AS event_apply_by_student,
     e.start_date AS event_start_date,
     e.end_date AS event_end_date,
     e.registration_start_date AS event_registration_start_date,

@@ -1,13 +1,16 @@
+import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import {
-  REGISTRATION_STATE_STYLES,
   STATUS_STYLES,
+  formatCountValue,
   formatDate,
-  formatDateRange,
-  formatMemberRange,
-  getEventActionDisabledState,
-  getRegistrationState
+  formatDurationDays,
+  getBalanceCount,
+  getVisibleEventStatusActions
 } from "./eventManagement.constants";
 import {
+  AdminIconActionButton,
   AdminBadge,
   AdminMappedBadge,
   AdminTextActionButton
@@ -23,7 +26,6 @@ export default function EventManagementMobileCards({
   onActivate,
   onArchive,
   onClose,
-  onDeactivate,
   onEdit,
   onView,
   rows
@@ -35,10 +37,11 @@ export default function EventManagementMobileCards({
       renderItem={(row) => {
         const eventId = Number(row.event_id);
         const busy = actionBusyId === eventId;
-        const disabled = getEventActionDisabledState(row.status);
-        const registrationState = getRegistrationState(
-          row.registration_start_date,
-          row.registration_end_date
+        const visibleActions = getVisibleEventStatusActions(row.status);
+        const durationLabel = formatDurationDays(
+          row.start_date,
+          row.end_date,
+          row.duration_days
         );
 
         return (
@@ -54,7 +57,7 @@ export default function EventManagementMobileCards({
                   </AdminBadge>
                 </div>
                 <p className="mt-1 text-sm text-slate-500">
-                  {row.location || "Location not specified"}
+                  {row.event_organizer || row.location || "Event details not specified"}
                 </p>
                 {busy ? (
                   <p className="mt-2 text-xs font-semibold text-[#1754cf]">Updating event...</p>
@@ -65,76 +68,78 @@ export default function EventManagementMobileCards({
             </div>
 
             <div className="mt-4">
-              <AdminMobileValueRow label="Event Window" value={formatDateRange(row.start_date, row.end_date)} />
+              <AdminMobileValueRow label="ID" value={String(eventId)} />
+              <AdminMobileValueRow label="Category" value={row.event_category || "-"} />
+              <AdminMobileValueRow label="Location" value={row.location || "-"} />
+              <AdminMobileValueRow label="Start Date" value={formatDate(row.start_date)} />
+              <AdminMobileValueRow label="End Date" value={formatDate(row.end_date)} />
               <AdminMobileValueRow
-                label="Registration"
-                align="start"
-                valueClassName="text-right"
-              >
-                <div className="space-y-1">
-                  <div className="text-xs font-semibold text-slate-700">
-                    {formatDateRange(
-                      row.registration_start_date,
-                      row.registration_end_date
-                    )}
-                  </div>
-                  <AdminBadge
-                    className={`px-2.5 py-0.5 text-[10px] ${REGISTRATION_STATE_STYLES[registrationState.key]}`}
-                  >
-                    {registrationState.label}
-                  </AdminBadge>
-                </div>
-              </AdminMobileValueRow>
-              <AdminMobileValueRow
-                label="Capacity"
-                value={formatMemberRange(row.min_members, row.max_members)}
+                label="Duration"
+                value={durationLabel === "-" ? "-" : `${durationLabel} day(s)`}
               />
+              <AdminMobileValueRow label="Maximum Count" value={formatCountValue(row.maximum_count)} />
+              <AdminMobileValueRow label="Applied Count" value={formatCountValue(row.applied_count)} />
               <AdminMobileValueRow
-                label="Event Groups"
-                value={String(Number(row.team_count || 0))}
-              />
-              <AdminMobileValueRow
-                label="Updated"
-                value={formatDate(row.updated_at)}
+                label="Balance Count"
+                value={getBalanceCount(row.maximum_count, row.applied_count)}
               />
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               <AdminTextActionButton
                 onClick={() => onView(row)}
                 label="View Details"
+                fullWidth={false}
+                sizeClassName="px-3 py-2"
                 className="border border-[#1754cf]/15 bg-[#1754cf]/8 text-[#1754cf] hover:bg-[#1754cf]/12"
               />
-              <AdminTextActionButton
+              <AdminIconActionButton
                 onClick={() => onEdit(row)}
                 disabled={busy}
                 label="Edit"
-                className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              />
-              <AdminTextActionButton
-                onClick={() => onActivate(row)}
-                disabled={busy || disabled.activate}
-                label="Activate"
-                className="border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-              />
-              <AdminTextActionButton
-                onClick={() => onClose(row)}
-                disabled={busy || disabled.close}
-                label="Close"
-                className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              />
-              <AdminTextActionButton
-                onClick={() => onArchive(row)}
-                disabled={busy || disabled.archive}
-                label="Archive"
-                className="border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
-              />
-              <AdminTextActionButton
-                onClick={() => onDeactivate(row)}
-                disabled={busy || disabled.inactive}
-                label={busy ? "Working..." : "Set Inactive"}
-                className="border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
-              />
+                sizeClassName="h-10 w-10"
+                baseClassName="rounded-lg border border-slate-200 bg-white text-slate-700"
+                className="hover:bg-slate-50"
+              >
+                <EditOutlinedIcon sx={{ fontSize: 20 }} />
+              </AdminIconActionButton>
+
+              {visibleActions.activate ? (
+                <AdminTextActionButton
+                  onClick={() => onActivate(row)}
+                  disabled={busy}
+                  label="Activate"
+                  fullWidth={false}
+                  sizeClassName="px-3 py-2"
+                  className="border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                />
+              ) : null}
+
+              {visibleActions.close ? (
+                <AdminIconActionButton
+                  onClick={() => onClose(row)}
+                  disabled={busy}
+                  label="Close"
+                  sizeClassName="h-10 w-10"
+                  baseClassName="rounded-lg border border-slate-200 bg-white text-slate-700"
+                  className="hover:bg-slate-50"
+                >
+                  <CloseRoundedIcon sx={{ fontSize: 20 }} />
+                </AdminIconActionButton>
+              ) : null}
+
+              {visibleActions.archive ? (
+                <AdminIconActionButton
+                  onClick={() => onArchive(row)}
+                  disabled={busy}
+                  label="Archive"
+                  sizeClassName="h-10 w-10"
+                  baseClassName="rounded-lg border border-amber-200 bg-amber-50 text-amber-700"
+                  className="hover:bg-amber-100"
+                >
+                  <DeleteOutlineRoundedIcon sx={{ fontSize: 20 }} />
+                </AdminIconActionButton>
+              ) : null}
             </div>
           </AdminMobileCard>
         );

@@ -181,10 +181,22 @@ export default function StudentEventGroupsPage() {
 
   const eventActive = normalizeValue(event?.status) === "ACTIVE";
   const registrationStatus = getEventRegistrationStatus(event);
+  const studentApplicationsEnabled =
+    event?.apply_by_student === undefined || event?.apply_by_student === null
+      ? true
+      : ["true", "1", "yes", "y"].includes(
+          String(event.apply_by_student).trim().toLowerCase()
+        );
   const createDisabled =
-    !eventActive || !registrationStatus.isOpen || !!myActiveMembershipInEvent || savingTeam;
+    !eventActive ||
+    !studentApplicationsEnabled ||
+    !registrationStatus.isOpen ||
+    !!myActiveMembershipInEvent ||
+    savingTeam;
   const createDisabledReason = !eventActive
     ? "This event is not active, so new groups cannot be created."
+    : !studentApplicationsEnabled
+      ? "Student applications are disabled for this event."
     : !registrationStatus.isOpen
       ? "Registration is not open for this event right now."
     : myActiveMembershipInEvent
@@ -323,6 +335,12 @@ export default function StudentEventGroupsPage() {
       {!eventActive && event ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           This event is not active, so new event groups cannot be created right now.
+        </div>
+      ) : null}
+
+      {event && !studentApplicationsEnabled ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Student applications are disabled for this event.
         </div>
       ) : null}
 

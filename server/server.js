@@ -22,6 +22,7 @@ const startServer = async () => {
     void membershipService.syncPendingGroupRankReviews().catch((error) => {
       console.error("Group rank review warmup failed:", error?.message || error);
     });
+    
     void eligibilityService
       .syncStoredEligibilityPointAllocationsForAllPhases()
       .catch((error) => {

@@ -1,6 +1,7 @@
 import { formatLabel, formatShortDate, normalizeValue } from "../teams/teamPage.utils";
 
 export const EVENT_STATUS_OPTIONS = ["ACTIVE", "CLOSED", "INACTIVE", "ARCHIVED"];
+export const EVENT_REGISTRATION_OPTIONS = ["OPEN", "UPCOMING", "CLOSED"];
 export const EVENT_GROUP_STATUS_OPTIONS = ["ACTIVE", "INACTIVE", "FROZEN", "ARCHIVED"];
 export const EVENT_GROUP_REQUEST_STATE_OPTIONS = [
   "ACTIVE_MEMBER",
@@ -16,14 +17,46 @@ export const EMPTY_EVENT_GROUP_FORM = {
   description: ""
 };
 
+const normalizeBooleanLike = (value, defaultValue = false) => {
+  if (value === undefined || value === null || value === "") {
+    return defaultValue;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "y"].includes(normalized)) return true;
+    if (["false", "0", "no", "n"].includes(normalized)) return false;
+  }
+
+  return Boolean(value);
+};
+
 export const getEventLocationLabel = (event) =>
   event?.location || event?.venue || event?.place || "-";
+
+export const getEventOrganizerLabel = (event) =>
+  String(event?.event_organizer || "").trim() || "-";
+
+export const getEventCategoryLabel = (event) =>
+  String(event?.event_category || "").trim() || "-";
+
+export const getEventLevelLabel = (event) =>
+  String(event?.event_level || "").trim() || "-";
 
 export const getEventDateRangeLabel = (event) => {
   const values = [formatShortDate(event?.start_date), formatShortDate(event?.end_date)].filter(
     (value) => value && value !== "-"
   );
   return values.length > 0 ? values.join(" to ") : "-";
+};
+
+export const formatEventDate = (value) => {
+  if (!value) return "-";
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+
+  return parsed.toLocaleDateString();
 };
 
 export const getEventRegistrationDateRangeLabel = (event) => {
@@ -47,12 +80,54 @@ export const getEventMemberLimitLabel = (event) => {
   return "Not configured";
 };
 
+export const formatEventCountValue = (value) => {
+  if (value === undefined || value === null || value === "") return "-";
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? String(parsed) : "-";
+};
+
+export const getEventBalanceCount = (maximumCount, appliedCount) => {
+  const maxValue = Number(maximumCount);
+  if (!Number.isFinite(maxValue)) return "-";
+
+  const appliedValue = Number(appliedCount);
+  if (!Number.isFinite(appliedValue)) return String(maxValue);
+
+  return String(Math.max(0, maxValue - appliedValue));
+};
+
+export const formatEventDurationDays = (start, end, fallback = null) => {
+  if (fallback !== undefined && fallback !== null && fallback !== "") {
+    const parsedFallback = Number(fallback);
+    if (Number.isFinite(parsedFallback)) return String(parsedFallback);
+  }
+
+  if (!start || !end) return "-";
+
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return "-";
+
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const diff = Math.floor((endDate.getTime() - startDate.getTime()) / msPerDay);
+  if (diff < 0) return "-";
+
+  return String(diff + 1);
+};
+
 export const getNormalizedExternalUrl = (value) => {
   const normalized = String(value || "").trim();
   if (!normalized) return null;
   if (/^https?:\/\//i.test(normalized)) return normalized;
   return `https://${normalized}`;
 };
+
+export const isEventStudentApplicationEnabled = (event) =>
+  normalizeBooleanLike(event?.apply_by_student, true);
+
+export const getEventStudentApplyLabel = (event) =>
+  isEventStudentApplicationEnabled(event) ? "Yes" : "No";
 
 export const getEventRegistrationStatus = (event) => {
   const start = event?.registration_start_date ? new Date(event.registration_start_date) : null;
@@ -98,6 +173,8 @@ export const getEventRegistrationStatus = (event) => {
 
   return { key: "OPEN", label: "Registration Open", isOpen: true };
 };
+
+export const getEventRegistrationFilterValue = (event) => getEventRegistrationStatus(event).key;
 
 export const getEventGroupRequestStatus = ({ latestRequestByTeamId, myTeamIdSet, teamId }) => {
   const normalizedTeamId = Number(teamId);

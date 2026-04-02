@@ -28,7 +28,7 @@ const LoginPage = ({ onLogin }) => {
       onLogin({ userId, role, name, sessionExpiresAt });
 
       // navigate to role dashboard
-      if (role === "ADMIN") {
+      if (role === "ADMIN" || role === "SYSTEM_ADMIN") {
         navigate("/admin/dashboard");
       } else if (role === "STUDENT") {
         navigate("/student/dashboard");

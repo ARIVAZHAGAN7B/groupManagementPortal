@@ -45,6 +45,23 @@ const ensureEventGroupCapacity = (team) => {
   }
 };
 
+const ensureStudentApplicationsAllowed = (team) => {
+  if (!team) return;
+
+  const applyByStudent = team?.event_apply_by_student;
+  if (applyByStudent === null || applyByStudent === undefined || applyByStudent === "") {
+    return;
+  }
+
+  if (
+    applyByStudent === false ||
+    Number(applyByStudent) === 0 ||
+    String(applyByStudent).trim().toLowerCase() === "false"
+  ) {
+    throw new Error("Student applications are disabled for this event");
+  }
+};
+
 const getStudentIdByUserIdFrom = async (queryable, userId) => {
   const [rows] = await queryable.query(
     "SELECT student_id FROM students WHERE user_id = ? LIMIT 1",
@@ -130,6 +147,7 @@ const ensureTeamCanAcceptRequests = async (executor, teamId) => {
   if (String(team.event_status || "").toUpperCase() !== "ACTIVE") {
     throw new Error("Only ACTIVE events can accept requests");
   }
+  ensureStudentApplicationsAllowed(team);
   ensureEventRegistrationWindowOpen(team);
   ensureEventGroupCapacity(team);
   return team;

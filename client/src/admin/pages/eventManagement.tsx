@@ -7,7 +7,6 @@ import {
   archiveEvent,
   closeEvent,
   createEvent,
-  deleteEvent,
   fetchEvents,
   updateEvent
 } from "../../service/events.api";
@@ -16,56 +15,123 @@ import EventManagementFilters from "../components/events/EventManagementFilters"
 import EventManagementFormCard from "../components/events/EventManagementFormCard";
 import EventManagementHero from "../components/events/EventManagementHero";
 import EventManagementMobileCards from "../components/events/EventManagementMobileCards";
-import { filterEventRows } from "../components/events/eventManagement.constants";
+import {
+  DEFAULT_REWARD_ALLOCATION,
+  DEFAULT_YEAR_REWARD_VALUES,
+  formatRewardAllocationValue,
+  parseRewardAllocationValues,
+  filterEventRows
+} from "../components/events/eventManagement.constants";
 import AdminFormModal from "../components/ui/AdminFormModal";
 import AdminPaginationBar from "../components/ui/AdminPaginationBar";
 
 type EventRow = {
+  applied_count?: number | null;
+  apply_by_student?: boolean | null;
+  balance_count?: number | null;
+  competition_name?: string | null;
   created_at?: string | null;
+  country?: string | null;
+  department?: string | null;
   description?: string | null;
+  duration_days?: number | null;
   end_date?: string | null;
+  eligible_for_rewards?: boolean | null;
+  event_category?: string | null;
   event_code?: string | null;
   event_id: number;
+  event_level?: string | null;
   event_name?: string | null;
+  event_organizer?: string | null;
   location?: string | null;
+  maximum_count?: number | null;
   max_members?: number | null;
   min_members?: number | null;
   registration_end_date?: string | null;
   registration_link?: string | null;
   registration_start_date?: string | null;
+  related_to_special_lab?: boolean | null;
+  reward_allocation?: string | null;
+  selected_resources?: string | null;
   start_date?: string | null;
+  state?: string | null;
   status?: string | null;
   team_count?: number | null;
+  total_level_of_competition?: string | null;
   updated_at?: string | null;
+  winner_rewards?: string | null;
+  within_bit?: boolean | null;
 };
 
 type EventFormState = {
+  applied_count: string;
+  apply_by_student: string;
+  competition_name: string;
+  country: string;
   description: string;
+  department: string;
   end_date: string;
+  eligible_for_rewards: string;
+  event_category: string;
   event_code: string;
+  event_level: string;
   event_name: string;
+  event_organizer: string;
   location: string;
+  maximum_count: string;
   max_members: string;
   min_members: string;
   registration_end_date: string;
   registration_link: string;
   registration_start_date: string;
+  related_to_special_lab: string;
+  first_year_reward: string;
+  fourth_year_reward: string;
+  reward_allocation: string;
+  second_year_reward: string;
+  selected_resources: string;
   start_date: string;
+  state: string;
   status: string;
+  third_year_reward: string;
+  total_level_of_competition: string;
+  winner_rewards: string;
+  within_bit: string;
 };
 
 const EMPTY_FORM: EventFormState = {
+  applied_count: "",
+  apply_by_student: "true",
+  competition_name: "",
+  country: "India",
   event_code: "",
+  department: "",
   event_name: "",
+  eligible_for_rewards: "false",
+  event_category: "",
+  event_level: "",
+  event_organizer: "",
+  first_year_reward: DEFAULT_YEAR_REWARD_VALUES.first_year_reward,
+  fourth_year_reward: DEFAULT_YEAR_REWARD_VALUES.fourth_year_reward,
   location: "",
+  maximum_count: "",
   registration_link: "",
+  related_to_special_lab: "false",
+  reward_allocation: DEFAULT_REWARD_ALLOCATION,
+  second_year_reward: DEFAULT_YEAR_REWARD_VALUES.second_year_reward,
+  selected_resources: "",
   start_date: "",
   end_date: "",
   registration_start_date: "",
   registration_end_date: "",
   min_members: "",
   max_members: "",
+  state: "",
   status: "ACTIVE",
+  third_year_reward: DEFAULT_YEAR_REWARD_VALUES.third_year_reward,
+  total_level_of_competition: "",
+  winner_rewards: "",
+  within_bit: "false",
   description: ""
 };
 
@@ -74,20 +140,80 @@ const toInputDate = (value: string | null | undefined) => (value ? String(value)
 const toInputNumber = (value: number | null | undefined) =>
   value === null || value === undefined ? "" : String(value);
 
-const toFormState = (row: EventRow): EventFormState => ({
-  event_code: row.event_code || "",
-  event_name: row.event_name || "",
-  location: row.location || "",
-  registration_link: row.registration_link || "",
-  start_date: toInputDate(row.start_date),
-  end_date: toInputDate(row.end_date),
-  registration_start_date: toInputDate(row.registration_start_date),
-  registration_end_date: toInputDate(row.registration_end_date),
-  min_members: toInputNumber(row.min_members),
-  max_members: toInputNumber(row.max_members),
-  status: row.status || "ACTIVE",
-  description: row.description || ""
-});
+const toIntegerString = (value: string | number | null | undefined, fallback = "") => {
+  const match = String(value ?? "").match(/\d+/);
+  return match ? match[0] : fallback;
+};
+
+const toInputBoolean = (
+  value: boolean | number | string | null | undefined,
+  fallback: "true" | "false"
+) => {
+  if (value === null || value === undefined || value === "") return fallback;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "y"].includes(normalized)) return "true";
+    if (["false", "0", "no", "n"].includes(normalized)) return "false";
+  }
+
+  return value ? "true" : "false";
+};
+
+const toFormState = (row: EventRow): EventFormState => {
+  const rewardValues = parseRewardAllocationValues(row.reward_allocation);
+
+  return {
+    applied_count: toInputNumber(row.applied_count),
+    apply_by_student: toInputBoolean(row.apply_by_student, "true"),
+    competition_name: row.competition_name || "",
+    country: row.country || "India",
+    event_code: row.event_code || "",
+    department: row.department || "",
+    event_name: row.event_name || "",
+    eligible_for_rewards: toInputBoolean(row.eligible_for_rewards, "false"),
+    event_category: row.event_category || "",
+    event_level: row.event_level || "",
+    event_organizer: row.event_organizer || "",
+    first_year_reward: rewardValues.first_year_reward,
+    fourth_year_reward: rewardValues.fourth_year_reward,
+    location: row.location || "",
+    maximum_count: toInputNumber(row.maximum_count),
+    registration_link: row.registration_link || "",
+    related_to_special_lab: toInputBoolean(row.related_to_special_lab, "false"),
+    reward_allocation:
+      row.reward_allocation ||
+      formatRewardAllocationValue(rewardValues) ||
+      DEFAULT_REWARD_ALLOCATION,
+    second_year_reward: rewardValues.second_year_reward,
+    selected_resources: row.selected_resources || "",
+    start_date: toInputDate(row.start_date),
+    end_date: toInputDate(row.end_date),
+    registration_start_date: toInputDate(row.registration_start_date),
+    registration_end_date: toInputDate(row.registration_end_date),
+    min_members: toInputNumber(row.min_members),
+    max_members: toInputNumber(row.max_members),
+    state: row.state || "",
+    status: row.status || "ACTIVE",
+    third_year_reward: rewardValues.third_year_reward,
+    total_level_of_competition: row.total_level_of_competition || "",
+    winner_rewards: toIntegerString(row.winner_rewards),
+    within_bit: toInputBoolean(row.within_bit, "false"),
+    description: row.description || ""
+  };
+};
+
+const getUniqueTextOptions = (
+  rows: EventRow[],
+  accessor: (row: EventRow) => string | null | undefined
+) =>
+  Array.from(
+    new Set(
+      rows
+        .map(accessor)
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    )
+  ).sort((left, right) => left.localeCompare(right));
 
 export default function EventManagement() {
   const navigate = useNavigate();
@@ -98,6 +224,9 @@ export default function EventManagement() {
   const [successMessage, setSuccessMessage] = useState("");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [categoryFilter, setCategoryFilter] = useState("ALL");
+  const [levelFilter, setLevelFilter] = useState("ALL");
+  const [applyByStudentFilter, setApplyByStudentFilter] = useState("ALL");
   const [saving, setSaving] = useState(false);
   const [actionBusyId, setActionBusyId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -133,9 +262,33 @@ export default function EventManagement() {
     [editingId, rows]
   );
 
+  const categoryOptions = useMemo(
+    () => getUniqueTextOptions(rows, (row) => row.event_category),
+    [rows]
+  );
+  const levelOptions = useMemo(
+    () => getUniqueTextOptions(rows, (row) => row.event_level),
+    [rows]
+  );
+  const hasActiveFilters = useMemo(
+    () =>
+      Boolean(String(query || "").trim()) ||
+      statusFilter !== "ALL" ||
+      categoryFilter !== "ALL" ||
+      levelFilter !== "ALL" ||
+      applyByStudentFilter !== "ALL",
+    [applyByStudentFilter, categoryFilter, levelFilter, query, statusFilter]
+  );
   const filteredRows = useMemo(
-    () => filterEventRows(rows, { query, statusFilter }),
-    [query, rows, statusFilter]
+    () =>
+      filterEventRows(rows, {
+        query,
+        statusFilter,
+        categoryFilter,
+        levelFilter,
+        studentFilter: applyByStudentFilter
+      }),
+    [applyByStudentFilter, categoryFilter, levelFilter, query, rows, statusFilter]
   );
 
   const {
@@ -149,7 +302,15 @@ export default function EventManagement() {
 
   useEffect(() => {
     setPage(1);
-  }, [query, setPage, statusFilter]);
+  }, [applyByStudentFilter, categoryFilter, levelFilter, query, setPage, statusFilter]);
+
+  const handleResetFilters = () => {
+    setQuery("");
+    setStatusFilter("ALL");
+    setCategoryFilter("ALL");
+    setLevelFilter("ALL");
+    setApplyByStudentFilter("ALL");
+  };
 
   const onChangeField = (key: keyof EventFormState, value: string) => {
     setForm((previous) => ({ ...previous, [key]: value }));
@@ -185,18 +346,47 @@ export default function EventManagement() {
     setSuccessMessage("");
 
     try {
+      const rewardsEnabled = form.eligible_for_rewards === "true";
+      const structuredRewardAllocation = formatRewardAllocationValue({
+        first_year_reward: form.first_year_reward,
+        second_year_reward: form.second_year_reward,
+        third_year_reward: form.third_year_reward,
+        fourth_year_reward: form.fourth_year_reward
+      });
+
       const payload = {
+        applied_count: form.applied_count ? Number(form.applied_count) : null,
+        apply_by_student: form.apply_by_student === "true",
+        competition_name: String(form.competition_name || "").trim(),
+        country: String(form.country || "").trim(),
         event_code: String(form.event_code || "").trim().toUpperCase(),
+        department: String(form.department || "").trim(),
         event_name: String(form.event_name || "").trim(),
+        eligible_for_rewards: form.eligible_for_rewards === "true",
+        event_category: String(form.event_category || "").trim(),
+        event_level: String(form.event_level || "").trim(),
+        event_organizer: String(form.event_organizer || "").trim(),
         location: String(form.location || "").trim(),
+        maximum_count: form.maximum_count ? Number(form.maximum_count) : null,
         registration_link: String(form.registration_link || "").trim(),
+        related_to_special_lab: form.related_to_special_lab === "true",
+        reward_allocation:
+          rewardsEnabled
+            ? structuredRewardAllocation || String(form.reward_allocation || "").trim()
+            : "",
+        selected_resources: String(form.selected_resources || "").trim(),
         start_date: form.start_date || null,
+        state: String(form.state || "").trim(),
         end_date: form.end_date || null,
         registration_start_date: form.registration_start_date || null,
         registration_end_date: form.registration_end_date || null,
         min_members: form.min_members ? Number(form.min_members) : null,
         max_members: form.max_members ? Number(form.max_members) : null,
         status: form.status,
+        total_level_of_competition: String(form.total_level_of_competition || "").trim(),
+        winner_rewards:
+          rewardsEnabled && form.winner_rewards ? String(Number(form.winner_rewards)) : "",
+        within_bit: form.within_bit === "true",
         description: String(form.description || "").trim()
       };
 
@@ -292,12 +482,20 @@ export default function EventManagement() {
       </AdminFormModal>
 
       <EventManagementFilters
-        filteredCount={filteredRows.length}
+        applyByStudentFilter={applyByStudentFilter}
+        categoryFilter={categoryFilter}
+        categoryOptions={categoryOptions}
+        hasActiveFilters={hasActiveFilters}
+        levelFilter={levelFilter}
+        levelOptions={levelOptions}
+        onResetFilters={handleResetFilters}
         query={query}
+        setApplyByStudentFilter={setApplyByStudentFilter}
+        setCategoryFilter={setCategoryFilter}
+        setLevelFilter={setLevelFilter}
         setQuery={setQuery}
         setStatusFilter={setStatusFilter}
         statusFilter={statusFilter}
-        totalCount={rows.length}
       />
 
       {loading ? (
@@ -330,14 +528,6 @@ export default function EventManagement() {
                 `Event ${row.event_code || row.event_id} is now CLOSED.`
               )
             }
-            onDeactivate={(row) =>
-              doRowAction(
-                row,
-                deleteEvent,
-                `Event ${row.event_code || row.event_id} has been set to INACTIVE.`,
-                `Set event ${row.event_code || row.event_id} to INACTIVE?`
-              )
-            }
             onEdit={onEdit}
             onView={(row) => navigate(`/event-management/${row.event_id}`)}
             rows={pagedRows}
@@ -365,14 +555,6 @@ export default function EventManagement() {
                 row,
                 closeEvent,
                 `Event ${row.event_code || row.event_id} is now CLOSED.`
-              )
-            }
-            onDeactivate={(row) =>
-              doRowAction(
-                row,
-                deleteEvent,
-                `Event ${row.event_code || row.event_id} has been set to INACTIVE.`,
-                `Set event ${row.event_code || row.event_id} to INACTIVE?`
               )
             }
             onEdit={onEdit}

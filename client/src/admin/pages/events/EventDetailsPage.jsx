@@ -4,6 +4,12 @@ import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { fetchEventById } from "../../../service/events.api";
+import {
+  formatBooleanLabel,
+  formatCountValue,
+  formatDurationDays,
+  getBalanceCount
+} from "../../components/events/eventManagement.constants";
 import EventSummaryPanel from "../../../students/components/events/EventSummaryPanel";
 import {
   getEventDateRangeLabel,
@@ -20,6 +26,31 @@ function StatTile({ label, value }) {
       </p>
       <p className="mt-1 text-sm font-semibold text-slate-900">{value || "-"}</p>
     </div>
+  );
+}
+
+function DetailBlock({ items, title }) {
+  if (!items.length) return null;
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-slate-500">{title}</h2>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {items.map((item) => (
+          <div
+            key={item.label}
+            className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+              {item.label}
+            </p>
+            <p className="mt-1 text-sm font-semibold text-slate-900 break-words">
+              {item.value || "-"}
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -52,6 +83,60 @@ export default function EventDetailsPage() {
   const registrationLink = useMemo(
     () => getNormalizedExternalUrl(event?.registration_link),
     [event?.registration_link]
+  );
+  const metadataItems = useMemo(
+    () =>
+      [
+        { label: "Event Organizer", value: event?.event_organizer || "-" },
+        { label: "Event Category", value: event?.event_category || "-" },
+        { label: "Event Level", value: event?.event_level || "-" },
+        { label: "State", value: event?.state || "-" },
+        { label: "Country", value: event?.country || "-" },
+        { label: "Department", value: event?.department || "-" },
+        { label: "Competition Name", value: event?.competition_name || "-" },
+        {
+          label: "Total Level Of Competition",
+          value: event?.total_level_of_competition || "-"
+        },
+        {
+          label: "Apply By Student",
+          value: formatBooleanLabel(event?.apply_by_student)
+        },
+        { label: "With-In BIT", value: formatBooleanLabel(event?.within_bit) },
+        {
+          label: "Related To Special Lab",
+          value: formatBooleanLabel(event?.related_to_special_lab)
+        },
+        {
+          label: "Eligible For Rewards",
+          value: formatBooleanLabel(event?.eligible_for_rewards)
+        }
+      ],
+    [event]
+  );
+  const resourceItems = useMemo(
+    () =>
+      [
+        { label: "Selected Resources", value: event?.selected_resources || "-" },
+        { label: "Maximum Count", value: formatCountValue(event?.maximum_count) },
+        { label: "Applied Count", value: formatCountValue(event?.applied_count) },
+        {
+          label: "Balance Count",
+          value: getBalanceCount(event?.maximum_count, event?.applied_count)
+        },
+        {
+          label: "Duration (Days)",
+          value: formatDurationDays(event?.start_date, event?.end_date, event?.duration_days)
+        },
+        { label: "Winner Rewards", value: event?.winner_rewards || "-" },
+        { label: "Reward Allocation", value: event?.reward_allocation || "-" }
+      ],
+    [event]
+  );
+  const durationLabel = formatDurationDays(
+    event?.start_date,
+    event?.end_date,
+    event?.duration_days
   );
 
   if (loading) {
@@ -137,6 +222,16 @@ export default function EventDetailsPage() {
           <StatTile label="Registration" value={getEventRegistrationDateRangeLabel(event)} />
           <StatTile label="Member Limits" value={getEventMemberLimitLabel(event)} />
           <StatTile label="Registered Groups" value={String(Number(event.team_count) || 0)} />
+          <StatTile
+            label="Duration"
+            value={durationLabel === "-" ? "-" : `${durationLabel} day(s)`}
+          />
+          <StatTile label="Maximum Count" value={formatCountValue(event.maximum_count)} />
+          <StatTile label="Applied Count" value={formatCountValue(event.applied_count)} />
+          <StatTile
+            label="Balance Count"
+            value={getBalanceCount(event.maximum_count, event.applied_count)}
+          />
         </div>
 
         <div className="absolute -bottom-10 -right-10 h-48 w-48 rounded-full bg-[#1754cf]/10 blur-3xl" />
@@ -148,6 +243,9 @@ export default function EventDetailsPage() {
         title="Event Overview"
         groupCount={event.team_count}
       />
+
+      <DetailBlock items={metadataItems} title="Event Metadata" />
+      <DetailBlock items={resourceItems} title="Resources And Rewards" />
     </div>
   );
 }

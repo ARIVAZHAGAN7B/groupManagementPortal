@@ -1,12 +1,69 @@
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
-import AllGroupsBadge from "../allGroups/AllGroupsBadge";
-import { formatLabel } from "../teams/teamPage.utils";
 import {
-  getEventDateRangeLabel,
+  formatEventCountValue,
+  formatEventDate,
+  formatEventDurationDays,
+  getEventBalanceCount,
+  getEventCategoryLabel,
   getEventLocationLabel,
-  getEventMemberLimitLabel,
-  getEventRegistrationDateRangeLabel
+  getEventOrganizerLabel,
+  getEventStudentApplyLabel
 } from "./events.constants";
+
+const STATUS_STYLES = {
+  ACTIVE: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  CLOSED: "border-slate-200 bg-slate-100 text-slate-700",
+  INACTIVE: "border-rose-200 bg-rose-50 text-rose-700",
+  ARCHIVED: "border-amber-200 bg-amber-50 text-amber-700"
+};
+
+const headers = [
+  "ID",
+  "Event Code",
+  "Event Name",
+  "Event Organizer",
+  "Event Category",
+  "Status",
+  "Start Date",
+  "End Date",
+  "Duration (Days)",
+  "Event Location",
+  "Maximum Count",
+  "Applied Count",
+  "Balance Count",
+  "Apply By Student",
+  "Actions"
+];
+
+function TableText({ className = "", maxWidth = "max-w-[180px]", value }) {
+  const label = String(value ?? "").trim() || "-";
+
+  return (
+    <p className={`${maxWidth} truncate ${className}`.trim()} title={label}>
+      {label}
+    </p>
+  );
+}
+
+function EventCodeBadge({ value }) {
+  return (
+    <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 font-mono text-[9px] text-slate-600">
+      {value || "NO-CODE"}
+    </span>
+  );
+}
+
+function StatusBadge({ value }) {
+  const normalized = String(value || "").trim().toUpperCase();
+  const className = STATUS_STYLES[normalized] || "border-slate-200 bg-slate-100 text-slate-600";
+  const label = normalized || "-";
+
+  return (
+    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[9px] font-bold ${className}`}>
+      {label.replaceAll("_", " ")}
+    </span>
+  );
+}
 
 export default function EventDirectoryTable({
   rows = [],
@@ -14,68 +71,113 @@ export default function EventDirectoryTable({
   onView
 }) {
   return (
-    <div className="overflow-x-auto overflow-y-visible rounded-2xl">
-      <table className="min-w-[1120px] w-full text-sm">
-        <thead className="bg-slate-50 text-slate-600">
-          <tr>
-            <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Event</th>
-            <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Location</th>
-            <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Event Dates</th>
-            <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Registration</th>
-            <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Members</th>
-            <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Status</th>
-            <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Groups</th>
-            <th className="sticky right-0 bg-slate-50 px-4 py-3 text-left font-semibold whitespace-nowrap shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.14)]">
-              Actions
-            </th>
+    <div className="overflow-auto rounded-2xl">
+      <table className="min-w-[1780px] w-full text-[10px]">
+        <thead>
+          <tr className="border-b border-slate-200 bg-slate-50">
+            {headers.map((header) => (
+              <th
+                key={header}
+                className="whitespace-nowrap px-3.5 py-3 text-left text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-500"
+              >
+                {header}
+              </th>
+            ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-200 bg-white">
+
+        <tbody className="divide-y divide-slate-100 bg-white">
           {loading ? (
             <tr>
-              <td className="px-4 py-12 text-center text-sm text-slate-500" colSpan={8}>
+              <td colSpan={headers.length} className="px-4 py-12 text-center text-sm text-slate-500">
                 Loading events...
               </td>
             </tr>
           ) : rows.length === 0 ? (
             <tr>
-              <td className="px-4 py-12 text-center text-sm text-slate-500" colSpan={8}>
+              <td colSpan={headers.length} className="px-4 py-12 text-center text-sm text-slate-500">
                 No events found for the current filters.
               </td>
             </tr>
           ) : (
-            rows.map((event) => (
-              <tr key={event.event_id} className="group hover:bg-slate-50/80">
-                <td className="px-4 py-3">
-                  <div className="font-semibold text-slate-900">{event.event_name || "-"}</div>
-                  <div className="mt-0.5 text-xs text-slate-500">
-                    {event.event_code || "No code"}
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-slate-700">{getEventLocationLabel(event)}</td>
-                <td className="px-4 py-3 text-slate-700">{getEventDateRangeLabel(event)}</td>
-                <td className="px-4 py-3 text-slate-700">
-                  {getEventRegistrationDateRangeLabel(event)}
-                </td>
-                <td className="px-4 py-3 text-slate-700">{getEventMemberLimitLabel(event)}</td>
-                <td className="px-4 py-3">
-                  <AllGroupsBadge value={formatLabel(event.status, "Unknown")} />
-                </td>
-                <td className="px-4 py-3 font-medium text-slate-800">
-                  {Number(event.team_count) || 0}
-                </td>
-                <td className="sticky right-0 bg-white px-4 py-3 shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50/80">
-                  <button
-                    type="button"
-                    onClick={() => onView?.(event)}
-                    title={`View ${event.event_name || "event"}`}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#1754cf]/15 bg-[#1754cf]/8 text-[#1754cf] transition hover:bg-[#1754cf]/12"
-                  >
-                    <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
-                  </button>
-                </td>
-              </tr>
-            ))
+            rows.map((event) => {
+              const eventId = Number(event.event_id);
+
+              return (
+                <tr key={eventId} className="transition hover:bg-slate-50">
+                  <td className="px-3.5 py-3.5 whitespace-nowrap font-mono text-[10px] text-slate-500">
+                    {eventId}
+                  </td>
+
+                  <td className="px-3.5 py-3.5 whitespace-nowrap">
+                    <EventCodeBadge value={event.event_code} />
+                  </td>
+
+                  <td className="px-3.5 py-3.5">
+                    <TableText
+                      className="font-semibold text-[11px] text-slate-900"
+                      maxWidth="max-w-[240px]"
+                      value={event.event_name}
+                    />
+                  </td>
+
+                  <td className="px-3.5 py-3.5 text-slate-500">
+                    <TableText maxWidth="max-w-[200px]" value={getEventOrganizerLabel(event)} />
+                  </td>
+
+                  <td className="px-3.5 py-3.5 text-slate-500">
+                    <TableText maxWidth="max-w-[170px]" value={getEventCategoryLabel(event)} />
+                  </td>
+
+                  <td className="px-3.5 py-3.5 whitespace-nowrap">
+                    <StatusBadge value={event.status} />
+                  </td>
+
+                  <td className="px-3.5 py-3.5 whitespace-nowrap text-slate-600">
+                    {formatEventDate(event.start_date)}
+                  </td>
+
+                  <td className="px-3.5 py-3.5 whitespace-nowrap text-slate-600">
+                    {formatEventDate(event.end_date)}
+                  </td>
+
+                  <td className="px-3.5 py-3.5 whitespace-nowrap font-semibold text-slate-700">
+                    {formatEventDurationDays(event.start_date, event.end_date, event.duration_days)}
+                  </td>
+
+                  <td className="px-3.5 py-3.5 text-slate-500">
+                    <TableText maxWidth="max-w-[220px]" value={getEventLocationLabel(event)} />
+                  </td>
+
+                  <td className="px-3.5 py-3.5 whitespace-nowrap font-semibold text-slate-700">
+                    {formatEventCountValue(event.maximum_count)}
+                  </td>
+
+                  <td className="px-3.5 py-3.5 whitespace-nowrap font-semibold text-slate-700">
+                    {formatEventCountValue(event.applied_count)}
+                  </td>
+
+                  <td className="px-3.5 py-3.5 whitespace-nowrap font-semibold text-slate-700">
+                    {getEventBalanceCount(event.maximum_count, event.applied_count)}
+                  </td>
+
+                  <td className="px-3.5 py-3.5 whitespace-nowrap text-slate-600">
+                    {getEventStudentApplyLabel(event)}
+                  </td>
+
+                  <td className="w-[1%] px-3.5 py-3.5 whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => onView?.(event)}
+                      title="View"
+                      className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-[#1754cf]/15 bg-[#1754cf]/8 text-[#1754cf] transition hover:bg-[#1754cf]/12"
+                    >
+                      <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })
           )}
         </tbody>
       </table>

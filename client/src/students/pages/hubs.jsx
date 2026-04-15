@@ -1,5 +1,5 @@
-import ScopedTeamDirectoryPage from "../components/teams/ScopedTeamDirectoryPage";
+import HubDirectoryPage from "../components/hubs/HubDirectoryPage";
 
 export default function HubsPage() {
-  return <ScopedTeamDirectoryPage teamType="HUB" />;
+  return <HubDirectoryPage />;
 }

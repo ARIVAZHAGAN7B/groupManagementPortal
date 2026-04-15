@@ -1,3 +1,5 @@
+import AddRoundedIcon from "@mui/icons-material/AddRounded";
+import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import {
   BOOLEAN_SELECT_OPTIONS,
@@ -8,9 +10,27 @@ import {
   EVENT_STATUSES,
   INDIA_STATE_OPTIONS,
   STATUS_STYLES,
+  formatCountValue,
   formatRewardAllocationValue
 } from "./eventManagement.constants";
 import { AdminMappedBadge } from "../ui/AdminUiPrimitives";
+
+const ROUND_STATUS_OPTIONS = [
+  { value: "SCHEDULED", label: "SCHEDULED" },
+  { value: "ONGOING", label: "ONGOING" },
+  { value: "COMPLETED", label: "COMPLETED" },
+  { value: "CANCELLED", label: "CANCELLED" }
+];
+
+const ROUND_MODE_OPTIONS = [
+  { value: "ONLINE", label: "Online" },
+  { value: "OFFLINE", label: "Offline" }
+];
+
+const REGISTRATION_MODE_OPTIONS = [
+  { value: "TEAM", label: "Team" },
+  { value: "INDIVIDUAL", label: "Individual Direct" }
+];
 
 const labelClass =
   "mb-2 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500";
@@ -126,13 +146,24 @@ function ReadOnlyField({
 export default function EventManagementFormCard({
   editingId,
   form,
+  hubOptions = [],
+  onAddRound,
   onCancelEdit,
   onChangeField,
+  onChangeRound,
+  onRemoveRound,
   onReset,
   onSubmit,
+  onToggleAllowedHub,
   saving
 }) {
   const isIndia = String(form.country || "").trim().toLowerCase() === "india";
+  const isIndividualRegistration = String(form.registration_mode || "").toUpperCase() === "INDIVIDUAL";
+  const selectedAllowedHubIds = new Set(
+    (Array.isArray(form.allowed_hub_ids) ? form.allowed_hub_ids : [])
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value))
+  );
   const rewardsEnabled = form.eligible_for_rewards === "true";
   const rewardPreview = rewardsEnabled
     ? formatRewardAllocationValue({
@@ -142,13 +173,27 @@ export default function EventManagementFormCard({
         fourth_year_reward: form.fourth_year_reward
       }) || DEFAULT_REWARD_ALLOCATION
     : "-";
+  const validRegistrationsLabel =
+    editingId || String(form.applied_count || "").trim()
+      ? formatCountValue(form.applied_count)
+      : "Auto-tracked after a team reaches the minimum member count";
+  const availableSlotsLabel = (() => {
+    const maximumCount = Number(form.maximum_count);
+    if (!Number.isFinite(maximumCount)) {
+      return "Unlimited";
+    }
+
+    const validRegistrations = Number(form.applied_count);
+    const usedCount = Number.isFinite(validRegistrations) ? validRegistrations : 0;
+    return String(Math.max(0, maximumCount - usedCount));
+  })();
 
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl">
       <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="text-xl font-bold text-slate-900">
-            {editingId ? `Update Event #${editingId}` : "Create Event"}
+            {editingId ? `Update Event Listing #${editingId}` : "Create Event Listing"}
           </h2>
           <AdminMappedBadge
             map={STATUS_STYLES}
@@ -186,10 +231,10 @@ export default function EventManagementFormCard({
             />
 
             <InputField
-              label="Event Organizer"
+              label="Host / Organizer"
               value={form.event_organizer}
               onChange={(event) => onChangeField("event_organizer", event.target.value)}
-              placeholder="IEEE Student Branch"
+              placeholder="AICTE, IEEE, Hackathon Team"
               maxLength={255}
             />
 
@@ -216,8 +261,15 @@ export default function EventManagementFormCard({
               options={EVENT_STATUSES.map((status) => ({ value: status, label: status }))}
             />
 
+            <SelectField
+              label="Registration Mode"
+              value={form.registration_mode}
+              onChange={(event) => onChangeField("registration_mode", event.target.value)}
+              options={REGISTRATION_MODE_OPTIONS}
+            />
+
             <InputField
-              label="Competition Name"
+              label="Program / Competition"
               value={form.competition_name}
               onChange={(event) => onChangeField("competition_name", event.target.value)}
               placeholder="Smart India Hackathon"
@@ -257,7 +309,7 @@ export default function EventManagementFormCard({
             />
 
             <InputField
-              label="Web Link"
+              label="Registration / Reference Link"
               value={form.registration_link}
               onChange={(event) => onChangeField("registration_link", event.target.value)}
               placeholder="https://example.com/event"
@@ -313,10 +365,10 @@ export default function EventManagementFormCard({
             />
 
             <InputField
-              label="Selected Resources"
+              label="Participation Notes"
               value={form.selected_resources}
               onChange={(event) => onChangeField("selected_resources", event.target.value)}
-              placeholder="Projector, Auditorium, Judges"
+              placeholder="Rules, submission notes, contact details, or required documents"
               maxLength={1000}
             />
           </div>
@@ -324,25 +376,34 @@ export default function EventManagementFormCard({
 
         <Section title="Participation">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <InputField
-              label="Min Members"
-              type="number"
-              min={1}
-              step={1}
-              value={form.min_members}
-              onChange={(event) => onChangeField("min_members", event.target.value)}
-              placeholder="3"
-            />
+            {isIndividualRegistration ? (
+              <>
+                <ReadOnlyField label="Min Members" value="1" />
+                <ReadOnlyField label="Max Members" value="1" />
+              </>
+            ) : (
+              <>
+                <InputField
+                  label="Min Members"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={form.min_members}
+                  onChange={(event) => onChangeField("min_members", event.target.value)}
+                  placeholder="3"
+                />
 
-            <InputField
-              label="Max Members"
-              type="number"
-              min={1}
-              step={1}
-              value={form.max_members}
-              onChange={(event) => onChangeField("max_members", event.target.value)}
-              placeholder="6"
-            />
+                <InputField
+                  label="Max Members"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={form.max_members}
+                  onChange={(event) => onChangeField("max_members", event.target.value)}
+                  placeholder="6"
+                />
+              </>
+            )}
 
             <InputField
               label="Maximum Count"
@@ -354,14 +415,14 @@ export default function EventManagementFormCard({
               placeholder="100"
             />
 
-            <InputField
-              label="Applied Count"
-              type="number"
-              min={0}
-              step={1}
-              value={form.applied_count}
-              onChange={(event) => onChangeField("applied_count", event.target.value)}
-              placeholder="25"
+            <ReadOnlyField
+              label="Valid Registrations"
+              value={validRegistrationsLabel}
+            />
+
+            <ReadOnlyField
+              label="Available Slots"
+              value={availableSlotsLabel}
             />
 
             <SelectField
@@ -394,6 +455,209 @@ export default function EventManagementFormCard({
               options={BOOLEAN_SELECT_OPTIONS}
             />
           </div>
+
+          {isIndividualRegistration ? (
+            <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+              Students will register directly for this event. Each registration creates a single-person participant record automatically.
+            </div>
+          ) : null}
+        </Section>
+
+        <Section title="Hub Access">
+          <div className="space-y-4">
+            <p className="text-sm text-slate-500">
+              Leave this empty to allow any student who meets the hub quota. Select one or more hubs to restrict participation to active members of those hubs only.
+            </p>
+
+            {hubOptions.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-5 text-sm text-slate-500">
+                No active hubs are available yet. Create hubs first to use hub-based access.
+              </div>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2">
+                {hubOptions.map((hub) => {
+                  const hubId = Number(hub.team_id);
+                  const selected = selectedAllowedHubIds.has(hubId);
+                  const priorityLabel = String(hub.hub_priority || "")
+                    .trim()
+                    .toLowerCase();
+
+                  return (
+                    <button
+                      key={hubId}
+                      type="button"
+                      onClick={() => onToggleAllowedHub?.(hubId)}
+                      className={`rounded-2xl border px-4 py-3 text-left transition ${
+                        selected
+                          ? "border-[#0f6cbd]/30 bg-[#0f6cbd]/8 shadow-sm"
+                          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">
+                          {hub.team_code || `Hub ${hubId}`}
+                        </span>
+                        {priorityLabel ? (
+                          <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">
+                            {priorityLabel}
+                          </span>
+                        ) : null}
+                        {selected ? (
+                          <span className="inline-flex rounded-full border border-[#0f6cbd]/20 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#0f6cbd]">
+                            Selected
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-2 text-sm font-semibold text-slate-900">
+                        {hub.team_name || "-"}
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        Only active members of this hub can participate when selected.
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </Section>
+
+        <Section title="Rounds">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-slate-500">
+              Configure the stages students or teams move through so admin can track progress clearly.
+            </p>
+            <button
+              type="button"
+              onClick={onAddRound}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              <AddRoundedIcon sx={{ fontSize: 18 }} />
+              Add Round
+            </button>
+          </div>
+
+          {form.rounds.length === 0 ? (
+            <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-5 text-sm text-slate-500">
+              No stages configured yet. Add rounds like Screening, Semi Final, and Final.
+            </div>
+          ) : (
+            <div className="mt-4 space-y-4">
+              {form.rounds.map((round, index) => (
+                <div
+                  key={`round-${index}`}
+                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                >
+                  <div className="flex flex-col gap-3 border-b border-slate-200 pb-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#0f6cbd]">
+                        Round {index + 1}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Define the mode, schedule, and details for this stage.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveRound(index)}
+                      className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+                    >
+                      <DeleteOutlineRoundedIcon sx={{ fontSize: 18 }} />
+                      Remove
+                    </button>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <InputField
+                      label="Round Name"
+                      value={round.round_name}
+                      onChange={(event) =>
+                        onChangeRound(index, "round_name", event.target.value)
+                      }
+                      placeholder="Screening Round"
+                      maxLength={150}
+                    />
+
+                    <InputField
+                      label="Round Start Date"
+                      type="date"
+                      value={round.round_date}
+                      onChange={(event) =>
+                        onChangeRound(index, "round_date", event.target.value)
+                      }
+                    />
+
+                    <InputField
+                      label="Round End Date"
+                      type="date"
+                      value={round.round_end_date}
+                      onChange={(event) =>
+                        onChangeRound(index, "round_end_date", event.target.value)
+                      }
+                    />
+
+                    <SelectField
+                      label="Round Mode"
+                      value={round.round_mode || "ONLINE"}
+                      onChange={(event) =>
+                        onChangeRound(index, "round_mode", event.target.value)
+                      }
+                      options={ROUND_MODE_OPTIONS}
+                    />
+
+                    <SelectField
+                      label="Round Status"
+                      value={round.status}
+                      onChange={(event) =>
+                        onChangeRound(index, "status", event.target.value)
+                      }
+                      options={ROUND_STATUS_OPTIONS}
+                    />
+
+                    <InputField
+                      label="Start Time"
+                      type="time"
+                      value={round.start_time}
+                      onChange={(event) =>
+                        onChangeRound(index, "start_time", event.target.value)
+                      }
+                    />
+
+                    <InputField
+                      label="End Time"
+                      type="time"
+                      value={round.end_time}
+                      onChange={(event) =>
+                        onChangeRound(index, "end_time", event.target.value)
+                      }
+                    />
+
+                    <InputField
+                      label="Round Location"
+                      value={round.location}
+                      onChange={(event) =>
+                        onChangeRound(index, "location", event.target.value)
+                      }
+                      placeholder="Seminar Hall 2"
+                      maxLength={255}
+                    />
+                  </div>
+
+                  <div className="mt-4">
+                    <TextAreaField
+                      label="Round Details"
+                      value={round.description}
+                      onChange={(event) =>
+                        onChangeRound(index, "description", event.target.value)
+                      }
+                      placeholder="Explain what happens in this round, what teams submit, and how they get evaluated."
+                      maxLength={1000}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </Section>
 
         {rewardsEnabled ? (
@@ -454,12 +718,12 @@ export default function EventManagementFormCard({
           </Section>
         ) : null}
 
-        <Section title="Description">
+        <Section title="Participation Notes">
           <TextAreaField
-            label="Event Description"
+            label="Student-Facing Notes"
             value={form.description}
             onChange={(event) => onChangeField("description", event.target.value)}
-            placeholder="Enter event description"
+            placeholder="Add notes that help students understand the opportunity, rules, and expectations."
             maxLength={1000}
           />
         </Section>
@@ -477,7 +741,7 @@ export default function EventManagementFormCard({
             disabled={saving}
             className="rounded-xl bg-[#0f6cbd] px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[#0f6cbd]/20 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {saving ? "Saving..." : editingId ? "Update Event" : "Create Event"}
+            {saving ? "Saving..." : editingId ? "Update Listing" : "Create Listing"}
           </button>
         </div>
       </form>

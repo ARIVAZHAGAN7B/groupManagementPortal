@@ -12,15 +12,20 @@ import {
   fetchMyEventGroupMemberships,
   leaveTeamMembership
 } from "../../../service/teams.api";
-import TeamPageDetailTile from "../teams/TeamPageDetailTile";
+import WorkspacePageHeader, {
+  WorkspacePageHeaderActionButton
+} from "../../../shared/components/WorkspacePageHeader";
 import TeamMembershipLeaveModal from "../teams/TeamMembershipLeaveModal";
-import { formatLabel, formatShortDate, normalizeValue } from "../teams/teamPage.utils";
+import { formatLabel, normalizeValue } from "../teams/teamPage.utils";
 import EventGroupMembersSection from "./EventGroupMembersSection";
+import EventOnDutySection from "./EventOnDutySection";
+import EventRegistrationOverviewSection from "./EventRegistrationOverviewSection";
+import { getEventRegistrationStatus } from "./events.constants";
 
 const EVENT_GROUP_LEAVE_SCOPE = {
-  singularLabel: "Event Group",
-  singularLower: "event group",
-  leaveLabel: "Leave Group",
+  singularLabel: "Registered Team",
+  singularLower: "registered team",
+  leaveLabel: "Leave Team",
   leaveBusyLabel: "Leaving..."
 };
 
@@ -51,11 +56,11 @@ export default function StudentEventGroupDetailsPage() {
       ]);
 
       if (!groupRow || normalizeValue(groupRow.team_type) !== "EVENT") {
-        throw new Error("Event group not found");
+        throw new Error("Registered team not found");
       }
 
       if (String(groupRow.event_id || "") !== String(eventId)) {
-        throw new Error("This event group does not belong to the selected event");
+        throw new Error("This team does not belong to the selected event");
       }
 
       setEvent(eventRow || null);
@@ -66,7 +71,7 @@ export default function StudentEventGroupDetailsPage() {
       );
     } catch (err) {
       setError(
-        err?.response?.data?.message || err?.message || "Failed to load event group details"
+        err?.response?.data?.message || err?.message || "Failed to load registered team details"
       );
       setEvent(null);
       setGroup(null);
@@ -128,7 +133,7 @@ export default function StudentEventGroupDetailsPage() {
       setLeaveModalOpen(false);
       await load();
     } catch (err) {
-      setLeaveError(err?.response?.data?.message || "Failed to leave event group");
+      setLeaveError(err?.response?.data?.message || "Failed to leave team");
     } finally {
       setLeaveBusyMembershipId(null);
     }
@@ -137,8 +142,12 @@ export default function StudentEventGroupDetailsPage() {
   const myRoleLabel = myMembershipInThisGroup
     ? formatLabel(myMembershipInThisGroup.role, "Member")
     : "-";
-  const isCaptain = String(myMembershipInThisGroup?.role || "").toUpperCase() === "CAPTAIN";
+  const normalizedMyRole = String(myMembershipInThisGroup?.role || "").toUpperCase();
+  const isCaptain = normalizedMyRole === "CAPTAIN";
+  const canManageOnDuty = ["CAPTAIN", "VICE_CAPTAIN"].includes(normalizedMyRole);
   const currentStudentId = myMembershipInThisGroup?.student_id || null;
+  const registrationStatus = getEventRegistrationStatus(event);
+  const rosterLocked = Boolean(event) && registrationStatus.key === "CLOSED";
 
   const leaveModalRow =
     myMembershipInThisGroup && group
@@ -155,7 +164,7 @@ export default function StudentEventGroupDetailsPage() {
     return (
       <div className="mx-auto w-full max-w-7xl px-4 py-5 md:px-6">
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500 shadow-sm">
-          Loading event group details...
+          Loading registered team details...
         </div>
       </div>
     );
@@ -175,7 +184,7 @@ export default function StudentEventGroupDetailsPage() {
     return (
       <div className="mx-auto w-full max-w-7xl px-4 py-5 md:px-6">
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500 shadow-sm">
-          Event group not found.
+          Registered team not found.
         </div>
       </div>
     );
@@ -183,80 +192,73 @@ export default function StudentEventGroupDetailsPage() {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-5 md:px-6">
-      <section className="relative overflow-hidden rounded-2xl border border-[#1754cf]/10 bg-[#1754cf]/5 p-8">
-        <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="max-w-3xl">
-            <span className="mb-2 block text-xs font-bold uppercase tracking-[0.24em] text-[#1754cf]">
-              Event Group Details
-            </span>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-              {group.team_name || "-"}
-            </h1>
-            <p className="mt-2 text-base font-medium text-slate-600">
-              {event.event_name || "-"}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <button
+      <WorkspacePageHeader
+        eyebrow="Registered Entry"
+        title={group.team_name || "-"}
+        description={`${event.event_name || "-"} - Review members, OD access, and registration progress in one place.`}
+        actions={
+          <>
+            <WorkspacePageHeaderActionButton
               type="button"
               onClick={() => navigate(`/events/${eventId}`)}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              className="border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
             >
               <ArrowBackRoundedIcon sx={{ fontSize: 18 }} />
               Back
-            </button>
-            <button
+            </WorkspacePageHeaderActionButton>
+            <WorkspacePageHeaderActionButton
               type="button"
               onClick={load}
               disabled={loading}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-70"
+              className="border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
             >
               <RefreshRoundedIcon sx={{ fontSize: 18 }} />
               Refresh
-            </button>
-            <button
+            </WorkspacePageHeaderActionButton>
+            <WorkspacePageHeaderActionButton
               type="button"
               onClick={handleOpenLeaveModal}
-              disabled={!myMembershipInThisGroup || Boolean(leaveBusyMembershipId)}
-              title={myMembershipInThisGroup ? "Leave this event group" : "You are not an active member of this event group"}
-              className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!myMembershipInThisGroup || Boolean(leaveBusyMembershipId) || rosterLocked}
+              title={
+                rosterLocked
+                  ? "Roster changes are locked because registration ended"
+                  : myMembershipInThisGroup
+                    ? "Leave this registered team"
+                    : "You are not an active member of this team"
+              }
+              className="border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
             >
               <LogoutRoundedIcon sx={{ fontSize: 18 }} />
-              {leaveBusyMembershipId ? "Leaving..." : "Leave Group"}
-            </button>
-          </div>
-        </div>
+              {leaveBusyMembershipId ? "Leaving..." : "Leave Team"}
+            </WorkspacePageHeaderActionButton>
+          </>
+        }
+      />
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          <TeamPageDetailTile
-            label="Team Status"
-            value={formatLabel(group.status, "Unknown")}
-          />
-          <TeamPageDetailTile
-            label="My Role"
-            value={myRoleLabel}
-          />
-          <TeamPageDetailTile
-            label="Total Members"
-            value={members.length}
-          />
-          <TeamPageDetailTile
-            label="Start Date"
-            value={formatShortDate(event?.start_date)}
-          />
-          <TeamPageDetailTile
-            label="End Date"
-            value={formatShortDate(event?.end_date)}
-          />
-        </div>
+      <EventRegistrationOverviewSection
+        event={event}
+        group={group}
+        memberCount={members.length}
+        myRoleLabel={myRoleLabel}
+      />
 
-        <div className="absolute -bottom-10 -right-10 h-48 w-48 rounded-full bg-[#1754cf]/10 blur-3xl" />
-      </section>
+      {rosterLocked ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Registration is closed for this event, so the team roster is locked.
+        </div>
+      ) : null}
+
+      {myMembershipInThisGroup ? (
+        <EventOnDutySection
+          canManage={canManageOnDuty}
+          event={event}
+          group={group}
+        />
+      ) : null}
 
       <EventGroupMembersSection
         members={members}
-        canRemoveMember={isCaptain}
+        canRemoveMember={isCaptain && !rosterLocked}
         currentStudentId={currentStudentId}
         onChanged={load}
       />

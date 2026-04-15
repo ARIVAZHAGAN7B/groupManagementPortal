@@ -5,6 +5,7 @@ export const REALTIME_EVENTS = {
   ADMIN_NOTIFICATIONS: "realtime:admin-notifications",
   JOIN_REQUESTS: "realtime:join-requests",
   EVENT_JOIN_REQUESTS: "realtime:event-join-requests",
+  EVENT_TEAM_INVITATIONS: "realtime:event-team-invitations",
   LEADERSHIP_REQUESTS: "realtime:leadership-requests",
   GROUP_TIER_REQUESTS: "realtime:group-tier-requests",
   MEMBERSHIPS: "realtime:memberships",

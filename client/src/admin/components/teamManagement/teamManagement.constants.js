@@ -4,6 +4,7 @@ export const inputClass =
 export const selectClass = `${inputClass} appearance-none pr-10`;
 
 export const TEAM_STATUSES = ["ACTIVE", "INACTIVE", "FROZEN", "ARCHIVED"];
+export const HUB_PRIORITY_OPTIONS = ["PROMINENT", "MEDIUM", "LOW"];
 
 export const STATUS_STYLES = {
   ACTIVE: "border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -17,6 +18,12 @@ export const TYPE_STYLES = {
   HUB: "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700",
   SECTION: "border-amber-200 bg-amber-50 text-amber-700",
   EVENT: "border-orange-200 bg-orange-50 text-orange-700"
+};
+
+export const HUB_PRIORITY_STYLES = {
+  PROMINENT: "border-rose-200 bg-rose-50 text-rose-700",
+  MEDIUM: "border-amber-200 bg-amber-50 text-amber-700",
+  LOW: "border-emerald-200 bg-emerald-50 text-emerald-700"
 };
 
 export const getScopeConfig = (scope = "TEAM") => {
@@ -51,7 +58,7 @@ export const getScopeConfig = (scope = "TEAM") => {
       teamType: "HUB",
       scopeLabel: "Hub",
       scopeLabelPlural: "Hubs",
-      searchPlaceholder: "Search by hub code, name, status, or notes",
+      searchPlaceholder: "Search by hub code, name, priority, status, or notes",
       workspaceLabel: "Hub Workspace"
     };
   }
@@ -94,6 +101,12 @@ export const formatTeamTypeLabel = (value) => {
   return normalized.charAt(0) + normalized.slice(1).toLowerCase();
 };
 
+export const formatHubPriorityLabel = (value) => {
+  const normalized = String(value || "").toUpperCase();
+  if (!normalized) return "-";
+  return normalized.charAt(0) + normalized.slice(1).toLowerCase();
+};
+
 export const filterTeamRows = (rows, { query = "", statusFilter = "ALL", typeFilter = "ALL" }) => {
   const search = String(query || "").trim().toLowerCase();
 
@@ -111,6 +124,7 @@ export const filterTeamRows = (rows, { query = "", statusFilter = "ALL", typeFil
       row?.team_code,
       row?.team_name,
       row?.team_type,
+      row?.hub_priority,
       row?.status,
       row?.description,
       row?.event_name,

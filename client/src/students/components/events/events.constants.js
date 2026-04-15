@@ -2,6 +2,7 @@ import { formatLabel, formatShortDate, normalizeValue } from "../teams/teamPage.
 
 export const EVENT_STATUS_OPTIONS = ["ACTIVE", "CLOSED", "INACTIVE", "ARCHIVED"];
 export const EVENT_REGISTRATION_OPTIONS = ["OPEN", "UPCOMING", "CLOSED"];
+export const EVENT_REGISTRATION_MODE_OPTIONS = ["TEAM", "INDIVIDUAL"];
 export const EVENT_GROUP_STATUS_OPTIONS = ["ACTIVE", "INACTIVE", "FROZEN", "ARCHIVED"];
 export const EVENT_GROUP_REQUEST_STATE_OPTIONS = [
   "ACTIVE_MEMBER",
@@ -33,6 +34,19 @@ const normalizeBooleanLike = (value, defaultValue = false) => {
 
 export const getEventLocationLabel = (event) =>
   event?.location || event?.venue || event?.place || "-";
+
+export const getEventRegistrationMode = (event) => {
+  const normalized = String(event?.registration_mode || "")
+    .trim()
+    .toUpperCase();
+  return normalized === "INDIVIDUAL" ? "INDIVIDUAL" : "TEAM";
+};
+
+export const isEventIndividualRegistration = (event) =>
+  getEventRegistrationMode(event) === "INDIVIDUAL";
+
+export const getEventRegistrationModeLabel = (event) =>
+  isEventIndividualRegistration(event) ? "Individual Direct" : "Team";
 
 export const getEventOrganizerLabel = (event) =>
   String(event?.event_organizer || "").trim() || "-";
@@ -69,6 +83,10 @@ export const getEventRegistrationDateRangeLabel = (event) => {
 };
 
 export const getEventMemberLimitLabel = (event) => {
+  if (isEventIndividualRegistration(event)) {
+    return "Individual only";
+  }
+
   const minMembers = Number(event?.min_members);
   const maxMembers = Number(event?.max_members);
   const hasMin = Number.isInteger(minMembers) && minMembers > 0;
@@ -128,6 +146,30 @@ export const isEventStudentApplicationEnabled = (event) =>
 
 export const getEventStudentApplyLabel = (event) =>
   isEventStudentApplicationEnabled(event) ? "Yes" : "No";
+
+export const getEventAllowedHubRows = (event) =>
+  Array.isArray(event?.allowed_hubs) ? event.allowed_hubs : [];
+
+export const isEventHubRestricted = (event) => getEventAllowedHubRows(event).length > 0;
+
+export const getEventAllowedHubNames = (event) =>
+  getEventAllowedHubRows(event)
+    .map((hub) => String(hub?.team_name || hub?.team_code || "").trim())
+    .filter(Boolean);
+
+export const getEventAllowedHubSummary = (event) => {
+  const names = getEventAllowedHubNames(event);
+  if (names.length === 0) {
+    return "Any student who meets the hub quota can participate.";
+  }
+
+  return names.join(", ");
+};
+
+export const getEventHubRestrictionLabel = (event) =>
+  isEventHubRestricted(event)
+    ? `Restricted to ${getEventAllowedHubRows(event).length} hub${getEventAllowedHubRows(event).length === 1 ? "" : "s"}`
+    : "All eligible hubs";
 
 export const getEventRegistrationStatus = (event) => {
   const start = event?.registration_start_date ? new Date(event.registration_start_date) : null;
@@ -220,7 +262,7 @@ export const resolveEventGroupJoinAction = ({
     return {
       disabled: true,
       label: isJoined ? "Joined" : "Request Join",
-      title: "You already belong to an event group in this event"
+      title: "You already belong to a team in this event"
     };
   }
 
@@ -252,7 +294,7 @@ export const resolveEventGroupJoinAction = ({
     return {
       disabled: true,
       label: "Request Join",
-      title: "Only active event groups can accept requests"
+      title: "Only active teams can accept requests"
     };
   }
 

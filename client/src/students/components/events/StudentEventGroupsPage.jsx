@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import AddCircleOutlineRoundedIcon from "@mui/icons-material/AddCircleOutlineRounded";
+import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import { useNavigate, useParams } from "react-router-dom";
 import { useRealtimeEvents } from "../../../hooks/useRealtimeEvents";
 import { REALTIME_EVENTS } from "../../../lib/realtime";
@@ -9,16 +10,19 @@ import { getMyEventJoinRequests } from "../../../service/eventJoinRequests.api";
 import {
   createEventGroup,
   fetchEventGroupsByEvent,
-  fetchMyEventGroupMemberships
+  fetchMyEventGroupMemberships,
+  registerIndividualEvent,
+  searchEventRegistrationCandidates
 } from "../../../service/teams.api";
-import TeamPageFilters from "../teams/TeamPageFilters";
-import TeamPageHero from "../teams/TeamPageHero";
+import { fetchMyHubMemberships } from "../../../service/hubs.api";
 import {
-  TeamDesktopTableShell,
-  TeamTableSearchField,
-  TeamTableSelectField
+  TeamDesktopTableShell
 } from "../teams/TeamDesktopTableControls";
 import { formatLabel, normalizeValue } from "../teams/teamPage.utils";
+import { WorkspaceFilterBar } from "../../../shared/components/WorkspaceInlineFilters";
+import WorkspacePageHeader, {
+  WorkspacePageHeaderActionButton
+} from "../../../shared/components/WorkspacePageHeader";
 import EventGroupCreateModal from "./EventGroupCreateModal";
 import EventGroupsMobileCards from "./EventGroupsMobileCards";
 import EventGroupsTable from "./EventGroupsTable";
@@ -27,18 +31,19 @@ import {
   EMPTY_EVENT_GROUP_FORM,
   EVENT_GROUP_REQUEST_STATE_OPTIONS,
   EVENT_GROUP_STATUS_OPTIONS,
-  getEventDateRangeLabel,
+  getEventAllowedHubSummary,
+  getEventAllowedHubRows,
+  getEventHubRestrictionLabel,
   getEventGroupRequestStatus,
-  getEventLocationLabel,
-  getEventMemberLimitLabel,
+  getEventRegistrationModeLabel,
   getEventRegistrationStatus
 } from "./events.constants";
 
-const inputClassName =
-  "w-full rounded-2xl border border-slate-300 bg-[#f3f4f6] px-4 py-3 text-sm font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#1754cf]/35 focus:ring-2 focus:ring-[#1754cf]/10";
-
-const selectClassName =
-  "w-full rounded-2xl border border-slate-300 bg-[#f3f4f6] px-4 py-3 text-sm font-medium text-slate-700 outline-none transition focus:border-[#1754cf]/35 focus:ring-2 focus:ring-[#1754cf]/10";
+const HUB_RULE_REQUIREMENTS = [
+  { key: "PROMINENT", label: "prominent", required: 2 },
+  { key: "MEDIUM", label: "medium", required: 2 },
+  { key: "LOW", label: "low", required: 2 }
+];
 
 export default function StudentEventGroupsPage() {
   const navigate = useNavigate();
@@ -47,6 +52,7 @@ export default function StudentEventGroupsPage() {
   const [event, setEvent] = useState(null);
   const [rows, setRows] = useState([]);
   const [myActiveMemberships, setMyActiveMemberships] = useState([]);
+  const [myHubMemberships, setMyHubMemberships] = useState([]);
   const [myRequests, setMyRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -56,16 +62,21 @@ export default function StudentEventGroupsPage() {
   const [savingTeam, setSavingTeam] = useState(false);
   const [teamForm, setTeamForm] = useState(EMPTY_EVENT_GROUP_FORM);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [inviteSearchQuery, setInviteSearchQuery] = useState("");
+  const [inviteSearchRows, setInviteSearchRows] = useState([]);
+  const [inviteSearchLoading, setInviteSearchLoading] = useState(false);
+  const [selectedInvitees, setSelectedInvitees] = useState([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
 
     try {
-      const [eventRow, groupRows, membershipRes, requestRows] = await Promise.all([
+      const [eventRow, groupRows, membershipRes, hubMembershipRes, requestRows] = await Promise.all([
         fetchEventById(eventId),
         fetchEventGroupsByEvent(eventId),
         fetchMyEventGroupMemberships({ status: "ACTIVE" }),
+        fetchMyHubMemberships({ status: "ACTIVE" }),
         getMyEventJoinRequests()
       ]);
 
@@ -74,12 +85,16 @@ export default function StudentEventGroupsPage() {
       setMyActiveMemberships(
         Array.isArray(membershipRes?.memberships) ? membershipRes.memberships : []
       );
+      setMyHubMemberships(
+        Array.isArray(hubMembershipRes?.memberships) ? hubMembershipRes.memberships : []
+      );
       setMyRequests(Array.isArray(requestRows) ? requestRows : []);
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to load event groups");
+      setError(err?.response?.data?.message || "Failed to load event registrations");
       setEvent(null);
       setRows([]);
       setMyActiveMemberships([]);
+      setMyHubMemberships([]);
       setMyRequests([]);
     } finally {
       setLoading(false);
@@ -100,7 +115,54 @@ export default function StudentEventGroupsPage() {
   useEffect(() => {
     setTeamForm(EMPTY_EVENT_GROUP_FORM);
     setCreateModalOpen(false);
+    setInviteSearchQuery("");
+    setInviteSearchRows([]);
+    setInviteSearchLoading(false);
+    setSelectedInvitees([]);
   }, [eventId]);
+
+  useEffect(() => {
+    if (!createModalOpen || !eventId) {
+      setInviteSearchRows([]);
+      setInviteSearchLoading(false);
+      return undefined;
+    }
+
+    const normalizedQuery = String(inviteSearchQuery || "").trim();
+    if (!normalizedQuery) {
+      setInviteSearchRows([]);
+      setInviteSearchLoading(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setInviteSearchLoading(true);
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const rows = await searchEventRegistrationCandidates(eventId, {
+          q: normalizedQuery,
+          limit: 10
+        });
+        if (!cancelled) {
+          setInviteSearchRows(Array.isArray(rows) ? rows : []);
+        }
+      } catch (_error) {
+        if (!cancelled) {
+          setInviteSearchRows([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setInviteSearchLoading(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [createModalOpen, eventId, inviteSearchQuery]);
 
   const myActiveMembershipInEvent = useMemo(
     () =>
@@ -155,24 +217,6 @@ export default function StudentEventGroupsPage() {
     });
   }, [latestRequestByTeamId, myTeamIdSet, query, requestStatusFilter, rows, statusFilter]);
 
-  const activeFilters = useMemo(() => {
-    const items = [];
-
-    if (String(query || "").trim()) {
-      items.push(`Search: ${String(query).trim()}`);
-    }
-
-    if (statusFilter !== "ALL") {
-      items.push(`Status: ${formatLabel(statusFilter)}`);
-    }
-
-    if (requestStatusFilter !== "ALL") {
-      items.push(`My Request: ${formatLabel(requestStatusFilter)}`);
-    }
-
-    return items;
-  }, [query, requestStatusFilter, statusFilter]);
-
   const resetFilters = useCallback(() => {
     setQuery("");
     setStatusFilter("ALL");
@@ -180,7 +224,60 @@ export default function StudentEventGroupsPage() {
   }, []);
 
   const eventActive = normalizeValue(event?.status) === "ACTIVE";
+  const individualRegistration =
+    String(event?.registration_mode || "TEAM").trim().toUpperCase() === "INDIVIDUAL";
   const registrationStatus = getEventRegistrationStatus(event);
+  const hubPriorityCounts = useMemo(
+    () =>
+      myHubMemberships.reduce(
+        (accumulator, membership) => {
+          const priority = String(membership?.hub_priority || "").toUpperCase();
+          if (!priority) return accumulator;
+          return {
+            ...accumulator,
+            [priority]: (accumulator[priority] || 0) + 1
+          };
+        },
+        {
+          PROMINENT: 0,
+          MEDIUM: 0,
+          LOW: 0
+        }
+      ),
+    [myHubMemberships]
+  );
+  const missingHubRequirements = useMemo(
+    () =>
+      HUB_RULE_REQUIREMENTS.filter(
+        (entry) => Number(hubPriorityCounts[entry.key]) < entry.required
+      ).map((entry) => ({
+        ...entry,
+        current: Number(hubPriorityCounts[entry.key]) || 0,
+        remaining: entry.required - (Number(hubPriorityCounts[entry.key]) || 0)
+      })),
+    [hubPriorityCounts]
+  );
+  const allowedHubIdSet = useMemo(
+    () =>
+      new Set(
+        getEventAllowedHubRows(event)
+          .map((hub) => Number(hub?.hub_id ?? hub?.team_id))
+          .filter((value) => Number.isInteger(value))
+      ),
+    [event]
+  );
+  const hasAllowedHubMembership = useMemo(() => {
+    if (allowedHubIdSet.size === 0) {
+      return true;
+    }
+
+    return myHubMemberships.some((membership) =>
+      allowedHubIdSet.has(Number(membership.team_id))
+    );
+  }, [allowedHubIdSet, myHubMemberships]);
+  const missingHubSummary = missingHubRequirements
+    .map((entry) => `${entry.remaining} ${entry.label}`)
+    .join(", ");
   const studentApplicationsEnabled =
     event?.apply_by_student === undefined || event?.apply_by_student === null
       ? true
@@ -188,28 +285,85 @@ export default function StudentEventGroupsPage() {
           String(event.apply_by_student).trim().toLowerCase()
         );
   const createDisabled =
-    !eventActive ||
-    !studentApplicationsEnabled ||
-    !registrationStatus.isOpen ||
-    !!myActiveMembershipInEvent ||
-    savingTeam;
+      !eventActive ||
+      !studentApplicationsEnabled ||
+      !registrationStatus.isOpen ||
+      missingHubRequirements.length > 0 ||
+      !hasAllowedHubMembership ||
+      !!myActiveMembershipInEvent ||
+      savingTeam;
   const createDisabledReason = !eventActive
-    ? "This event is not active, so new groups cannot be created."
+    ? `This event is not active, so new ${individualRegistration ? "individual" : "team"} registrations cannot be created.`
     : !studentApplicationsEnabled
       ? "Student applications are disabled for this event."
     : !registrationStatus.isOpen
       ? "Registration is not open for this event right now."
-    : myActiveMembershipInEvent
+      : missingHubRequirements.length > 0
+        ? `Complete your hub quota first. Still needed: ${missingHubSummary}.`
+      : !hasAllowedHubMembership
+        ? `This event is restricted to ${getEventAllowedHubSummary(event)}. Join one of those hubs first.`
+      : myActiveMembershipInEvent
       ? `You already belong to ${myActiveMembershipInEvent.team_code || myActiveMembershipInEvent.team_name}.`
       : "";
-  const eventTimeline = getEventDateRangeLabel(event);
-  const eventLocation = event ? getEventLocationLabel(event) : "-";
-
-  const headerSummary = event
-    ? filteredRows.length !== rows.length
-      ? `Showing ${filteredRows.length} of ${rows.length} event groups for ${event.event_name || event.event_code}`
-      : `${rows.length} event groups currently registered for ${event.event_name || event.event_code}`
-    : "Loading event groups";
+  const hasActiveFilters =
+    Boolean(String(query || "").trim()) ||
+    statusFilter !== "ALL" ||
+    requestStatusFilter !== "ALL";
+  const filterFields = useMemo(
+    () => [
+      {
+        key: "query",
+        type: "search",
+        label: "Search",
+        value: query,
+        placeholder: "Search by team, status, or request state",
+        onChangeValue: setQuery
+      },
+      {
+        key: "status",
+        type: "select",
+        label: "Group Status",
+        value: statusFilter,
+        onChangeValue: setStatusFilter,
+        wrapperClassName: "w-full sm:w-[180px]",
+        options: [
+          { value: "ALL", label: "All group statuses" },
+          ...EVENT_GROUP_STATUS_OPTIONS.map((status) => ({
+            value: status,
+            label: formatLabel(status)
+          }))
+        ]
+      },
+      {
+        key: "requestStatus",
+        type: "select",
+        label: "My Request",
+        value: requestStatusFilter,
+        onChangeValue: setRequestStatusFilter,
+        wrapperClassName: "w-full sm:w-[190px]",
+        options: [
+          { value: "ALL", label: "All request states" },
+          ...EVENT_GROUP_REQUEST_STATE_OPTIONS.map((status) => ({
+            value: status,
+            label: formatLabel(status)
+          }))
+        ]
+      }
+    ],
+    [query, requestStatusFilter, statusFilter]
+  );
+  const headerDescription = event
+    ? `${getEventRegistrationModeLabel(event)} registration workspace for ${event.event_code || event.event_name}. ${getEventHubRestrictionLabel(event)}.`
+    : "Review registrations, request states, and event details from one clean workspace.";
+  const membershipText = myActiveMembershipInEvent
+    ? `You belong to ${myActiveMembershipInEvent.team_code || myActiveMembershipInEvent.team_name}`
+    : missingHubRequirements.length > 0
+      ? `Hub quota pending: ${missingHubSummary}`
+      : !hasAllowedHubMembership
+        ? `Join one of these hubs first: ${getEventAllowedHubSummary(event)}`
+        : individualRegistration
+          ? "Review this event before registering individually"
+          : "Review this event before registering a team";
 
   const handleViewGroup = useCallback(
     (team) => {
@@ -225,13 +379,65 @@ export default function StudentEventGroupsPage() {
 
   const handleOpenCreateModal = useCallback(() => {
     if (createDisabled) return;
+    if (individualRegistration) return;
+    setInviteSearchQuery("");
+    setInviteSearchRows([]);
+    setSelectedInvitees([]);
     setCreateModalOpen(true);
-  }, [createDisabled]);
+  }, [createDisabled, individualRegistration]);
 
   const handleCloseCreateModal = useCallback(() => {
     if (savingTeam) return;
+    setInviteSearchQuery("");
+    setInviteSearchRows([]);
+    setSelectedInvitees([]);
     setCreateModalOpen(false);
   }, [savingTeam]);
+
+  const maxInviteeCount = useMemo(() => {
+    const maxMembers = Number(event?.max_members);
+    if (!Number.isInteger(maxMembers) || maxMembers <= 0) return null;
+    return Math.max(0, maxMembers - 1);
+  }, [event?.max_members]);
+
+  const visibleInviteSearchRows = useMemo(() => {
+    const selectedIds = new Set(selectedInvitees.map((row) => String(row.student_id)));
+    return inviteSearchRows.filter((row) => !selectedIds.has(String(row.student_id)));
+  }, [inviteSearchRows, selectedInvitees]);
+
+  const handleAddInvitee = useCallback(
+    (student) => {
+      if (!student?.student_id) return;
+
+      if (
+        maxInviteeCount !== null &&
+        selectedInvitees.length >= maxInviteeCount
+      ) {
+        setError(`This event allows only ${Number(event?.max_members) || 0} total team members.`);
+        return;
+      }
+
+      setSelectedInvitees((previousValue) => {
+        if (
+          previousValue.some(
+            (row) => String(row.student_id) === String(student.student_id)
+          )
+        ) {
+          return previousValue;
+        }
+        return [...previousValue, student];
+      });
+      setInviteSearchQuery("");
+      setInviteSearchRows([]);
+    },
+    [event?.max_members, maxInviteeCount, selectedInvitees.length]
+  );
+
+  const handleRemoveInvitee = useCallback((studentId) => {
+    setSelectedInvitees((previousValue) =>
+      previousValue.filter((row) => String(row.student_id) !== String(studentId))
+    );
+  }, []);
 
   const handleCreateGroup = useCallback(
     async (submitEvent) => {
@@ -245,15 +451,19 @@ export default function StudentEventGroupsPage() {
         const payload = {
           team_code: String(teamForm.team_code || "").trim().toUpperCase(),
           team_name: String(teamForm.team_name || "").trim(),
-          description: String(teamForm.description || "").trim()
+          description: String(teamForm.description || "").trim(),
+          invited_student_ids: selectedInvitees.map((row) => row.student_id)
         };
 
         if (!payload.team_code || !payload.team_name) {
-          throw new Error("Event group code and name are required");
+          throw new Error("Team code and team name are required");
         }
 
         const created = await createEventGroup(eventId, payload);
         setTeamForm(EMPTY_EVENT_GROUP_FORM);
+        setSelectedInvitees([]);
+        setInviteSearchQuery("");
+        setInviteSearchRows([]);
         setCreateModalOpen(false);
         await load();
 
@@ -262,68 +472,81 @@ export default function StudentEventGroupsPage() {
           navigate(`/events/${eventId}/groups/${createdTeamId}`);
         }
       } catch (err) {
-        setError(err?.response?.data?.message || err?.message || "Failed to create event group");
+        setError(err?.response?.data?.message || err?.message || "Failed to register team");
       } finally {
         setSavingTeam(false);
       }
     },
-    [eventId, load, navigate, teamForm]
+    [eventId, load, navigate, selectedInvitees, teamForm]
   );
+
+  const handleDirectRegistration = useCallback(async () => {
+    if (!eventId || createDisabled || !individualRegistration) return;
+
+    setSavingTeam(true);
+    setError("");
+
+    try {
+      const created = await registerIndividualEvent(eventId);
+      await load();
+
+      const createdTeamId = created?.data?.team?.team_id || created?.team?.team_id;
+      if (createdTeamId) {
+        navigate(`/events/${eventId}/groups/${createdTeamId}`);
+      }
+    } catch (err) {
+      setError(
+        err?.response?.data?.message || err?.message || "Failed to register for the event"
+      );
+    } finally {
+      setSavingTeam(false);
+    }
+  }, [createDisabled, eventId, individualRegistration, load, navigate]);
 
   return (
     <div className="max-w-screen-2xl space-y-3 p-4 md:p-5">
-      <TeamPageHero
-        loading={loading}
-        onRefresh={load}
-        eyebrow="Event Groups"
-        title={event?.event_name || "Event Groups"}
-        summary={headerSummary}
+      <WorkspacePageHeader
+        eyebrow={individualRegistration ? "Registered Participants" : "Registered Teams"}
+        title={
+          event?.event_name ||
+          (individualRegistration ? "Registered Participants" : "Registered Teams")
+        }
+        description={headerDescription}
         actions={
           <>
-            <button
+            <WorkspacePageHeaderActionButton
               type="button"
               onClick={() => navigate("/events")}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              className="border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
             >
               <ArrowBackRoundedIcon sx={{ fontSize: 18 }} />
               Back to Events
-            </button>
-            <button
+            </WorkspacePageHeaderActionButton>
+            <WorkspacePageHeaderActionButton
               type="button"
-              onClick={handleOpenCreateModal}
+              onClick={individualRegistration ? handleDirectRegistration : handleOpenCreateModal}
               disabled={createDisabled}
               title={createDisabledReason}
-              className="inline-flex items-center gap-2 rounded-lg border border-[#1754cf]/15 bg-[#1754cf]/8 px-4 py-2 text-sm font-semibold text-[#1754cf] transition hover:bg-[#1754cf]/12 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+              className="border-[#1754cf]/15 bg-[#1754cf]/8 text-[#1754cf] hover:bg-[#1754cf]/12 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
             >
               <AddCircleOutlineRoundedIcon sx={{ fontSize: 18 }} />
-              Create New Group
-            </button>
+              {savingTeam
+                ? "Registering..."
+                : individualRegistration
+                  ? "Register Individually"
+                  : "Register Team"}
+            </WorkspacePageHeaderActionButton>
+            <WorkspacePageHeaderActionButton
+              type="button"
+              onClick={load}
+              disabled={loading}
+              className="border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+            >
+              <RefreshRoundedIcon sx={{ fontSize: 18 }} />
+              {loading ? "Refreshing..." : "Refresh"}
+            </WorkspacePageHeaderActionButton>
           </>
         }
-        actionLabel="Refresh groups"
-        actionBusyLabel="Refreshing..."
-        stats={[
-          {
-            accentClass: "bg-[#1754cf]",
-            label: "Event Code",
-            value: event?.event_code || "-"
-          },
-          {
-            accentClass: "bg-emerald-500",
-            label: "Timeline",
-            value: eventTimeline
-          },
-          {
-            accentClass: "bg-sky-500",
-            label: "Location",
-            value: eventLocation
-          },
-          {
-            accentClass: "bg-slate-400",
-            label: "Member Limits",
-            value: getEventMemberLimitLabel(event)
-          }
-        ]}
       />
 
       {error ? (
@@ -334,7 +557,7 @@ export default function StudentEventGroupsPage() {
 
       {!eventActive && event ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          This event is not active, so new event groups cannot be created right now.
+          This event is not active, so new {individualRegistration ? "individual" : "team"} registrations cannot be created right now.
         </div>
       ) : null}
 
@@ -346,7 +569,25 @@ export default function StudentEventGroupsPage() {
 
       {event && !registrationStatus.isOpen ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          {registrationStatus.label}. New event groups and registrations are unavailable right now.
+          {registrationStatus.label}. New {individualRegistration ? "individual" : "team"} registrations are unavailable right now.
+        </div>
+      ) : null}
+
+      {event ? (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+          Hub access: {getEventHubRestrictionLabel(event)}. {getEventAllowedHubSummary(event)}
+        </div>
+      ) : null}
+
+      {missingHubRequirements.length > 0 ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Complete the hub quota before participating in events. Still needed: {missingHubSummary}.
+        </div>
+      ) : null}
+
+      {event && missingHubRequirements.length === 0 && !hasAllowedHubMembership ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          This event is restricted to {getEventAllowedHubSummary(event)}. Join one of those hubs to participate.
         </div>
       ) : null}
 
@@ -364,129 +605,40 @@ export default function StudentEventGroupsPage() {
         <EventSummaryPanel
           event={event}
           eyebrow="Selected Event"
-          title="Event Details"
-          groupCount={rows.length}
-          membershipText={
-            myActiveMembershipInEvent
-              ? `You belong to ${myActiveMembershipInEvent.team_code || myActiveMembershipInEvent.team_name}`
-              : "Review this event before creating or joining a group"
-          }
+          title="Participation Summary"
+          membershipText={membershipText}
         />
       ) : null}
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:hidden">
-        <TeamPageFilters
-          className="lg:hidden"
-          activeFilters={activeFilters}
-          canReset={activeFilters.length > 0}
-          itemLabel="event groups"
+      <div className="lg:hidden">
+        <WorkspaceFilterBar
+          fields={filterFields}
           onReset={resetFilters}
-          panelTitle="Filter Event Groups"
-          resultCount={filteredRows.length}
-          totalCount={rows.length}
-          withDivider
-        >
-          <label className="block">
-            <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-              Search
-            </span>
-            <input
-              value={query}
-              onChange={(inputEvent) => setQuery(inputEvent.target.value)}
-              placeholder="Search by event group, status, or request state"
-              className={inputClassName}
-            />
-          </label>
+          hasActiveFilters={hasActiveFilters}
+        />
+      </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Group Status
-              </span>
-              <select
-                value={statusFilter}
-                onChange={(inputEvent) => setStatusFilter(inputEvent.target.value)}
-                className={selectClassName}
-              >
-                <option value="ALL">All group statuses</option>
-                {EVENT_GROUP_STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>
-                    {formatLabel(status)}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                My Request
-              </span>
-              <select
-                value={requestStatusFilter}
-                onChange={(inputEvent) => setRequestStatusFilter(inputEvent.target.value)}
-                className={selectClassName}
-              >
-                <option value="ALL">All request states</option>
-                {EVENT_GROUP_REQUEST_STATE_OPTIONS.map((status) => (
-                  <option key={status} value={status}>
-                    {formatLabel(status)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </TeamPageFilters>
-
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:hidden">
         <EventGroupsMobileCards
           rows={filteredRows}
           loading={loading}
           latestRequestByTeamId={latestRequestByTeamId}
           myTeamIdSet={myTeamIdSet}
           onView={handleViewGroup}
+          registrationMode={event?.registration_mode}
         />
       </section>
 
       <TeamDesktopTableShell
-        canReset={activeFilters.length > 0}
+        canReset={hasActiveFilters}
         onReset={resetFilters}
         toolbar={
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-            <div className="min-w-0 xl:w-[22rem]">
-              <TeamTableSearchField
-                value={query}
-                onChange={(inputEvent) => setQuery(inputEvent.target.value)}
-                placeholder="Search by event group, status, or request state"
-              />
-            </div>
-
-            <div className="min-w-0 xl:w-44">
-              <TeamTableSelectField
-                value={statusFilter}
-                onChange={(inputEvent) => setStatusFilter(inputEvent.target.value)}
-              >
-                <option value="ALL">All group statuses</option>
-                {EVENT_GROUP_STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>
-                    {formatLabel(status)}
-                  </option>
-                ))}
-              </TeamTableSelectField>
-            </div>
-
-            <div className="min-w-0 xl:w-48">
-              <TeamTableSelectField
-                value={requestStatusFilter}
-                onChange={(inputEvent) => setRequestStatusFilter(inputEvent.target.value)}
-              >
-                <option value="ALL">All request states</option>
-                {EVENT_GROUP_REQUEST_STATE_OPTIONS.map((status) => (
-                  <option key={status} value={status}>
-                    {formatLabel(status)}
-                  </option>
-                ))}
-              </TeamTableSelectField>
-            </div>
-          </div>
+          <WorkspaceFilterBar
+            fields={filterFields}
+            onReset={resetFilters}
+            hasActiveFilters={hasActiveFilters}
+            showReset={false}
+          />
         }
       >
         <EventGroupsTable
@@ -495,20 +647,31 @@ export default function StudentEventGroupsPage() {
           latestRequestByTeamId={latestRequestByTeamId}
           myTeamIdSet={myTeamIdSet}
           onView={handleViewGroup}
+          registrationMode={event?.registration_mode}
         />
       </TeamDesktopTableShell>
 
-      <EventGroupCreateModal
-        event={event}
-        eventActive={eventActive}
-        myActiveMembershipInEvent={myActiveMembershipInEvent}
-        onChangeField={handleChangeField}
-        onClose={handleCloseCreateModal}
-        onSubmit={handleCreateGroup}
-        open={createModalOpen}
-        saving={savingTeam}
-        teamForm={teamForm}
-      />
+      {!individualRegistration ? (
+        <EventGroupCreateModal
+          event={event}
+          eventActive={eventActive}
+          inviteSearchLoading={inviteSearchLoading}
+          inviteSearchQuery={inviteSearchQuery}
+          inviteSearchRows={visibleInviteSearchRows}
+          maxInviteeCount={maxInviteeCount}
+          myActiveMembershipInEvent={myActiveMembershipInEvent}
+          onAddInvitee={handleAddInvitee}
+          onChangeField={handleChangeField}
+          onChangeInviteSearchQuery={setInviteSearchQuery}
+          onClose={handleCloseCreateModal}
+          onRemoveInvitee={handleRemoveInvitee}
+          onSubmit={handleCreateGroup}
+          open={createModalOpen}
+          selectedInvitees={selectedInvitees}
+          saving={savingTeam}
+          teamForm={teamForm}
+        />
+      ) : null}
     </div>
   );
 }

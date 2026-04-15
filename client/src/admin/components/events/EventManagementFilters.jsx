@@ -31,7 +31,7 @@ export default function EventManagementFilters({
       <AdminSearchField
         value={query}
         onChangeValue={setQuery}
-        placeholder="Search by code, event, organizer, category, location, or date"
+        placeholder="Search by code, event, host, category, location, or date"
         inputClassName={compactInputClass}
         wrapperClassName="relative w-full lg:min-w-[320px] lg:flex-1"
       />
@@ -85,8 +85,8 @@ export default function EventManagementFilters({
         selectClassName={compactSelectClass}
       >
         <option value="ALL">All student access</option>
-        <option value="true">Apply by student: Yes</option>
-        <option value="false">Apply by student: No</option>
+        <option value="true">Student registration: Yes</option>
+        <option value="false">Student registration: No</option>
       </AdminFilterSelect>
 
       <button

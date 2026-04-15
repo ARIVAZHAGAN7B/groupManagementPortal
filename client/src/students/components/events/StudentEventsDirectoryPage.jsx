@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  AdminFilterBar,
-  AdminFilterSelect,
-  AdminSearchField
-} from "../../../admin/components/ui/AdminFilterControls";
 import { fetchEvents } from "../../../service/events.api";
+import { WorkspaceFilterBar } from "../../../shared/components/WorkspaceInlineFilters";
 import TeamPageHero from "../teams/TeamPageHero";
 import { TeamDesktopTableShell } from "../teams/TeamDesktopTableControls";
 import { formatLabel, normalizeValue } from "../teams/teamPage.utils";
@@ -14,137 +10,18 @@ import EventDirectoryTable from "./EventDirectoryTable";
 import {
   EVENT_REGISTRATION_OPTIONS,
   EVENT_STATUS_OPTIONS,
+  getEventAllowedHubSummary,
+  getEventHubRestrictionLabel,
   getEventCategoryLabel,
   getEventLevelLabel,
   getEventLocationLabel,
   getEventOrganizerLabel,
+  getEventRegistrationModeLabel,
   getEventRegistrationDateRangeLabel,
   getEventRegistrationFilterValue,
   getEventRegistrationStatus,
   getEventStudentApplyLabel
 } from "./events.constants";
-
-const compactInputClass =
-  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] text-slate-700 outline-none transition focus:border-[#0f6cbd] focus:ring-4 focus:ring-[#0f6cbd]/10";
-
-const compactSelectClass = `${compactInputClass} appearance-none pr-9`;
-
-function StudentEventFilterBar({
-  activeFilters,
-  categoryFilter,
-  categoryOptions,
-  className = "",
-  hasActiveFilters,
-  levelFilter,
-  levelOptions,
-  onReset,
-  query,
-  registrationFilter,
-  resultCount,
-  setCategoryFilter,
-  setLevelFilter,
-  setQuery,
-  setRegistrationFilter,
-  setStatusFilter,
-  showMeta = false,
-  showReset = true,
-  statusFilter,
-  totalCount
-}) {
-  const showingText =
-    totalCount > 0 ? `Showing ${resultCount} of ${totalCount} events` : `Showing ${resultCount} events`;
-
-  const filterSummary =
-    activeFilters.length > 0 ? activeFilters.join(" | ") : "No filters applied";
-
-  return (
-    <div className={className}>
-      {showMeta ? (
-        <div className="mb-3 flex flex-col gap-1 px-0.5">
-          <p className="text-sm font-semibold text-slate-900">{showingText}</p>
-          <p className="text-xs text-slate-500">{filterSummary}</p>
-        </div>
-      ) : null}
-
-      <AdminFilterBar className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm md:flex-row md:flex-wrap md:items-center">
-        <AdminSearchField
-          value={query}
-          onChangeValue={setQuery}
-          placeholder="Search by code, event, organizer, category, location, or date"
-          inputClassName={compactInputClass}
-          wrapperClassName="relative w-full lg:min-w-[320px] lg:flex-1"
-        />
-
-        <AdminFilterSelect
-          value={statusFilter}
-          onChangeValue={setStatusFilter}
-          wrapperClassName="relative w-full sm:w-[170px]"
-          selectClassName={compactSelectClass}
-        >
-          <option value="ALL">All statuses</option>
-          {EVENT_STATUS_OPTIONS.map((status) => (
-            <option key={status} value={status}>
-              {formatLabel(status)}
-            </option>
-          ))}
-        </AdminFilterSelect>
-
-        <AdminFilterSelect
-          value={categoryFilter}
-          onChangeValue={setCategoryFilter}
-          wrapperClassName="relative w-full sm:w-[180px]"
-          selectClassName={compactSelectClass}
-        >
-          <option value="ALL">All categories</option>
-          {categoryOptions.map((category) => (
-            <option key={category} value={category}>
-              {category}
-            </option>
-          ))}
-        </AdminFilterSelect>
-
-        <AdminFilterSelect
-          value={levelFilter}
-          onChangeValue={setLevelFilter}
-          wrapperClassName="relative w-full sm:w-[170px]"
-          selectClassName={compactSelectClass}
-        >
-          <option value="ALL">All levels</option>
-          {levelOptions.map((level) => (
-            <option key={level} value={level}>
-              {level}
-            </option>
-          ))}
-        </AdminFilterSelect>
-
-        <AdminFilterSelect
-          value={registrationFilter}
-          onChangeValue={setRegistrationFilter}
-          wrapperClassName="relative w-full sm:w-[190px]"
-          selectClassName={compactSelectClass}
-        >
-          <option value="ALL">All registration</option>
-          {EVENT_REGISTRATION_OPTIONS.map((status) => (
-            <option key={status} value={status}>
-              {formatLabel(status)}
-            </option>
-          ))}
-        </AdminFilterSelect>
-
-        {showReset ? (
-          <button
-            type="button"
-            onClick={onReset}
-            disabled={!hasActiveFilters}
-            className="inline-flex min-h-[38px] w-full items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-3.5 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-          >
-            Clear Filters
-          </button>
-        ) : null}
-      </AdminFilterBar>
-    </div>
-  );
-}
 
 export default function StudentEventsDirectoryPage() {
   const navigate = useNavigate();
@@ -226,6 +103,9 @@ export default function StudentEventsDirectoryPage() {
           event.registration_end_date,
           getEventRegistrationDateRangeLabel(event),
           getEventRegistrationStatus(event).label,
+          getEventRegistrationModeLabel(event),
+          getEventHubRestrictionLabel(event),
+          getEventAllowedHubSummary(event),
           registrationState,
           getEventStudentApplyLabel(event),
           getEventLocationLabel(event),
@@ -278,6 +158,92 @@ export default function StudentEventsDirectoryPage() {
 
     return items;
   }, [categoryFilter, levelFilter, query, registrationFilter, statusFilter]);
+  const filterFields = useMemo(
+    () => [
+      {
+        key: "query",
+        type: "search",
+        label: "Search",
+        value: query,
+        placeholder: "Search by code, event, host, category, location, or date",
+        onChangeValue: setQuery
+      },
+      {
+        key: "status",
+        type: "select",
+        label: "Status",
+        value: statusFilter,
+        onChangeValue: setStatusFilter,
+        wrapperClassName: "w-full sm:w-[170px]",
+        options: [
+          { value: "ALL", label: "All statuses" },
+          ...EVENT_STATUS_OPTIONS.map((status) => ({
+            value: status,
+            label: formatLabel(status)
+          }))
+        ]
+      },
+      {
+        key: "category",
+        type: "select",
+        label: "Category",
+        value: categoryFilter,
+        onChangeValue: setCategoryFilter,
+        wrapperClassName: "w-full sm:w-[180px]",
+        options: [
+          { value: "ALL", label: "All categories" },
+          ...categoryOptions.map((category) => ({
+            value: category,
+            label: category
+          }))
+        ]
+      },
+      {
+        key: "level",
+        type: "select",
+        label: "Level",
+        value: levelFilter,
+        onChangeValue: setLevelFilter,
+        wrapperClassName: "w-full sm:w-[170px]",
+        options: [
+          { value: "ALL", label: "All levels" },
+          ...levelOptions.map((level) => ({
+            value: level,
+            label: level
+          }))
+        ]
+      },
+      {
+        key: "registration",
+        type: "select",
+        label: "Registration",
+        value: registrationFilter,
+        onChangeValue: setRegistrationFilter,
+        wrapperClassName: "w-full sm:w-[190px]",
+        options: [
+          { value: "ALL", label: "All registration" },
+          ...EVENT_REGISTRATION_OPTIONS.map((status) => ({
+            value: status,
+            label: formatLabel(status)
+          }))
+        ]
+      }
+    ],
+    [
+      categoryFilter,
+      categoryOptions,
+      levelFilter,
+      levelOptions,
+      query,
+      registrationFilter,
+      setCategoryFilter,
+      setLevelFilter,
+      setQuery,
+      setRegistrationFilter,
+      setStatusFilter,
+      statusFilter
+    ]
+  );
 
   const resetFilters = useCallback(() => {
     setQuery("");
@@ -290,7 +256,7 @@ export default function StudentEventsDirectoryPage() {
   const headerSummary =
     filteredRows.length !== rows.length
       ? `Showing ${filteredRows.length} of ${rows.length} events`
-      : `${rows.length} events currently available`;
+      : `${rows.length} events currently available for participation`;
 
   const handleViewEvent = useCallback(
     (event) => {
@@ -305,8 +271,8 @@ export default function StudentEventsDirectoryPage() {
       <TeamPageHero
         loading={loading}
         onRefresh={load}
-        eyebrow="Events Directory"
-        title="Events"
+        eyebrow="Participation Directory"
+        title="Event Listings"
         description={headerSummary}
         actionLabel="Refresh events"
         actionBusyLabel="Refreshing..."
@@ -318,31 +284,13 @@ export default function StudentEventsDirectoryPage() {
         </div>
       ) : null}
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:hidden">
-        <div className="p-3">
-          <StudentEventFilterBar
-            activeFilters={activeFilters}
-            categoryFilter={categoryFilter}
-            categoryOptions={categoryOptions}
-            hasActiveFilters={activeFilters.length > 0}
-            levelFilter={levelFilter}
-            levelOptions={levelOptions}
-            onReset={resetFilters}
-            query={query}
-            registrationFilter={registrationFilter}
-            resultCount={filteredRows.length}
-            setCategoryFilter={setCategoryFilter}
-            setLevelFilter={setLevelFilter}
-            setQuery={setQuery}
-            setRegistrationFilter={setRegistrationFilter}
-            setStatusFilter={setStatusFilter}
-            showMeta
-            showReset
-            statusFilter={statusFilter}
-            totalCount={rows.length}
-          />
-        </div>
+      <WorkspaceFilterBar
+        fields={filterFields}
+        hasActiveFilters={activeFilters.length > 0}
+        onReset={resetFilters}
+      />
 
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:hidden">
         <EventDirectoryMobileCards
           rows={filteredRows}
           loading={loading}
@@ -353,29 +301,6 @@ export default function StudentEventsDirectoryPage() {
       <TeamDesktopTableShell
         canReset={activeFilters.length > 0}
         onReset={resetFilters}
-        toolbar={
-          <StudentEventFilterBar
-            activeFilters={activeFilters}
-            categoryFilter={categoryFilter}
-            categoryOptions={categoryOptions}
-            className="w-full"
-            hasActiveFilters={activeFilters.length > 0}
-            levelFilter={levelFilter}
-            levelOptions={levelOptions}
-            onReset={resetFilters}
-            query={query}
-            registrationFilter={registrationFilter}
-            resultCount={filteredRows.length}
-            setCategoryFilter={setCategoryFilter}
-            setLevelFilter={setLevelFilter}
-            setQuery={setQuery}
-            setRegistrationFilter={setRegistrationFilter}
-            setStatusFilter={setStatusFilter}
-            showReset={false}
-            statusFilter={statusFilter}
-            totalCount={rows.length}
-          />
-        }
       >
         <EventDirectoryTable
           rows={filteredRows}

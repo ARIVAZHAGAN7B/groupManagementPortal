@@ -3,16 +3,12 @@ import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import { useNavigate } from "react-router-dom";
 import AllGroupsBadge from "../allGroups/AllGroupsBadge";
-import {
-  TeamDesktopTableShell,
-  TeamTableSearchField,
-  TeamTableSelectField
-} from "./TeamDesktopTableControls";
+import { TeamDesktopTableShell } from "./TeamDesktopTableControls";
 import TeamPageDetailTile from "./TeamPageDetailTile";
-import TeamPageFilters from "./TeamPageFilters";
 import TeamPageHero from "./TeamPageHero";
 import TeamMembershipLeaveModal from "./TeamMembershipLeaveModal";
 import { fetchMyTeamMemberships, leaveTeamMembership } from "../../../service/teams.api";
+import { WorkspaceFilterBar } from "../../../shared/components/WorkspaceInlineFilters";
 import {
   formatLabel,
   formatShortDate,
@@ -20,12 +16,6 @@ import {
   normalizeValue
 } from "./teamPage.utils";
 import { getTeamScopeConfig, TEAM_STATUS_OPTIONS } from "./teamScope.constants";
-
-const inputClassName =
-  "w-full rounded-2xl border border-slate-300 bg-[#f3f4f6] px-4 py-3 text-sm font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#1754cf]/35 focus:ring-2 focus:ring-[#1754cf]/10";
-
-const selectClassName =
-  "w-full rounded-2xl border border-slate-300 bg-[#f3f4f6] px-4 py-3 text-sm font-medium text-slate-700 outline-none transition focus:border-[#1754cf]/35 focus:ring-2 focus:ring-[#1754cf]/10";
 
 const getLatestJoinLabel = (rows) => {
   const timestamps = (Array.isArray(rows) ? rows : [])
@@ -36,10 +26,9 @@ const getLatestJoinLabel = (rows) => {
   return formatShortDate(new Date(Math.max(...timestamps)));
 };
 
-export default function ScopedTeamMembershipsPage({ teamType = "TEAM" }) {
+export default function ScopedTeamMembershipsPage() {
   const navigate = useNavigate();
-  const scope = useMemo(() => getTeamScopeConfig(teamType), [teamType]);
-
+  const scope = useMemo(() => getTeamScopeConfig(), []);
   const [rows, setRows] = useState([]);
   const [studentId, setStudentId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -86,9 +75,10 @@ export default function ScopedTeamMembershipsPage({ teamType = "TEAM" }) {
   );
   const latestJoinLabel = useMemo(() => getLatestJoinLabel(rows), [rows]);
 
-  const roleOptions = useMemo(() => {
-    return ["ALL", ...new Set(rows.map((row) => normalizeValue(row.role)).filter(Boolean))];
-  }, [rows]);
+  const roleOptions = useMemo(
+    () => ["ALL", ...new Set(rows.map((row) => normalizeValue(row.role)).filter(Boolean))],
+    [rows]
+  );
 
   const filteredRows = useMemo(() => {
     const normalizedQuery = String(query || "").trim().toLowerCase();
@@ -109,27 +99,60 @@ export default function ScopedTeamMembershipsPage({ teamType = "TEAM" }) {
     });
   }, [query, roleFilter, rows, teamStatusFilter]);
 
-  const activeFilters = useMemo(() => {
-    const items = [];
-
-    if (String(query || "").trim()) {
-      items.push(`Search: ${String(query).trim()}`);
-    }
-    if (roleFilter !== "ALL") {
-      items.push(`Role: ${formatLabel(roleFilter)}`);
-    }
-    if (teamStatusFilter !== "ALL") {
-      items.push(`Status: ${formatLabel(teamStatusFilter)}`);
-    }
-
-    return items;
-  }, [query, roleFilter, teamStatusFilter]);
-
   const resetFilters = useCallback(() => {
     setQuery("");
     setRoleFilter("ALL");
     setTeamStatusFilter("ALL");
   }, []);
+
+  const hasActiveFilters =
+    Boolean(String(query || "").trim()) || roleFilter !== "ALL" || teamStatusFilter !== "ALL";
+
+  const filterFields = useMemo(
+    () => [
+      {
+        key: "query",
+        type: "search",
+        label: "Team",
+        value: query,
+        placeholder: "Search by code, name, role, status, or notes",
+        onChangeValue: setQuery
+      },
+      {
+        key: "role",
+        type: "select",
+        label: "Role",
+        value: roleFilter,
+        onChangeValue: setRoleFilter,
+        wrapperClassName: "w-full sm:w-[180px]",
+        options: [
+          { value: "ALL", label: "All roles" },
+          ...roleOptions
+            .filter((option) => option !== "ALL")
+            .map((option) => ({
+              value: option,
+              label: formatLabel(option)
+            }))
+        ]
+      },
+      {
+        key: "teamStatus",
+        type: "select",
+        label: `${scope.singularLabel} Status`,
+        value: teamStatusFilter,
+        onChangeValue: setTeamStatusFilter,
+        wrapperClassName: "w-full sm:w-[190px]",
+        options: [
+          { value: "ALL", label: "All statuses" },
+          ...TEAM_STATUS_OPTIONS.map((status) => ({
+            value: status,
+            label: formatLabel(status)
+          }))
+        ]
+      }
+    ],
+    [query, roleFilter, roleOptions, scope.singularLabel, teamStatusFilter]
+  );
 
   const handleOpenDetails = useCallback(
     (row) => {
@@ -162,18 +185,15 @@ export default function ScopedTeamMembershipsPage({ teamType = "TEAM" }) {
       setLeaveModalRow(null);
       await load();
     } catch (err) {
-      setLeaveError(
-        err?.response?.data?.message || `Failed to leave ${scope.singularLower}`
-      );
+      setLeaveError(err?.response?.data?.message || `Failed to leave ${scope.singularLower}`);
     } finally {
       setLeaveBusyMembershipId(null);
     }
   }, [leaveModalRow, load, scope.singularLower]);
 
-  const headerSummary =
-    filteredRows.length !== rows.length
-      ? `Showing ${filteredRows.length} of ${rows.length} memberships`
-      : `${rows.length} active ${scope.singularLower} membership${rows.length === 1 ? "" : "s"}`;
+  const headerSummary = hasActiveFilters
+    ? `${filteredRows.length} team memberships match the current filters`
+    : `${rows.length} active ${scope.singularLower} membership${rows.length === 1 ? "" : "s"}`;
 
   return (
     <div className="max-w-screen-2xl space-y-3 p-4 md:p-5">
@@ -219,71 +239,15 @@ export default function ScopedTeamMembershipsPage({ teamType = "TEAM" }) {
         </div>
       ) : null}
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:hidden">
-        <TeamPageFilters
-          className="lg:hidden"
-          activeFilters={activeFilters}
-          canReset={activeFilters.length > 0}
-          itemLabel="memberships"
+      <div className="lg:hidden">
+        <WorkspaceFilterBar
+          fields={filterFields}
           onReset={resetFilters}
-          panelTitle="Filter Memberships"
-          resultCount={filteredRows.length}
-          totalCount={rows.length}
-          withDivider
-        >
-          <label className="block">
-            <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-              Search
-            </span>
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search by code, name, role, status, or notes"
-              className={inputClassName}
-            />
-          </label>
+          hasActiveFilters={hasActiveFilters}
+        />
+      </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Role
-              </span>
-              <select
-                value={roleFilter}
-                onChange={(event) => setRoleFilter(event.target.value)}
-                className={selectClassName}
-              >
-                <option value="ALL">All roles</option>
-                {roleOptions
-                  .filter((option) => option !== "ALL")
-                  .map((option) => (
-                    <option key={option} value={option}>
-                      {formatLabel(option)}
-                    </option>
-                  ))}
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                {scope.singularLabel} Status
-              </span>
-              <select
-                value={teamStatusFilter}
-                onChange={(event) => setTeamStatusFilter(event.target.value)}
-                className={selectClassName}
-              >
-                <option value="ALL">All statuses</option>
-                {TEAM_STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>
-                    {formatLabel(status)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </TeamPageFilters>
-
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:hidden">
         {loading ? (
           <div className="px-4 py-12 text-center text-sm text-slate-500">
             Loading memberships...
@@ -358,50 +322,15 @@ export default function ScopedTeamMembershipsPage({ teamType = "TEAM" }) {
       </section>
 
       <TeamDesktopTableShell
-        canReset={activeFilters.length > 0}
+        canReset={hasActiveFilters}
         onReset={resetFilters}
         toolbar={
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-            <div className="min-w-0 xl:w-[24rem]">
-              <TeamTableSearchField
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search by code, name, role, status, or notes"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:w-auto">
-              <div className="min-w-0 xl:w-48">
-                <TeamTableSelectField
-                  value={roleFilter}
-                  onChange={(event) => setRoleFilter(event.target.value)}
-                >
-                  <option value="ALL">All roles</option>
-                  {roleOptions
-                    .filter((option) => option !== "ALL")
-                    .map((option) => (
-                      <option key={option} value={option}>
-                        {formatLabel(option)}
-                      </option>
-                    ))}
-                </TeamTableSelectField>
-              </div>
-
-              <div className="min-w-0 xl:w-48">
-                <TeamTableSelectField
-                  value={teamStatusFilter}
-                  onChange={(event) => setTeamStatusFilter(event.target.value)}
-                >
-                  <option value="ALL">All statuses</option>
-                  {TEAM_STATUS_OPTIONS.map((status) => (
-                    <option key={status} value={status}>
-                      {formatLabel(status)}
-                    </option>
-                  ))}
-                </TeamTableSelectField>
-              </div>
-            </div>
-          </div>
+          <WorkspaceFilterBar
+            fields={filterFields}
+            onReset={resetFilters}
+            hasActiveFilters={hasActiveFilters}
+            showReset={false}
+          />
         }
       >
         <div className="overflow-x-auto overflow-y-visible rounded-2xl">

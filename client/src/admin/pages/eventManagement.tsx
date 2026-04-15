@@ -7,9 +7,11 @@ import {
   archiveEvent,
   closeEvent,
   createEvent,
+  fetchEventById,
   fetchEvents,
   updateEvent
 } from "../../service/events.api";
+import { fetchHubs } from "../../service/hubs.api";
 import EventManagementDesktopTable from "../components/events/EventManagementDesktopTable";
 import EventManagementFilters from "../components/events/EventManagementFilters";
 import EventManagementFormCard from "../components/events/EventManagementFormCard";
@@ -25,8 +27,30 @@ import {
 import AdminFormModal from "../components/ui/AdminFormModal";
 import AdminPaginationBar from "../components/ui/AdminPaginationBar";
 
+type EventRoundFormState = {
+  description: string;
+  end_time: string;
+  location: string;
+  round_date: string;
+  round_end_date: string;
+  round_mode: string;
+  round_name: string;
+  start_time: string;
+  status: string;
+};
+
 type EventRow = {
+  active_team_count?: number | null;
   applied_count?: number | null;
+  allowed_hub_count?: number | null;
+  allowed_hub_ids?: number[] | null;
+  allowed_hubs?: Array<{
+    hub_id?: number | null;
+    team_id?: number | null;
+    team_code?: string | null;
+    team_name?: string | null;
+    hub_priority?: string | null;
+  }> | null;
   apply_by_student?: boolean | null;
   balance_count?: number | null;
   competition_name?: string | null;
@@ -47,24 +71,30 @@ type EventRow = {
   maximum_count?: number | null;
   max_members?: number | null;
   min_members?: number | null;
+  registration_mode?: string | null;
+  forming_team_count?: number | null;
   registration_end_date?: string | null;
   registration_link?: string | null;
   registration_start_date?: string | null;
   related_to_special_lab?: boolean | null;
   reward_allocation?: string | null;
+  rounds?: EventRoundFormState[] | null;
   selected_resources?: string | null;
   start_date?: string | null;
   state?: string | null;
   status?: string | null;
   team_count?: number | null;
+  total_team_count?: number | null;
   total_level_of_competition?: string | null;
   updated_at?: string | null;
+  valid_team_count?: number | null;
   winner_rewards?: string | null;
   within_bit?: boolean | null;
 };
 
 type EventFormState = {
   applied_count: string;
+  allowed_hub_ids: number[];
   apply_by_student: string;
   competition_name: string;
   country: string;
@@ -81,6 +111,7 @@ type EventFormState = {
   maximum_count: string;
   max_members: string;
   min_members: string;
+  registration_mode: string;
   registration_end_date: string;
   registration_link: string;
   registration_start_date: string;
@@ -88,6 +119,7 @@ type EventFormState = {
   first_year_reward: string;
   fourth_year_reward: string;
   reward_allocation: string;
+  rounds: EventRoundFormState[];
   second_year_reward: string;
   selected_resources: string;
   start_date: string;
@@ -99,8 +131,21 @@ type EventFormState = {
   within_bit: string;
 };
 
+const buildEmptyRound = (index = 0): EventRoundFormState => ({
+  description: "",
+  end_time: "",
+  location: "",
+  round_date: "",
+  round_end_date: "",
+  round_mode: "ONLINE",
+  round_name: `Round ${index + 1}`,
+  start_time: "",
+  status: "SCHEDULED"
+});
+
 const EMPTY_FORM: EventFormState = {
   applied_count: "",
+  allowed_hub_ids: [],
   apply_by_student: "true",
   competition_name: "",
   country: "India",
@@ -116,8 +161,10 @@ const EMPTY_FORM: EventFormState = {
   location: "",
   maximum_count: "",
   registration_link: "",
+  registration_mode: "TEAM",
   related_to_special_lab: "false",
   reward_allocation: DEFAULT_REWARD_ALLOCATION,
+  rounds: [],
   second_year_reward: DEFAULT_YEAR_REWARD_VALUES.second_year_reward,
   selected_resources: "",
   start_date: "",
@@ -159,11 +206,118 @@ const toInputBoolean = (
   return value ? "true" : "false";
 };
 
+const normalizeUrlInput = (value: string) => {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "";
+
+  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(normalized)
+    ? normalized
+    : `https://${normalized}`;
+
+  try {
+    return new URL(candidate).toString();
+  } catch (_error) {
+    throw new Error("Registration link must be a valid URL");
+  }
+};
+
+const validateEventForm = (form: EventFormState) => {
+  if (!String(form.event_code || "").trim() || !String(form.event_name || "").trim()) {
+    throw new Error("Event code and event name are required");
+  }
+
+  if (
+    form.start_date &&
+    form.end_date &&
+    String(form.start_date).trim() > String(form.end_date).trim()
+  ) {
+    throw new Error("Event end date cannot be before the event start date");
+  }
+
+  if (
+    form.registration_start_date &&
+    form.registration_end_date &&
+    String(form.registration_start_date).trim() > String(form.registration_end_date).trim()
+  ) {
+    throw new Error("Registration end date cannot be before the registration start date");
+  }
+
+  if (
+    form.min_members &&
+    form.max_members &&
+    Number(form.min_members) > Number(form.max_members)
+  ) {
+    throw new Error("Minimum members cannot be greater than maximum members");
+  }
+
+  form.rounds.forEach((round, index) => {
+    if (
+      round.round_date &&
+      round.round_end_date &&
+      String(round.round_date).trim() > String(round.round_end_date).trim()
+    ) {
+      throw new Error(`Round ${index + 1} end date cannot be before start date`);
+    }
+
+    if (
+      round.start_time &&
+      round.end_time &&
+      (!round.round_end_date || round.round_end_date === round.round_date) &&
+      String(round.start_time).trim() > String(round.end_time).trim()
+    ) {
+      throw new Error(`Round ${index + 1} end time cannot be before start time`);
+    }
+  });
+};
+
+const buildRoundPayload = (rounds: EventRoundFormState[]) =>
+  (Array.isArray(rounds) ? rounds : [])
+    .map((round, index) => ({
+      description: String(round.description || "").trim(),
+      end_time: round.end_time || null,
+      location: String(round.location || "").trim(),
+      round_date: round.round_date || null,
+      round_end_date: round.round_end_date || null,
+      round_mode: String(round.round_mode || "ONLINE").trim().toUpperCase() || "ONLINE",
+      round_name: String(round.round_name || "").trim() || `Round ${index + 1}`,
+      start_time: round.start_time || null,
+      status: round.status || "SCHEDULED"
+    }))
+    .filter(
+      (round) =>
+        round.round_name ||
+        round.round_date ||
+        round.start_time ||
+        round.end_time ||
+        round.location ||
+        round.description
+    );
+
 const toFormState = (row: EventRow): EventFormState => {
   const rewardValues = parseRewardAllocationValues(row.reward_allocation);
+  const rounds = Array.isArray(row.rounds)
+    ? row.rounds.map((round) => ({
+        description: round.description || "",
+        end_time: round.end_time ? String(round.end_time).slice(0, 5) : "",
+        location: round.location || "",
+        round_date: toInputDate(round.round_date),
+        round_end_date: toInputDate(round.round_end_date || round.round_date),
+        round_mode: round.round_mode || "ONLINE",
+        round_name: round.round_name || "",
+        start_time: round.start_time ? String(round.start_time).slice(0, 5) : "",
+        status: round.status || "SCHEDULED"
+      }))
+    : [];
 
   return {
     applied_count: toInputNumber(row.applied_count),
+    allowed_hub_ids: Array.isArray(row.allowed_hub_ids)
+      ? row.allowed_hub_ids.map((value) => Number(value)).filter((value) => Number.isInteger(value))
+      : Array.isArray(row.allowed_hubs)
+        ? row.allowed_hubs
+            .map((hub) => Number(hub?.hub_id ?? hub?.team_id))
+            .filter((value) => Number.isInteger(value))
+        : [],
     apply_by_student: toInputBoolean(row.apply_by_student, "true"),
     competition_name: row.competition_name || "",
     country: row.country || "India",
@@ -179,11 +333,13 @@ const toFormState = (row: EventRow): EventFormState => {
     location: row.location || "",
     maximum_count: toInputNumber(row.maximum_count),
     registration_link: row.registration_link || "",
+    registration_mode: row.registration_mode || "TEAM",
     related_to_special_lab: toInputBoolean(row.related_to_special_lab, "false"),
     reward_allocation:
       row.reward_allocation ||
       formatRewardAllocationValue(rewardValues) ||
       DEFAULT_REWARD_ALLOCATION,
+    rounds,
     second_year_reward: rewardValues.second_year_reward,
     selected_resources: row.selected_resources || "",
     start_date: toInputDate(row.start_date),
@@ -219,6 +375,7 @@ export default function EventManagement() {
   const navigate = useNavigate();
 
   const [rows, setRows] = useState<EventRow[]>([]);
+  const [hubRows, setHubRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -230,6 +387,7 @@ export default function EventManagement() {
   const [saving, setSaving] = useState(false);
   const [actionBusyId, setActionBusyId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingSnapshot, setEditingSnapshot] = useState<EventFormState | null>(null);
   const [formModalOpen, setFormModalOpen] = useState(false);
   const [form, setForm] = useState<EventFormState>(EMPTY_FORM);
 
@@ -238,11 +396,13 @@ export default function EventManagement() {
     setError("");
 
     try {
-      const data = await fetchEvents();
+      const [data, hubs] = await Promise.all([fetchEvents(), fetchHubs({ status: "ACTIVE" })]);
       setRows(Array.isArray(data) ? data : []);
+      setHubRows(Array.isArray(hubs) ? hubs : []);
     } catch (err: any) {
       setError(err?.response?.data?.message || "Failed to load events");
       setRows([]);
+      setHubRows([]);
     } finally {
       setLoading(false);
     }
@@ -254,13 +414,9 @@ export default function EventManagement() {
 
   const resetForm = () => {
     setEditingId(null);
+    setEditingSnapshot(null);
     setForm(EMPTY_FORM);
   };
-
-  const editingRow = useMemo(
-    () => rows.find((row) => Number(row.event_id) === editingId) || null,
-    [editingId, rows]
-  );
 
   const categoryOptions = useMemo(
     () => getUniqueTextOptions(rows, (row) => row.event_category),
@@ -313,7 +469,62 @@ export default function EventManagement() {
   };
 
   const onChangeField = (key: keyof EventFormState, value: string) => {
-    setForm((previous) => ({ ...previous, [key]: value }));
+    setForm((previous) => {
+      if (key === "registration_mode") {
+        return {
+          ...previous,
+          registration_mode: value,
+          min_members: value === "INDIVIDUAL" ? "1" : previous.min_members,
+          max_members: value === "INDIVIDUAL" ? "1" : previous.max_members
+        };
+      }
+
+      return { ...previous, [key]: value };
+    });
+  };
+
+  const onToggleAllowedHub = (hubId: number) => {
+    setForm((previous) => {
+      const normalizedHubId = Number(hubId);
+      if (!Number.isInteger(normalizedHubId) || normalizedHubId <= 0) {
+        return previous;
+      }
+
+      const exists = previous.allowed_hub_ids.includes(normalizedHubId);
+      return {
+        ...previous,
+        allowed_hub_ids: exists
+          ? previous.allowed_hub_ids.filter((value) => value !== normalizedHubId)
+          : [...previous.allowed_hub_ids, normalizedHubId]
+      };
+    });
+  };
+
+  const onAddRound = () => {
+    setForm((previous) => ({
+      ...previous,
+      rounds: [...previous.rounds, buildEmptyRound(previous.rounds.length)]
+    }));
+  };
+
+  const onChangeRound = (
+    index: number,
+    key: keyof EventRoundFormState,
+    value: string
+  ) => {
+    setForm((previous) => ({
+      ...previous,
+      rounds: previous.rounds.map((round, roundIndex) =>
+        roundIndex === index ? { ...round, [key]: value } : round
+      )
+    }));
+  };
+
+  const onRemoveRound = (index: number) => {
+    setForm((previous) => ({
+      ...previous,
+      rounds: previous.rounds.filter((_, roundIndex) => roundIndex !== index)
+    }));
   };
 
   const handleStartCreate = () => {
@@ -331,8 +542,8 @@ export default function EventManagement() {
   };
 
   const handleReset = () => {
-    if (editingRow) {
-      setForm(toFormState(editingRow));
+    if (editingSnapshot) {
+      setForm(editingSnapshot);
       return;
     }
 
@@ -346,6 +557,8 @@ export default function EventManagement() {
     setSuccessMessage("");
 
     try {
+      validateEventForm(form);
+
       const rewardsEnabled = form.eligible_for_rewards === "true";
       const structuredRewardAllocation = formatRewardAllocationValue({
         first_year_reward: form.first_year_reward,
@@ -354,8 +567,7 @@ export default function EventManagement() {
         fourth_year_reward: form.fourth_year_reward
       });
 
-      const payload = {
-        applied_count: form.applied_count ? Number(form.applied_count) : null,
+      const payload: any = {
         apply_by_student: form.apply_by_student === "true",
         competition_name: String(form.competition_name || "").trim(),
         country: String(form.country || "").trim(),
@@ -368,7 +580,9 @@ export default function EventManagement() {
         event_organizer: String(form.event_organizer || "").trim(),
         location: String(form.location || "").trim(),
         maximum_count: form.maximum_count ? Number(form.maximum_count) : null,
-        registration_link: String(form.registration_link || "").trim(),
+        allowed_hub_ids: form.allowed_hub_ids,
+        registration_link: normalizeUrlInput(form.registration_link),
+        registration_mode: form.registration_mode,
         related_to_special_lab: form.related_to_special_lab === "true",
         reward_allocation:
           rewardsEnabled
@@ -387,12 +601,9 @@ export default function EventManagement() {
         winner_rewards:
           rewardsEnabled && form.winner_rewards ? String(Number(form.winner_rewards)) : "",
         within_bit: form.within_bit === "true",
-        description: String(form.description || "").trim()
+        description: String(form.description || "").trim(),
+        rounds: buildRoundPayload(form.rounds)
       };
-
-      if (!payload.event_code || !payload.event_name) {
-        throw new Error("Event code and event name are required");
-      }
 
       if (editingId) {
         await updateEvent(editingId, payload);
@@ -412,12 +623,20 @@ export default function EventManagement() {
     }
   };
 
-  const onEdit = (row: EventRow) => {
-    setEditingId(Number(row.event_id));
-    setForm(toFormState(row));
+  const onEdit = async (row: EventRow) => {
     setError("");
     setSuccessMessage("");
-    setFormModalOpen(true);
+
+    try {
+      const detailedRow = await fetchEventById(row.event_id);
+      const nextFormState = toFormState(detailedRow || row);
+      setEditingId(Number(row.event_id));
+      setEditingSnapshot(nextFormState);
+      setForm(nextFormState);
+      setFormModalOpen(true);
+    } catch (err: any) {
+      setError(err?.response?.data?.message || "Failed to load event details");
+    }
   };
 
   const doRowAction = async (
@@ -445,7 +664,7 @@ export default function EventManagement() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-5 md:px-6">
+    <div className="mx-auto w-full max-w-screen-2xl space-y-6 px-3 py-5 md:px-4 xl:px-6">
       <EventManagementHero
         editingId={editingId}
         loading={loading}
@@ -473,10 +692,15 @@ export default function EventManagement() {
         <EventManagementFormCard
           editingId={editingId}
           form={form}
+          hubOptions={hubRows}
+          onAddRound={onAddRound}
           onCancelEdit={handleCancelEdit}
           onChangeField={onChangeField}
+          onChangeRound={onChangeRound}
+          onRemoveRound={onRemoveRound}
           onReset={handleReset}
           onSubmit={onSubmit}
+          onToggleAllowedHub={onToggleAllowedHub}
           saving={saving}
         />
       </AdminFormModal>

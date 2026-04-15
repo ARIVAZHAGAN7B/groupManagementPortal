@@ -1,5 +1,7 @@
 const db = require("../../config/db");
 const repo = require("./eventJoinRequest.repository");
+const eventHubEligibilityService = require("../event/eventHubEligibility.service");
+const participationService = require("../event/eventParticipation.service");
 const teamRepo = require("../team/team.repository");
 const { expandDepartmentCode } = require("../../utils/department.service");
 
@@ -137,8 +139,10 @@ const ensureLeadershipRoleAvailability = async (queryable, teamId, role) => {
   }
 };
 
-const ensureTeamCanAcceptRequests = async (executor, teamId) => {
-  const team = await teamRepo.getTeamById(teamId, executor);
+const ensureTeamCanAcceptRequests = async (executor, teamId, options = {}) => {
+  const team = options.lockTeam
+    ? await teamRepo.lockTeamById(teamId, executor)
+    : await teamRepo.getTeamById(teamId, executor);
   if (!team) throw new Error("Team not found");
   if (!team.event_id) throw new Error("This team is not linked to an event");
   if (String(team.status || "").toUpperCase() !== "ACTIVE") {
@@ -161,6 +165,10 @@ const ensureTeamExists = async (executor, teamId) => {
 
 const applyEventJoinRequest = async (studentId, teamId) => {
   const team = await ensureTeamCanAcceptRequests(db, teamId);
+  await eventHubEligibilityService.ensureStudentEligibleForEvent(
+    studentId,
+    team.event_id
+  );
 
   const activeMembership = await teamRepo.findActiveTeamMembershipByTeamAndStudent(
     teamId,
@@ -217,7 +225,9 @@ const decideEventJoinRequest = async (requestId, status, reason, actorUser, opti
 
     let targetTeam;
     if (normalizedStatus === "APPROVED") {
-      targetTeam = await ensureTeamCanAcceptRequests(conn, request.team_id);
+      targetTeam = await ensureTeamCanAcceptRequests(conn, request.team_id, {
+        lockTeam: true
+      });
     } else {
       targetTeam = await ensureTeamExists(conn, request.team_id);
     }
@@ -244,6 +254,11 @@ const decideEventJoinRequest = async (requestId, status, reason, actorUser, opti
       }
 
       if (targetTeam?.event_id) {
+        await eventHubEligibilityService.ensureStudentEligibleForEvent(
+          request.student_id,
+          targetTeam.event_id,
+          conn
+        );
         const activeInEvent = await teamRepo.findActiveTeamMembershipByStudentAndEvent(
           request.student_id,
           targetTeam.event_id,
@@ -265,6 +280,15 @@ const decideEventJoinRequest = async (requestId, status, reason, actorUser, opti
         await ensureLeadershipRoleAvailability(conn, request.team_id, membershipRole);
       }
 
+      await participationService.ensureTeamCanBecomeValidWithoutOverflow(
+        targetTeam,
+        (Number(targetTeam.active_member_count) || 0) + 1,
+        conn,
+        {
+          lockEvent: true
+        }
+      );
+
       await teamRepo.createTeamMembership(
         {
           team_id: request.team_id,
@@ -272,6 +296,14 @@ const decideEventJoinRequest = async (requestId, status, reason, actorUser, opti
           role: membershipRole,
           assigned_by: String(actorUser.userId),
           notes: `Approved via event join request #${request.event_request_id}`
+        },
+        conn
+      );
+
+      await participationService.syncEventParticipationCounts(
+        targetTeam.event_id,
+        {
+          lockEvent: true
         },
         conn
       );

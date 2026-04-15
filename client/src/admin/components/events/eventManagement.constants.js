@@ -333,6 +333,7 @@ export const filterEventRows = (
       row?.maximum_count,
       row?.applied_count,
       row?.balance_count,
+      row?.registration_mode,
       row?.apply_by_student,
       row?.within_bit,
       row?.related_to_special_lab,
@@ -352,7 +353,10 @@ export const filterEventRows = (
       row?.max_members,
       row?.status,
       row?.description,
-      row?.team_count
+      row?.team_count,
+      ...(Array.isArray(row?.allowed_hubs)
+        ? row.allowed_hubs.flatMap((hub) => [hub?.team_code, hub?.team_name, hub?.hub_priority])
+        : [])
     ]
       .map((value) => String(value ?? "").toLowerCase())
       .join(" ")

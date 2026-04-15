@@ -1,6 +1,7 @@
 const express = require("express");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
+const path = require("path");
 const { authenticate } = require("./middlewares/auth.middleware");
 const { getCorsConfig } = require("./config/runtime");
 
@@ -12,8 +13,11 @@ const joinRequestRoutes = require("./modules/joinRequest/joinRequest.routes");
 const phaseRoutes = require("./modules/phase/phase.routes");
 const eligibilityRoutes = require("./modules/eligibility/eligibility.routes");
 const teamRoutes = require("./modules/team/team.routes");
+const hubRoutes = require("./modules/hub/hub.routes");
 const eventRoutes = require("./modules/event/event.routes");
 const eventJoinRequestRoutes = require("./modules/eventJoinRequest/eventJoinRequest.routes");
+const eventTeamInvitationRoutes = require("./modules/eventTeamInvitation/eventTeamInvitation.routes");
+const onDutyRoutes = require("./modules/onDuty/onDuty.routes");
 const auditRoutes = require("./modules/audit/audit.routes");
 const systemConfigRoutes = require("./modules/systemConfig/systemConfig.routes");
 const leadershipRequestRoutes = require("./modules/leadershipRequest/leadershipRequest.routes");
@@ -25,9 +29,10 @@ const {getProfile} = require("./getProfiles");
 
 const app = express();
 
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 app.use(cors(getCorsConfig()));
+app.use("/uploads", express.static(path.resolve(__dirname, "uploads")));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/register", registerRoutes);
@@ -38,9 +43,12 @@ app.use("/api/phases", phaseRoutes);
 app.use("/api/eligibility", eligibilityRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/teams", teamRoutes);
+app.use("/api/hubs", hubRoutes);
 app.use("/api/event-groups", teamRoutes);
 app.use("/api/event-join-requests", eventJoinRequestRoutes);
 app.use("/api/event-group-join-requests", eventJoinRequestRoutes);
+app.use("/api/event-team-invitations", eventTeamInvitationRoutes);
+app.use("/api/on-duty", onDutyRoutes);
 app.use("/api/audit-logs", auditRoutes);
 app.use("/api/system-config", systemConfigRoutes);
 app.use("/api/leadership-requests", leadershipRequestRoutes);

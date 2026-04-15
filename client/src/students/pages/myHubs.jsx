@@ -1,5 +1,5 @@
-import ScopedTeamMembershipsPage from "../components/teams/ScopedTeamMembershipsPage";
+import HubMembershipsPage from "../components/hubs/HubMembershipsPage";
 
 export default function MyHubsPage() {
-  return <ScopedTeamMembershipsPage teamType="HUB" />;
+  return <HubMembershipsPage />;
 }

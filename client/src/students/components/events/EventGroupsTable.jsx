@@ -5,26 +5,36 @@ import {
   formatMemberCount,
   formatShortDate
 } from "../teams/teamPage.utils";
-import { getEventGroupRequestStatus } from "./events.constants";
+import {
+  getEventGroupRequestStatus,
+  getEventRegistrationMode
+} from "./events.constants";
 
 export default function EventGroupsTable({
   rows = [],
   loading = false,
   latestRequestByTeamId,
   myTeamIdSet,
-  onView
+  onView,
+  registrationMode = "TEAM"
 }) {
+  const individualRegistration = getEventRegistrationMode({
+    registration_mode: registrationMode
+  }) === "INDIVIDUAL";
+
   return (
     <div className="overflow-x-auto overflow-y-visible rounded-2xl">
       <table className="min-w-[1120px] w-full text-sm">
         <thead className="bg-slate-50 text-slate-600">
           <tr>
-            <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Event Group</th>
+            <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+              {individualRegistration ? "Registered Participant" : "Registered Team"}
+            </th>
             <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Status</th>
             <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Members</th>
             <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Created</th>
             <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">My Request</th>
-            <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Group Details</th>
+            <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Team Notes</th>
             <th className="sticky right-0 bg-slate-50 px-4 py-3 text-left font-semibold whitespace-nowrap shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.14)]">
               Actions
             </th>
@@ -34,13 +44,13 @@ export default function EventGroupsTable({
           {loading ? (
             <tr>
               <td className="px-4 py-12 text-center text-sm text-slate-500" colSpan={7}>
-                Loading event groups...
+                Loading registered teams...
               </td>
             </tr>
           ) : rows.length === 0 ? (
             <tr>
               <td className="px-4 py-12 text-center text-sm text-slate-500" colSpan={7}>
-                No event groups found for the current filters.
+                No registered teams found for the current filters.
               </td>
             </tr>
           ) : (
@@ -81,7 +91,7 @@ export default function EventGroupsTable({
                       className="inline-flex items-center gap-2 rounded-lg border border-[#1754cf]/15 bg-[#1754cf]/8 px-3 py-1.5 text-sm font-semibold text-[#1754cf] transition hover:bg-[#1754cf]/12"
                     >
                       <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
-                      View
+                      {individualRegistration ? "View Entry" : "View Team"}
                     </button>
                   </td>
                 </tr>

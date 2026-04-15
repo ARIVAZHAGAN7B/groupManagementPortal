@@ -11,6 +11,7 @@ export const roleSelectBaseClass =
 
 export const MEMBERSHIP_STATUS_ORDER = ["ACTIVE", "LEFT"];
 export const TEAM_ROLE_OPTIONS = ["CAPTAIN", "VICE_CAPTAIN", "STRATEGIST", "MANAGER", "MEMBER"];
+export const HUB_ROLE_OPTIONS = ["MEMBER"];
 export const EVENT_GROUP_ROLE_OPTIONS = ["CAPTAIN", "VICE_CAPTAIN", "MEMBER"];
 
 const TEAM_TYPE_LABELS = {
@@ -127,7 +128,9 @@ export const formatDate = (value) => {
 export const getRoleOptionsForTeamType = (teamType) =>
   normalizeTeamMembershipKey(teamType) === "EVENT"
     ? EVENT_GROUP_ROLE_OPTIONS
-    : TEAM_ROLE_OPTIONS;
+    : normalizeTeamMembershipKey(teamType) === "HUB"
+      ? HUB_ROLE_OPTIONS
+      : TEAM_ROLE_OPTIONS;
 
 export const getRoleBadgeClass = (role) =>
   ROLE_STYLES[normalizeTeamMembershipKey(role)] || ROLE_STYLES.MEMBER;

@@ -57,7 +57,7 @@ function EventGroupMemberRemoveModal({
             {member.student_name || member.student_id || "Selected member"}
           </h3>
           <p className="mt-1 text-sm text-rose-800">
-            This will remove the member from the event group.
+            This will remove the member from the registered team.
           </p>
         </div>
 
@@ -143,7 +143,7 @@ export default function EventGroupMembersSection({
 
     try {
       await leaveTeamMembership(membershipId, {
-        notes: "Removed by captain from event group members list"
+        notes: "Removed by captain from registered team members list"
       });
       setRemoveMemberRow(null);
       onChanged?.();
@@ -158,15 +158,15 @@ export default function EventGroupMembersSection({
     <>
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-4">
-          <h2 className="text-lg font-bold text-slate-900">Event Group Members</h2>
+          <h2 className="text-lg font-bold text-slate-900">Registered Team Members</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Active members currently assigned to this event group.
+            Active members currently assigned to this registered team.
           </p>
         </div>
 
         {members.length === 0 ? (
           <div className="px-5 py-12 text-center text-sm text-slate-500">
-            No active members found for this event group.
+            No active members found for this team.
           </div>
         ) : (
           <>

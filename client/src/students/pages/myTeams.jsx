@@ -1,28 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AllGroupsBadge from "../components/allGroups/AllGroupsBadge";
 import {
-  TeamDesktopTableShell,
-  TeamTableFilterPanel,
-  TeamTableHeaderFilterButton,
-  TeamTableSearchField,
-  TeamTableSelectField
+  TeamDesktopTableShell
 } from "../components/teams/TeamDesktopTableControls";
 import TeamPageDetailTile from "../components/teams/TeamPageDetailTile";
-import TeamPageFilters from "../components/teams/TeamPageFilters";
 import TeamPageHero from "../components/teams/TeamPageHero";
 import { fetchMyEventGroupMemberships } from "../../service/teams.api";
+import { WorkspaceFilterBar } from "../../shared/components/WorkspaceInlineFilters";
 import {
   formatLabel,
   formatShortDate,
   getUniqueCount,
   normalizeValue
 } from "../components/teams/teamPage.utils";
-
-const inputClassName =
-  "w-full rounded-2xl border border-slate-300 bg-[#f3f4f6] px-4 py-3 text-sm font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#1754cf]/35 focus:ring-2 focus:ring-[#1754cf]/10";
-
-const selectClassName =
-  "w-full rounded-2xl border border-slate-300 bg-[#f3f4f6] px-4 py-3 text-sm font-medium text-slate-700 outline-none transition focus:border-[#1754cf]/35 focus:ring-2 focus:ring-[#1754cf]/10";
 
 export default function MyTeamsPage() {
   const [rows, setRows] = useState([]);
@@ -123,27 +113,62 @@ export default function MyTeamsPage() {
     });
   }, [eventStatusFilter, query, roleFilter, rows]);
 
-  const activeFilters = useMemo(() => {
-    const items = [];
-
-    if (String(query || "").trim()) {
-      items.push(`Search: ${String(query).trim()}`);
-    }
-    if (roleFilter !== "ALL") {
-      items.push(`Role: ${formatLabel(roleFilter)}`);
-    }
-    if (eventStatusFilter !== "ALL") {
-      items.push(`Event Status: ${formatLabel(eventStatusFilter)}`);
-    }
-
-    return items;
-  }, [eventStatusFilter, query, roleFilter]);
-
   const resetFilters = useCallback(() => {
     setQuery("");
     setRoleFilter("ALL");
     setEventStatusFilter("ALL");
   }, []);
+  const hasActiveFilters =
+    Boolean(String(query || "").trim()) ||
+    roleFilter !== "ALL" ||
+    eventStatusFilter !== "ALL";
+  const filterFields = useMemo(
+    () => [
+      {
+        key: "query",
+        type: "search",
+        label: "Search",
+        value: query,
+        placeholder: "Search by event, group, role, or notes",
+        onChangeValue: setQuery
+      },
+      {
+        key: "role",
+        type: "select",
+        label: "Role",
+        value: roleFilter,
+        onChangeValue: setRoleFilter,
+        wrapperClassName: "w-full sm:w-[180px]",
+        options: [
+          { value: "ALL", label: "All roles" },
+          ...roleOptions
+            .filter((option) => option !== "ALL")
+            .map((option) => ({
+              value: option,
+              label: formatLabel(option)
+            }))
+        ]
+      },
+      {
+        key: "eventStatus",
+        type: "select",
+        label: "Event Status",
+        value: eventStatusFilter,
+        onChangeValue: setEventStatusFilter,
+        wrapperClassName: "w-full sm:w-[190px]",
+        options: [
+          { value: "ALL", label: "All event statuses" },
+          ...eventStatusOptions
+            .filter((option) => option !== "ALL")
+            .map((option) => ({
+              value: option,
+              label: formatLabel(option)
+            }))
+        ]
+      }
+    ],
+    [eventStatusFilter, eventStatusOptions, query, roleFilter, roleOptions]
+  );
   const headerSummary =
     filteredRows.length !== rows.length
       ? `Showing ${filteredRows.length} of ${rows.length} memberships`
@@ -193,73 +218,15 @@ export default function MyTeamsPage() {
         </div>
       ) : null}
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:hidden">
-        <TeamPageFilters
-          className="lg:hidden"
-          activeFilters={activeFilters}
-          canReset={activeFilters.length > 0}
-          itemLabel="memberships"
+      <div className="lg:hidden">
+        <WorkspaceFilterBar
+          fields={filterFields}
           onReset={resetFilters}
-          panelTitle="Filter Memberships"
-          resultCount={filteredRows.length}
-          totalCount={rows.length}
-          withDivider
-        >
-          <label className="block">
-            <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-              Search
-            </span>
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search by event, group, role, or notes"
-              className={inputClassName}
-            />
-          </label>
+          hasActiveFilters={hasActiveFilters}
+        />
+      </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Role
-              </span>
-              <select
-                value={roleFilter}
-                onChange={(event) => setRoleFilter(event.target.value)}
-                className={selectClassName}
-              >
-                <option value="ALL">All roles</option>
-                {roleOptions
-                  .filter((option) => option !== "ALL")
-                  .map((option) => (
-                    <option key={option} value={option}>
-                      {formatLabel(option)}
-                    </option>
-                  ))}
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Event Status
-              </span>
-              <select
-                value={eventStatusFilter}
-                onChange={(event) => setEventStatusFilter(event.target.value)}
-                className={selectClassName}
-              >
-                <option value="ALL">All event statuses</option>
-                {eventStatusOptions
-                  .filter((option) => option !== "ALL")
-                  .map((option) => (
-                    <option key={option} value={option}>
-                      {formatLabel(option)}
-                    </option>
-                  ))}
-              </select>
-            </label>
-          </div>
-        </TeamPageFilters>
-
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:hidden">
         {loading ? (
           <div className="px-4 py-12 text-center text-sm text-slate-500">
             Loading memberships...
@@ -321,90 +288,32 @@ export default function MyTeamsPage() {
         )}
       </section>
 
-      <TeamDesktopTableShell canReset={activeFilters.length > 0} onReset={resetFilters}>
+      <TeamDesktopTableShell
+        canReset={hasActiveFilters}
+        onReset={resetFilters}
+        toolbar={
+          <WorkspaceFilterBar
+            fields={filterFields}
+            onReset={resetFilters}
+            hasActiveFilters={hasActiveFilters}
+            showReset={false}
+          />
+        }
+      >
         <div className="overflow-x-auto overflow-y-visible rounded-2xl">
           <table className="min-w-[1100px] w-full text-sm">
             <thead className="bg-slate-50 text-slate-600">
               <tr>
-                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
-                  <TeamTableHeaderFilterButton
-                    active={String(query || "").trim().length > 0}
-                    label="Event"
-                    panelWidthClass="w-80"
-                  >
-                    <TeamTableFilterPanel
-                      title="Membership Search"
-                      currentText={String(query || "").trim() || "All memberships"}
-                      helperText="Search by event, group, role, status, or notes."
-                    >
-                      <TeamTableSearchField
-                        value={query}
-                        onChange={(event) => setQuery(event.target.value)}
-                        placeholder="Event, group, role, or notes"
-                      />
-                    </TeamTableFilterPanel>
-                  </TeamTableHeaderFilterButton>
-                </th>
+                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Event</th>
                 <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Group</th>
-                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
-                  <TeamTableHeaderFilterButton active={roleFilter !== "ALL"} label="Role">
-                    <TeamTableFilterPanel
-                      title="Role Filter"
-                      currentText={roleFilter === "ALL" ? "All roles" : formatLabel(roleFilter)}
-                      helperText="Limit the table to a specific role assignment."
-                    >
-                      <TeamTableSelectField
-                        value={roleFilter}
-                        onChange={(event) => setRoleFilter(event.target.value)}
-                      >
-                        <option value="ALL">All roles</option>
-                        {roleOptions
-                          .filter((option) => option !== "ALL")
-                          .map((option) => (
-                            <option key={option} value={option}>
-                              {formatLabel(option)}
-                            </option>
-                          ))}
-                      </TeamTableSelectField>
-                    </TeamTableFilterPanel>
-                  </TeamTableHeaderFilterButton>
-                </th>
+                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Role</th>
                 <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
                   Membership
                 </th>
                 <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
                   Group Status
                 </th>
-                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
-                  <TeamTableHeaderFilterButton
-                    active={eventStatusFilter !== "ALL"}
-                    label="Event Status"
-                  >
-                    <TeamTableFilterPanel
-                      title="Event Status Filter"
-                      currentText={
-                        eventStatusFilter === "ALL"
-                          ? "All event statuses"
-                          : formatLabel(eventStatusFilter)
-                      }
-                      helperText="Show only memberships tied to events in a selected status."
-                    >
-                      <TeamTableSelectField
-                        value={eventStatusFilter}
-                        onChange={(event) => setEventStatusFilter(event.target.value)}
-                      >
-                        <option value="ALL">All event statuses</option>
-                        {eventStatusOptions
-                          .filter((option) => option !== "ALL")
-                          .map((option) => (
-                            <option key={option} value={option}>
-                              {formatLabel(option)}
-                            </option>
-                          ))}
-                      </TeamTableSelectField>
-                    </TeamTableFilterPanel>
-                  </TeamTableHeaderFilterButton>
-                </th>
+                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Event Status</th>
                 <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Joined</th>
                 <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Notes</th>
               </tr>

@@ -1,5 +1,7 @@
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import {
+  getEventAllowedHubSummary,
+  getEventHubRestrictionLabel,
   formatEventCountValue,
   formatEventDate,
   formatEventDurationDays,
@@ -7,6 +9,7 @@ import {
   getEventCategoryLabel,
   getEventLocationLabel,
   getEventOrganizerLabel,
+  getEventRegistrationModeLabel,
   getEventStudentApplyLabel
 } from "./events.constants";
 
@@ -21,7 +24,7 @@ const headers = [
   "ID",
   "Event Code",
   "Event Name",
-  "Event Organizer",
+  "Host / Organizer",
   "Event Category",
   "Status",
   "Start Date",
@@ -31,7 +34,9 @@ const headers = [
   "Maximum Count",
   "Applied Count",
   "Balance Count",
-  "Apply By Student",
+  "Registration Mode",
+  "Hub Access",
+  "Student Registration",
   "Actions"
 ];
 
@@ -72,13 +77,13 @@ export default function EventDirectoryTable({
 }) {
   return (
     <div className="overflow-auto rounded-2xl">
-      <table className="min-w-[1780px] w-full text-[10px]">
+      <table className="min-w-[1780px] w-full text-[11px]">
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50">
             {headers.map((header) => (
               <th
                 key={header}
-                className="whitespace-nowrap px-3.5 py-3 text-left text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-500"
+                className="whitespace-nowrap px-3.5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500"
               >
                 {header}
               </th>
@@ -105,7 +110,7 @@ export default function EventDirectoryTable({
 
               return (
                 <tr key={eventId} className="transition hover:bg-slate-50">
-                  <td className="px-3.5 py-3.5 whitespace-nowrap font-mono text-[10px] text-slate-500">
+                  <td className="px-3.5 py-3.5 whitespace-nowrap font-mono text-[11px] text-slate-500">
                     {eventId}
                   </td>
 
@@ -115,7 +120,7 @@ export default function EventDirectoryTable({
 
                   <td className="px-3.5 py-3.5">
                     <TableText
-                      className="font-semibold text-[11px] text-slate-900"
+                      className="font-semibold text-[12px] text-slate-900"
                       maxWidth="max-w-[240px]"
                       value={event.event_name}
                     />
@@ -157,13 +162,24 @@ export default function EventDirectoryTable({
                     {formatEventCountValue(event.applied_count)}
                   </td>
 
-                  <td className="px-3.5 py-3.5 whitespace-nowrap font-semibold text-slate-700">
-                    {getEventBalanceCount(event.maximum_count, event.applied_count)}
-                  </td>
+                <td className="px-3.5 py-3.5 whitespace-nowrap font-semibold text-slate-700">
+                  {getEventBalanceCount(event.maximum_count, event.applied_count)}
+                </td>
 
-                  <td className="px-3.5 py-3.5 whitespace-nowrap text-slate-600">
-                    {getEventStudentApplyLabel(event)}
-                  </td>
+                <td className="px-3.5 py-3.5 whitespace-nowrap text-slate-600">
+                  {getEventRegistrationModeLabel(event)}
+                </td>
+
+                <td className="px-3.5 py-3.5 text-slate-600">
+                  <TableText
+                    maxWidth="max-w-[240px]"
+                    value={`${getEventHubRestrictionLabel(event)} | ${getEventAllowedHubSummary(event)}`}
+                  />
+                </td>
+
+                <td className="px-3.5 py-3.5 whitespace-nowrap text-slate-600">
+                  {getEventStudentApplyLabel(event)}
+                </td>
 
                   <td className="w-[1%] px-3.5 py-3.5 whitespace-nowrap">
                     <button

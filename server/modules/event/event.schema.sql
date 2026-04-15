@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS events (
   maximum_count INT NULL,
   applied_count INT NULL,
   apply_by_student BOOLEAN NOT NULL DEFAULT TRUE,
+  registration_mode ENUM('TEAM','INDIVIDUAL') NOT NULL DEFAULT 'TEAM',
   start_date DATE NULL,
   end_date DATE NULL,
   registration_start_date DATE NULL,
@@ -38,6 +39,57 @@ CREATE TABLE IF NOT EXISTS events (
   KEY idx_events_dates (start_date, end_date),
   KEY idx_events_registration_dates (registration_start_date, registration_end_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS event_rounds (
+  round_id BIGINT NOT NULL AUTO_INCREMENT,
+  event_id INT NOT NULL,
+  round_order INT NOT NULL,
+  round_name VARCHAR(150) NOT NULL,
+  round_date DATE NULL,
+  round_end_date DATE NULL,
+  start_time TIME NULL,
+  end_time TIME NULL,
+  location VARCHAR(255) NULL,
+  description TEXT NULL,
+  round_mode ENUM('ONLINE','OFFLINE') NOT NULL DEFAULT 'ONLINE',
+  status ENUM('SCHEDULED','ONGOING','COMPLETED','CANCELLED') NOT NULL DEFAULT 'SCHEDULED',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (round_id),
+  UNIQUE KEY uq_event_rounds_event_order (event_id, round_order),
+  KEY idx_event_rounds_event (event_id),
+  CONSTRAINT fk_event_rounds_event
+    FOREIGN KEY (event_id)
+    REFERENCES events(event_id)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+SET @events_schema := DATABASE();
+
+SET @ddl := IF(
+  EXISTS(
+    SELECT 1 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = @events_schema AND TABLE_NAME = 'event_rounds' AND COLUMN_NAME = 'round_end_date'
+  ),
+  'SELECT 1',
+  'ALTER TABLE event_rounds ADD COLUMN round_end_date DATE NULL AFTER round_date'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @ddl := IF(
+  EXISTS(
+    SELECT 1 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = @events_schema AND TABLE_NAME = 'event_rounds' AND COLUMN_NAME = 'round_mode'
+  ),
+  'SELECT 1',
+  'ALTER TABLE event_rounds ADD COLUMN round_mode ENUM(''ONLINE'',''OFFLINE'') NOT NULL DEFAULT ''ONLINE'' AFTER description'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 SET @events_schema := DATABASE();
 
@@ -204,6 +256,18 @@ SET @ddl := IF(
   ),
   'SELECT 1',
   'ALTER TABLE events ADD COLUMN apply_by_student BOOLEAN NOT NULL DEFAULT TRUE AFTER applied_count'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @ddl := IF(
+  EXISTS(
+    SELECT 1 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = @events_schema AND TABLE_NAME = 'events' AND COLUMN_NAME = 'registration_mode'
+  ),
+  'SELECT 1',
+  'ALTER TABLE events ADD COLUMN registration_mode ENUM(''TEAM'',''INDIVIDUAL'') NOT NULL DEFAULT ''TEAM'' AFTER apply_by_student'
 );
 PREPARE stmt FROM @ddl;
 EXECUTE stmt;

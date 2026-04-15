@@ -3,6 +3,7 @@ const repo = require("./eligibility.repository");
 const groupPointRepo = require("../groupPoint/groupPoint.repository");
 const membershipRepo = require("../membership/membership.repository");
 const membershipService = require("../membership/membership.service");
+const hubRepo = require("../hub/hub.repository");
 const teamRepo = require("../team/team.repository");
 const { expandDepartmentCode } = require("../../utils/department.service");
 
@@ -1199,11 +1200,16 @@ const buildMembershipCollection = (rows = []) => ({
 });
 
 const buildDashboardSummaryByStudentId = async (studentId, fallbackName = null) => {
-  const [studentStats, phase, activeGroupRow, activeTeamMembershipRows] = await Promise.all([
+  const [studentStats, phase, activeGroupRow, activeTeamMembershipRows, activeHubMembershipRows] = await Promise.all([
     repo.getDashboardStudentStats(studentId),
     repo.getCurrentPhase(),
     membershipRepo.getActiveMembershipWithGroupByStudent(studentId),
     teamRepo.getAllTeamMemberships({
+      student_id: studentId,
+      status: "ACTIVE",
+      exclude_team_type: "HUB"
+    }),
+    hubRepo.getAllHubMemberships({
       student_id: studentId,
       status: "ACTIVE"
     })
@@ -1245,14 +1251,15 @@ const buildDashboardSummaryByStudentId = async (studentId, fallbackName = null) 
           : null
       }
     : null;
-  const allMemberships = (activeTeamMembershipRows || []).map(mapDashboardMembership);
-  const teams = allMemberships.filter(
+  const teamMemberships = (activeTeamMembershipRows || []).map(mapDashboardMembership);
+  const hubMemberships = (activeHubMembershipRows || []).map(mapDashboardMembership);
+  const teams = teamMemberships.filter(
     (row) => String(row?.team_type || "").toUpperCase() === "TEAM"
   );
-  const hubs = allMemberships.filter(
+  const hubs = hubMemberships.filter(
     (row) => String(row?.team_type || "").toUpperCase() === "HUB"
   );
-  const event_groups = allMemberships.filter(
+  const event_groups = teamMemberships.filter(
     (row) => String(row?.team_type || "").toUpperCase() === "EVENT"
   );
 
@@ -1366,19 +1373,24 @@ const getAdminStudentProfile = async (studentId) => {
     basePointData,
     groupMembershipRows,
     teamMembershipRows,
+    hubMembershipRows,
     eligibilityHistoryRows,
     phaseTimelineRows
   ] = await Promise.all([
     buildDashboardSummaryByStudentId(studentId, normalizedStudent.name || null),
     getStudentBasePoints(studentId, 100),
     membershipRepo.getAllMemberships({ student_id: studentId }),
-    teamRepo.getAllTeamMemberships({ student_id: studentId }),
+    teamRepo.getAllTeamMemberships({ student_id: studentId, exclude_team_type: "HUB" }),
+    hubRepo.getAllHubMemberships({ student_id: studentId }),
     repo.getMyIndividualEligibilityHistory(studentId),
     repo.getStudentPhaseTimeline(studentId)
   ]);
 
   const groupMemberships = (groupMembershipRows || []).map(mapGroupMembershipHistoryRow);
-  const teamMemberships = (teamMembershipRows || []).map(mapTeamMembershipHistoryRow);
+  const teamMemberships = [
+    ...(teamMembershipRows || []).map(mapTeamMembershipHistoryRow),
+    ...(hubMembershipRows || []).map(mapTeamMembershipHistoryRow)
+  ];
   const membershipsByType = groupTeamMembershipsByType(teamMemberships);
 
   return {

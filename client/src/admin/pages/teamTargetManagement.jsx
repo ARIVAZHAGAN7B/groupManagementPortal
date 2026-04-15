@@ -143,7 +143,7 @@ export default function TeamTargetManagement() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="w-full lg:max-w-md border border-gray-200 rounded-lg px-3 py-1.5 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 transition"
-          placeholder="Search by team, type, event..."
+          placeholder="Team, type, event..."
         />
 
         <select
@@ -153,7 +153,6 @@ export default function TeamTargetManagement() {
         >
           <option value="ALL">All Types</option>
           <option value="TEAM">TEAM</option>
-          <option value="HUB">HUB</option>
           <option value="SECTION">SECTION</option>
           <option value="EVENT">EVENT</option>
         </select>

@@ -3,11 +3,14 @@ import AllGroupsBadge from "../allGroups/AllGroupsBadge";
 import TeamPageDetailTile from "../teams/TeamPageDetailTile";
 import { formatLabel } from "../teams/teamPage.utils";
 import {
+  getEventAllowedHubSummary,
+  getEventHubRestrictionLabel,
   getEventCategoryLabel,
   getEventDateRangeLabel,
   getEventLevelLabel,
   getEventLocationLabel,
   getEventOrganizerLabel,
+  getEventRegistrationModeLabel,
   getEventRegistrationDateRangeLabel,
   getEventRegistrationFilterValue,
   getEventStudentApplyLabel
@@ -41,6 +44,7 @@ export default function EventDirectoryMobileCards({
             <AllGroupsBadge value={formatLabel(event.status, "Unknown")} />
             <AllGroupsBadge value={formatLabel(getEventRegistrationFilterValue(event), "Open")} />
             <AllGroupsBadge value={getEventStudentApplyLabel(event)} />
+            <AllGroupsBadge value={getEventHubRestrictionLabel(event)} />
           </div>
 
           <div className="mt-3 min-w-0">
@@ -54,7 +58,11 @@ export default function EventDirectoryMobileCards({
             <TeamPageDetailTile label="Category" value={getEventCategoryLabel(event)} />
             <TeamPageDetailTile label="Level" value={getEventLevelLabel(event)} />
             <TeamPageDetailTile label="Location" value={getEventLocationLabel(event)} />
-            <TeamPageDetailTile label="Student Apply" value={getEventStudentApplyLabel(event)} />
+            <TeamPageDetailTile
+              label="Registration Mode"
+              value={getEventRegistrationModeLabel(event)}
+            />
+            <TeamPageDetailTile label="Student Registration" value={getEventStudentApplyLabel(event)} />
             <TeamPageDetailTile
               label="Event Dates"
               value={getEventDateRangeLabel(event)}
@@ -65,9 +73,14 @@ export default function EventDirectoryMobileCards({
               subtext={formatLabel(getEventRegistrationFilterValue(event), "Open")}
             />
             <TeamPageDetailTile
-              label="Groups"
+              label="Hub Access"
+              value={getEventHubRestrictionLabel(event)}
+              subtext={getEventAllowedHubSummary(event)}
+            />
+            <TeamPageDetailTile
+              label="Entries"
               value={Number(event.team_count) || 0}
-              subtext="Registered event groups"
+              subtext="Registered entries"
             />
           </div>
 
@@ -75,11 +88,11 @@ export default function EventDirectoryMobileCards({
             <button
               type="button"
               onClick={() => onView?.(event)}
-              title={`Open ${event.event_name || "event"} groups`}
+              title={`Open ${event.event_name || "event"} listing`}
               className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#1754cf]/15 bg-[#1754cf]/8 px-3.5 py-2.5 text-sm font-semibold text-[#1754cf] transition hover:bg-[#1754cf]/12"
             >
               <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
-              Open Groups
+              View Listing
             </button>
           </div>
         </article>

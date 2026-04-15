@@ -11,8 +11,10 @@ import {
   AdminTextActionButton
 } from "../ui/AdminUiPrimitives";
 import {
+  HUB_PRIORITY_STYLES,
   STATUS_STYLES,
   TYPE_STYLES,
+  formatHubPriorityLabel,
   formatTeamTypeLabel,
   getActionDisabledState
 } from "./teamManagement.constants";
@@ -108,6 +110,16 @@ export default function TeamManagementMobileCards({
                 <AdminBadge className={typeClass}>
                   {isEventGroupScope ? "Event Group" : formatTeamTypeLabel(row.team_type)}
                 </AdminBadge>
+                {String(row.team_type || "").toUpperCase() === "HUB" && row.hub_priority ? (
+                  <AdminBadge
+                    className={
+                      HUB_PRIORITY_STYLES[String(row.hub_priority || "").toUpperCase()] ||
+                      "border-slate-200 bg-slate-100 text-slate-600"
+                    }
+                  >
+                    {formatHubPriorityLabel(row.hub_priority)}
+                  </AdminBadge>
+                ) : null}
                 <AdminBadge className={statusClass}>
                   {String(row.status || "-").toUpperCase()}
                 </AdminBadge>

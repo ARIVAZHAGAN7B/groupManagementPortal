@@ -358,46 +358,23 @@ export default function AllGroups() {
     });
   }, []);
 
-  const onTierHeaderClick = useCallback(() => {
-    const availableTiers = tierOptions.filter(Boolean);
-
-    if (tierFilter !== "ALL") {
-      const currentIndex = availableTiers.indexOf(tierFilter);
-      const nextTier = currentIndex >= 0 ? availableTiers[currentIndex + 1] : availableTiers[0];
-
-      if (nextTier) {
-        setSortState(createDefaultSortState());
-        setTierFilter(nextTier);
-        return;
+  const onTierSort = useCallback(() => {
+    setSortState((prev) => {
+      if (prev.key !== "tier" || !prev.direction) {
+        return {
+          key: "tier",
+          direction: "asc"
+        };
       }
 
-      setTierFilter("ALL");
-      setSortState(createDefaultSortState());
-      return;
-    }
+      if (prev.direction === "asc") {
+        return {
+          key: "tier",
+          direction: "desc"
+        };
+      }
 
-    if (sortState.key !== "tier" || sortState.direction !== "asc") {
-      setSortState({
-        key: "tier",
-        direction: "asc"
-      });
-      return;
-    }
-
-    if (availableTiers.length > 0) {
-      setSortState(createDefaultSortState());
-      setTierFilter(availableTiers[0]);
-      return;
-    }
-
-    setSortState(createDefaultSortState());
-  }, [sortState.direction, sortState.key, tierFilter, tierOptions]);
-
-  const onStatusHeaderClick = useCallback(() => {
-    setStatusFilter((prev) => {
-      if (prev === "ALL") return "ACTIVE";
-      if (prev === "ACTIVE") return "INACTIVE";
-      return "ALL";
+      return createDefaultSortState();
     });
   }, []);
 
@@ -677,9 +654,8 @@ export default function AllGroups() {
       onRankSort: () => onNumericSort("rank"),
       onReset: resetFilters,
       onStatusChange: (e) => setStatusFilter(e.target.value),
-      onStatusHeaderClick,
       onTierChange: (e) => setTierFilter(e.target.value),
-      onTierHeaderClick,
+      onTierSort,
       onVacancyChange: (e) => setVacancyFilter(e.target.value),
       onVacancySort: () => onNumericSort("vacancies"),
       pointsMinFilter,
@@ -704,8 +680,7 @@ export default function AllGroups() {
       groupQuery,
       mergedGroups.length,
       onNumericSort,
-      onStatusHeaderClick,
-      onTierHeaderClick,
+      onTierSort,
       pointsMinFilter,
       rankFilter,
       rankOptions,

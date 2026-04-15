@@ -6,19 +6,27 @@ import {
   formatMemberCount,
   formatShortDate
 } from "../teams/teamPage.utils";
-import { getEventGroupRequestStatus } from "./events.constants";
+import {
+  getEventGroupRequestStatus,
+  getEventRegistrationMode
+} from "./events.constants";
 
 export default function EventGroupsMobileCards({
   rows = [],
   loading = false,
   latestRequestByTeamId,
   myTeamIdSet,
-  onView
+  onView,
+  registrationMode = "TEAM"
 }) {
+  const individualRegistration = getEventRegistrationMode({
+    registration_mode: registrationMode
+  }) === "INDIVIDUAL";
+
   if (loading) {
     return (
       <div className="px-4 py-12 text-center text-sm text-slate-500">
-        Loading event groups...
+        Loading registered teams...
       </div>
     );
   }
@@ -26,7 +34,7 @@ export default function EventGroupsMobileCards({
   if (rows.length === 0) {
     return (
       <div className="px-4 py-12 text-center text-sm text-slate-500">
-        No event groups found for the current filters.
+        No registered teams found for the current filters.
       </div>
     );
   }
@@ -72,7 +80,7 @@ export default function EventGroupsMobileCards({
 
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Group Details
+                Team Notes
               </div>
               <p className="mt-1 text-sm leading-6 text-slate-600">
                 {team.description || "No description added."}
@@ -86,7 +94,7 @@ export default function EventGroupsMobileCards({
                 className="inline-flex items-center gap-2 rounded-lg border border-[#1754cf]/15 bg-[#1754cf]/8 px-3.5 py-2 text-sm font-semibold text-[#1754cf] transition hover:bg-[#1754cf]/12"
               >
                 <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
-                View Group
+                {individualRegistration ? "View Entry" : "View Team"}
               </button>
             </div>
           </article>

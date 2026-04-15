@@ -57,7 +57,7 @@ export default function EventManagementMobileCards({
                   </AdminBadge>
                 </div>
                 <p className="mt-1 text-sm text-slate-500">
-                  {row.event_organizer || row.location || "Event details not specified"}
+                  {row.event_organizer || row.location || "Host or location not specified"}
                 </p>
                 {busy ? (
                   <p className="mt-2 text-xs font-semibold text-[#1754cf]">Updating event...</p>
@@ -78,10 +78,17 @@ export default function EventManagementMobileCards({
                 value={durationLabel === "-" ? "-" : `${durationLabel} day(s)`}
               />
               <AdminMobileValueRow label="Maximum Count" value={formatCountValue(row.maximum_count)} />
-              <AdminMobileValueRow label="Applied Count" value={formatCountValue(row.applied_count)} />
               <AdminMobileValueRow
-                label="Balance Count"
+                label="Valid Registrations"
+                value={formatCountValue(row.applied_count)}
+              />
+              <AdminMobileValueRow
+                label="Available Slots"
                 value={getBalanceCount(row.maximum_count, row.applied_count)}
+              />
+              <AdminMobileValueRow
+                label="Registration Mode"
+                value={String(row.registration_mode || "TEAM").toUpperCase() === "INDIVIDUAL" ? "Individual" : "Team"}
               />
             </div>
 

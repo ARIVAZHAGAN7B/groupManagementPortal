@@ -25,6 +25,7 @@ const TEAM_SELECT_WITH_COUNTS = `
     t.team_type,
     t.status,
     t.description,
+    t.rounds_cleared,
     t.created_by,
     t.created_at,
     t.updated_at,
@@ -38,6 +39,7 @@ const TEAM_SELECT_WITH_COUNTS = `
     e.end_date AS event_end_date,
     e.registration_start_date AS event_registration_start_date,
     e.registration_end_date AS event_registration_end_date,
+    e.maximum_count AS event_maximum_count,
     e.min_members AS event_min_members,
     e.max_members AS event_max_members,
     COALESCE(mc.active_member_count, 0) AS active_member_count
@@ -69,8 +71,17 @@ const TEAM_ORDER_BY = `
 const createTeam = async (team, executor) => {
   const [result] = await getExecutor(executor).query(
     `INSERT INTO teams
-      (event_id, team_code, team_name, team_type, status, description, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      (
+        event_id,
+        team_code,
+        team_name,
+        team_type,
+        status,
+        description,
+        rounds_cleared,
+        created_by
+      )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       team.event_id ?? null,
       team.team_code,
@@ -78,6 +89,7 @@ const createTeam = async (team, executor) => {
       team.team_type,
       team.status,
       team.description || null,
+      team.rounds_cleared ?? 0,
       team.created_by || null
     ]
   );
@@ -189,7 +201,8 @@ const getTeamByCode = async (teamCode, executor) => {
        t.team_code,
        t.team_name,
        t.team_type,
-       t.status
+       t.status,
+       t.rounds_cleared
      FROM teams t
      WHERE t.team_code = ?
      LIMIT 1`,
@@ -222,6 +235,16 @@ const updateTeam = async (teamId, team, executor) => {
   return result;
 };
 
+const updateTeamRoundsCleared = async (teamId, roundsCleared, executor) => {
+  const [result] = await getExecutor(executor).query(
+    `UPDATE teams
+     SET rounds_cleared = ?
+     WHERE team_id = ?`,
+    [roundsCleared, teamId]
+  );
+  return result;
+};
+
 const setTeamStatus = async (teamId, status, executor) => {
   const [result] = await getExecutor(executor).query(
     `UPDATE teams
@@ -234,7 +257,7 @@ const setTeamStatus = async (teamId, status, executor) => {
 
 const getStudentById = async (studentId, executor) => {
   const [rows] = await getExecutor(executor).query(
-    `SELECT student_id, name, email
+    `SELECT student_id, name, email, department, year
      FROM students
      WHERE student_id = ?
      LIMIT 1`,
@@ -245,13 +268,127 @@ const getStudentById = async (studentId, executor) => {
 
 const getStudentByUserId = async (userId, executor) => {
   const [rows] = await getExecutor(executor).query(
-    `SELECT student_id, name, email
+    `SELECT student_id, name, email, department, year
      FROM students
      WHERE user_id = ?
      LIMIT 1`,
     [userId]
   );
   return rows[0] || null;
+};
+
+const lockTeamById = async (teamId, executor) => {
+  const [rows] = await getExecutor(executor).query(
+    `${TEAM_SELECT_WITH_COUNTS}
+     WHERE t.team_id = ?
+     LIMIT 1
+     FOR UPDATE`,
+    [teamId]
+  );
+  return rows[0] || null;
+};
+
+const getStudentsByIds = async (studentIds = [], executor) => {
+  const normalizedIds = Array.from(
+    new Set(
+      (Array.isArray(studentIds) ? studentIds : [])
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    )
+  );
+
+  if (normalizedIds.length === 0) {
+    return [];
+  }
+
+  const placeholders = normalizedIds.map(() => "?").join(", ");
+  const [rows] = await getExecutor(executor).query(
+    `SELECT student_id, name, email, department, year
+     FROM students
+     WHERE student_id IN (${placeholders})`,
+    normalizedIds
+  );
+  return rows;
+};
+
+const getTeamsByIds = async (teamIds = [], executor) => {
+  const normalizedIds = Array.from(
+    new Set(
+      (Array.isArray(teamIds) ? teamIds : [])
+        .map((value) => Number(value))
+        .filter((value) => Number.isInteger(value) && value > 0)
+    )
+  );
+
+  if (normalizedIds.length === 0) {
+    return [];
+  }
+
+  const placeholders = normalizedIds.map(() => "?").join(", ");
+  const [rows] = await getExecutor(executor).query(
+    `SELECT
+       team_id,
+       event_id,
+       team_code,
+       team_name,
+       team_type,
+       status
+     FROM teams
+     WHERE team_id IN (${placeholders})`,
+    normalizedIds
+  );
+  return rows;
+};
+
+const searchEventRegistrationCandidates = async (
+  eventId,
+  queryText = "",
+  excludeStudentId = null,
+  limit = 12,
+  executor
+) => {
+  const normalizedQuery = String(queryText || "").trim();
+  const clauses = [
+    `NOT EXISTS (
+      SELECT 1
+      FROM team_membership tm
+      INNER JOIN teams t ON t.team_id = tm.team_id
+      WHERE tm.student_id = s.student_id
+        AND tm.status = 'ACTIVE'
+        AND t.event_id = ?
+    )`
+  ];
+  const values = [eventId];
+
+  if (excludeStudentId) {
+    clauses.push("s.student_id <> ?");
+    values.push(String(excludeStudentId));
+  }
+
+  if (normalizedQuery) {
+    clauses.push(
+      `(LOWER(s.student_id) LIKE ? OR LOWER(s.name) LIKE ? OR LOWER(s.email) LIKE ?)`
+    );
+    const searchPattern = `%${normalizedQuery.toLowerCase()}%`;
+    values.push(searchPattern, searchPattern, searchPattern);
+  }
+
+  values.push(Math.max(1, Number(limit) || 12));
+
+  const [rows] = await getExecutor(executor).query(
+    `SELECT
+       s.student_id,
+       s.name,
+       s.email,
+       s.department,
+       s.year
+     FROM students s
+     WHERE ${clauses.join(" AND ")}
+     ORDER BY s.name ASC, s.student_id ASC
+     LIMIT ?`,
+    values
+  );
+  return rows;
 };
 
 const createTeamMembership = async (payload, executor) => {
@@ -338,6 +475,16 @@ const findActiveTeamMembershipByStudentAndEvent = async (studentId, eventId, exe
     [studentId, eventId]
   );
   return rows[0] || null;
+};
+
+const getMaxRoundsClearedByEvent = async (eventId, executor) => {
+  const [[row]] = await getExecutor(executor).query(
+    `SELECT COALESCE(MAX(rounds_cleared), 0) AS max_rounds_cleared
+     FROM teams
+     WHERE event_id = ?`,
+    [eventId]
+  );
+  return Number(row?.max_rounds_cleared) || 0;
 };
 
 const findActiveTeamMembershipByTeamAndRole = async (
@@ -540,15 +687,21 @@ module.exports = {
   getAllTeams,
   getTeamsByEventId,
   getTeamById,
+  lockTeamById,
   getTeamByCode,
   updateTeam,
+  updateTeamRoundsCleared,
   setTeamStatus,
   getStudentById,
   getStudentByUserId,
+  getStudentsByIds,
+  getTeamsByIds,
+  searchEventRegistrationCandidates,
   createTeamMembership,
   getTeamMembershipById,
   findActiveTeamMembershipByTeamAndStudent,
   findActiveTeamMembershipByStudentAndEvent,
+  getMaxRoundsClearedByEvent,
   findActiveTeamMembershipByTeamAndRole,
   getTeamMembershipsByTeamId,
   getAllTeamMemberships,

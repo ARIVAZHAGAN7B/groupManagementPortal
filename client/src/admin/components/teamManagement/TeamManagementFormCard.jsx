@@ -1,5 +1,6 @@
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import {
+  HUB_PRIORITY_OPTIONS,
   TEAM_STATUSES,
   formatTeamTypeLabel,
   inputClass,
@@ -17,6 +18,7 @@ export default function TeamManagementFormCard({
   scopeConfig
 }) {
   const isEventGroupScope = scopeConfig.scope === "EVENT_GROUP";
+  const isHubScope = scopeConfig.scope === "HUB";
 
   const submitLabel = saving
     ? "Saving..."
@@ -142,6 +144,31 @@ export default function TeamManagementFormCard({
               </span>
             </div>
           </div>
+
+          {isHubScope ? (
+            <div>
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                Hub Priority
+              </label>
+              <div className="relative">
+                <select
+                  value={form.hub_priority || ""}
+                  onChange={(e) => onChangeField("hub_priority", e.target.value)}
+                  className={selectClass}
+                >
+                  <option value="">Select priority</option>
+                  {HUB_PRIORITY_OPTIONS.map((priority) => (
+                    <option key={priority} value={priority}>
+                      {priority.charAt(0) + priority.slice(1).toLowerCase()}
+                    </option>
+                  ))}
+                </select>
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">
+                  <KeyboardArrowDownRoundedIcon sx={{ fontSize: 20 }} />
+                </span>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div>

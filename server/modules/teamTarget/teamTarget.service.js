@@ -2,7 +2,7 @@ const repo = require("./teamTarget.repository");
 const teamRepo = require("../team/team.repository");
 
 const ADMIN_ROLES = ["ADMIN", "SYSTEM_ADMIN"];
-const TEAM_TYPES = ["TEAM", "HUB", "SECTION", "EVENT"];
+const TEAM_TYPES = ["TEAM", "SECTION", "EVENT"];
 const TEAM_STATUSES = ["ACTIVE", "INACTIVE", "FROZEN", "ARCHIVED"];
 
 const normalizeText = (value) => String(value || "").trim();

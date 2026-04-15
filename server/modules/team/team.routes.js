@@ -32,6 +32,12 @@ router.get(
 );
 
 router.get(
+  "/event/:eventId/student-candidates",
+  authorize("ADMIN", "SYSTEM_ADMIN", "STUDENT", "CAPTAIN"),
+  controller.searchEventRegistrationCandidates
+);
+
+router.get(
   "/:id",
   authorize("ADMIN", "SYSTEM_ADMIN", "STUDENT", "CAPTAIN"),
   controller.getTeam
@@ -62,6 +68,12 @@ router.post(
 );
 
 router.post(
+  "/event/:eventId/individual-registration",
+  authorize("STUDENT", "CAPTAIN"),
+  controller.registerIndividuallyInEvent
+);
+
+router.post(
   "/:id/join",
   authorize("STUDENT", "CAPTAIN"),
   controller.joinTeamAsSelf
@@ -71,6 +83,12 @@ router.put(
   "/:id",
   authorize("ADMIN", "SYSTEM_ADMIN"),
   controller.updateTeam
+);
+
+router.put(
+  "/:id/round-progress",
+  authorize("ADMIN", "SYSTEM_ADMIN"),
+  controller.updateEventTeamRoundsCleared
 );
 
 router.put(

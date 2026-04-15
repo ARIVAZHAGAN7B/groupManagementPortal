@@ -22,7 +22,7 @@ const headers = [
   "ID",
   "Event Code",
   "Event Name",
-  "Event Organizer",
+  "Host / Organizer",
   "Event Category",
   "Status",
   "Start Date",
@@ -30,9 +30,10 @@ const headers = [
   "Duration (Days)",
   "Event Location",
   "Maximum Count",
-  "Applied Count",
-  "Balance Count",
-  "Apply By Student",
+  "Valid Registrations",
+  "Available Slots",
+  "Registration Mode",
+  "Student Registration",
   "Actions"
 ];
 
@@ -61,13 +62,13 @@ export default function EventManagementDesktopTable({
 }) {
   return (
     <div className="hidden overflow-auto rounded-2xl border border-slate-200 bg-white shadow-sm lg:block">
-      <table className="min-w-[1780px] w-full text-[10px]">
+      <table className="min-w-[1780px] w-full text-[11px]">
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50">
             {headers.map((header) => (
               <th
                 key={header}
-                className="whitespace-nowrap px-3.5 py-3 text-left text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-500"
+                className="whitespace-nowrap px-3.5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500"
               >
                 {header}
               </th>
@@ -83,19 +84,19 @@ export default function EventManagementDesktopTable({
 
             return (
               <tr key={eventId} className="transition hover:bg-slate-50">
-                <td className="px-3.5 py-3.5 whitespace-nowrap font-mono text-[10px] text-slate-500">
+                <td className="px-3.5 py-3.5 whitespace-nowrap font-mono text-[11px] text-slate-500">
                   {eventId}
                 </td>
 
                 <td className="px-3.5 py-3.5 whitespace-nowrap">
-                  <AdminBadge className="border-slate-200 bg-slate-100 px-2 py-0.5 font-mono text-[9px] text-slate-600">
+                  <AdminBadge className="border-slate-200 bg-slate-100 px-2 py-0.5 font-mono text-[10px] text-slate-600">
                     {row.event_code || "NO-CODE"}
                   </AdminBadge>
                 </td>
 
                 <td className="px-3.5 py-3.5">
                   <TableText
-                    className="font-semibold text-[11px] text-slate-900"
+                    className="font-semibold text-[12px] text-slate-900"
                     maxWidth="max-w-[240px]"
                     value={row.event_name}
                   />
@@ -111,7 +112,7 @@ export default function EventManagementDesktopTable({
 
                 <td className="px-3.5 py-3.5 whitespace-nowrap">
                   <AdminMappedBadge
-                    className="px-2 py-0.5 text-[9px]"
+                    className="px-2 py-0.5 text-[10px]"
                     map={STATUS_STYLES}
                     value={row.status}
                   />
@@ -143,6 +144,12 @@ export default function EventManagementDesktopTable({
 
                 <td className="px-3.5 py-3.5 whitespace-nowrap font-semibold text-slate-700">
                   {getBalanceCount(row.maximum_count, row.applied_count)}
+                </td>
+
+                <td className="px-3.5 py-3.5 whitespace-nowrap text-slate-600">
+                  {String(row.registration_mode || "TEAM").toUpperCase() === "INDIVIDUAL"
+                    ? "Individual"
+                    : "Team"}
                 </td>
 
                 <td className="px-3.5 py-3.5 whitespace-nowrap text-slate-600">
@@ -179,7 +186,7 @@ export default function EventManagementDesktopTable({
                         label="Activate"
                         fullWidth={false}
                         sizeClassName="px-2 py-1"
-                        textClassName="text-[10px] font-semibold leading-none"
+                        textClassName="text-[11px] font-semibold leading-none"
                         className="border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                       />
                     ) : null}

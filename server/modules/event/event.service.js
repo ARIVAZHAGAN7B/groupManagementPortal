@@ -1,6 +1,13 @@
+const db = require("../../config/db");
 const repo = require("./event.repository");
+const participationService = require("./eventParticipation.service");
+const hubRepo = require("../hub/hub.repository");
+const teamRepo = require("../team/team.repository");
 
 const EVENT_STATUSES = ["ACTIVE", "CLOSED", "INACTIVE", "ARCHIVED"];
+const EVENT_ROUND_STATUSES = ["SCHEDULED", "ONGOING", "COMPLETED", "CANCELLED"];
+const EVENT_ROUND_MODES = ["ONLINE", "OFFLINE"];
+const EVENT_REGISTRATION_MODES = ["TEAM", "INDIVIDUAL"];
 
 const normalizeText = (value) => String(value || "").trim();
 const normalizeCode = (value) => normalizeText(value).toUpperCase();
@@ -8,8 +15,12 @@ const normalizeUrl = (value, fieldName) => {
   const normalized = normalizeText(value);
   if (!normalized) return null;
 
+  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(normalized)
+    ? normalized
+    : `https://${normalized}`;
+
   try {
-    const parsed = new URL(normalized);
+    const parsed = new URL(candidate);
     return parsed.toString();
   } catch (_error) {
     throw new Error(`${fieldName} must be a valid URL`);
@@ -24,11 +35,48 @@ const normalizeStatus = (value) => {
   return normalized;
 };
 
+const normalizeRoundStatus = (value) => {
+  const normalized = normalizeText(value).toUpperCase() || "SCHEDULED";
+  if (!EVENT_ROUND_STATUSES.includes(normalized)) {
+    throw new Error(
+      `round status must be one of: ${EVENT_ROUND_STATUSES.join(", ")}`
+    );
+  }
+  return normalized;
+};
+
+const normalizeRoundMode = (value) => {
+  const normalized = normalizeText(value).toUpperCase() || "ONLINE";
+  if (!EVENT_ROUND_MODES.includes(normalized)) {
+    throw new Error(`round mode must be one of: ${EVENT_ROUND_MODES.join(", ")}`);
+  }
+  return normalized;
+};
+
+const normalizeRegistrationMode = (value) => {
+  const normalized = normalizeText(value).toUpperCase() || "TEAM";
+  if (!EVENT_REGISTRATION_MODES.includes(normalized)) {
+    throw new Error(
+      `registration_mode must be one of: ${EVENT_REGISTRATION_MODES.join(", ")}`
+    );
+  }
+  return normalized;
+};
+
 const normalizeDate = (value) => {
   if (value === undefined || value === null || value === "") return null;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) throw new Error("Invalid date value");
   return d.toISOString().split("T")[0];
+};
+
+const normalizeTime = (value, fieldName) => {
+  if (value === undefined || value === null || value === "") return null;
+  const normalized = String(value).trim();
+  if (!/^\d{2}:\d{2}(?::\d{2})?$/.test(normalized)) {
+    throw new Error(`${fieldName} must be a valid time`);
+  }
+  return normalized.length === 5 ? `${normalized}:00` : normalized;
 };
 
 const normalizeOptionalPositiveInteger = (value, fieldName) => {
@@ -65,6 +113,21 @@ const normalizeOptionalBoolean = (value, fieldName) => {
   throw new Error(`${fieldName} must be true or false`);
 };
 
+const normalizeAllowedHubIds = (value) => {
+  if (value === undefined || value === null || value === "") return [];
+  if (!Array.isArray(value)) {
+    throw new Error("allowed_hub_ids must be an array");
+  }
+
+  return Array.from(
+    new Set(
+      value
+        .map((item) => Number(item))
+        .filter((item) => Number.isInteger(item) && item > 0)
+    )
+  );
+};
+
 const normalizeNumberOrNull = (value) =>
   value === null || value === undefined || value === "" ? null : Number(value);
 
@@ -98,6 +161,57 @@ const calculateBalanceCount = (maximumCount, appliedCount) => {
   return Math.max(0, maxValue - appliedValue);
 };
 
+const normalizeRounds = (value) => {
+  if (value === undefined) return undefined;
+  if (value === null) return [];
+  if (!Array.isArray(value)) {
+    throw new Error("rounds must be an array");
+  }
+
+  return value.map((row, index) => {
+    const round_name = normalizeText(row?.round_name);
+    const round_date = normalizeDate(row?.round_date);
+    const round_end_date = normalizeDate(row?.round_end_date);
+    const start_time = normalizeTime(row?.start_time, "round start_time");
+    const end_time = normalizeTime(row?.end_time, "round end_time");
+    const location = normalizeText(row?.location) || null;
+    const description = normalizeText(row?.description) || null;
+    const round_mode = normalizeRoundMode(row?.round_mode);
+    const status = normalizeRoundStatus(row?.status);
+
+    if (!round_name) {
+      throw new Error(`rounds[${index}].round_name is required`);
+    }
+
+    if (round_date && round_end_date && round_end_date < round_date) {
+      throw new Error(`rounds[${index}] end date cannot be before start date`);
+    }
+
+    if (
+      round_date &&
+      start_time &&
+      end_time &&
+      (!round_end_date || round_end_date === round_date) &&
+      start_time > end_time
+    ) {
+      throw new Error(`rounds[${index}] end_time cannot be before start_time`);
+    }
+
+    return {
+      round_order: index + 1,
+      round_name,
+      round_date,
+      round_end_date: round_end_date || round_date || null,
+      start_time,
+      end_time,
+      location,
+      description,
+      round_mode,
+      status
+    };
+  });
+};
+
 const normalizePayload = (payload = {}) => {
   const event_code = normalizeCode(payload.event_code);
   const event_name = normalizeText(payload.event_name);
@@ -122,14 +236,11 @@ const normalizePayload = (payload = {}) => {
     payload.maximum_count,
     "maximum_count"
   );
-  const applied_count = normalizeOptionalNonNegativeInteger(
-    payload.applied_count,
-    "applied_count"
-  );
   const apply_by_student = normalizeOptionalBoolean(
     payload.apply_by_student,
     "apply_by_student"
   );
+  const registration_mode = normalizeRegistrationMode(payload.registration_mode);
   const start_date = normalizeDate(payload.start_date);
   const end_date = normalizeDate(payload.end_date);
   const registration_start_date = normalizeDate(payload.registration_start_date);
@@ -144,6 +255,8 @@ const normalizePayload = (payload = {}) => {
   const winner_rewards = normalizeText(payload.winner_rewards) || null;
   const reward_allocation = normalizeText(payload.reward_allocation) || null;
   const description = normalizeText(payload.description) || null;
+  const rounds = normalizeRounds(payload.rounds);
+  const allowed_hub_ids = normalizeAllowedHubIds(payload.allowed_hub_ids);
 
   if (!event_code) throw new Error("event_code is required");
   if (!event_name) throw new Error("event_name is required");
@@ -166,11 +279,13 @@ const normalizePayload = (payload = {}) => {
   }
   if (
     maximum_count !== null &&
-    applied_count !== null &&
-    Number(applied_count) > Number(maximum_count)
+    Number(maximum_count) < 0
   ) {
-    throw new Error("applied_count cannot be greater than maximum_count");
+    throw new Error("maximum_count must be a non-negative integer");
   }
+
+  const normalizedMinMembers = registration_mode === "INDIVIDUAL" ? 1 : min_members;
+  const normalizedMaxMembers = registration_mode === "INDIVIDUAL" ? 1 : max_members;
 
   return {
     event_code,
@@ -190,29 +305,52 @@ const normalizePayload = (payload = {}) => {
     registration_link,
     selected_resources,
     maximum_count,
-    applied_count,
     apply_by_student: apply_by_student === null ? true : apply_by_student,
+    registration_mode,
     start_date,
     end_date,
     registration_start_date,
     registration_end_date,
-    min_members,
-    max_members,
+    min_members: normalizedMinMembers,
+    max_members: normalizedMaxMembers,
     status,
     eligible_for_rewards:
       eligible_for_rewards === null ? false : eligible_for_rewards,
     winner_rewards,
     reward_allocation,
-    description
+    description,
+    rounds,
+    allowed_hub_ids
   };
 };
 
-const ensureUniqueEventCode = async (eventCode, excludeEventId = null) => {
-  const existing = await repo.getEventByCode(eventCode);
+const ensureUniqueEventCode = async (eventCode, excludeEventId = null, executor = undefined) => {
+  const existing = await repo.getEventByCode(eventCode, executor);
   if (!existing) return;
   if (excludeEventId && Number(existing.event_id) === Number(excludeEventId)) return;
   throw new Error("event_code already exists");
 };
+
+const mapRoundRow = (row) => ({
+  ...row,
+  round_id: Number(row.round_id),
+  event_id: Number(row.event_id),
+  round_order: Number(row.round_order),
+  round_end_date: row.round_end_date || row.round_date || null,
+  round_mode: normalizeText(row.round_mode).toUpperCase() || "ONLINE"
+});
+
+const mapAllowedHubRow = (row) => ({
+  event_id:
+    row?.event_id === undefined || row?.event_id === null ? null : Number(row.event_id),
+  hub_id: Number(row?.hub_id),
+  team_id: Number(row?.hub_id),
+  team_code: row?.team_code || null,
+  team_name: row?.team_name || null,
+  team_type: row?.team_type || "HUB",
+  hub_priority: normalizeText(row?.hub_priority).toUpperCase() || null,
+  status: row?.status || null
+});
 
 const mapEventRow = (row) => ({
   ...row,
@@ -230,9 +368,14 @@ const mapEventRow = (row) => ({
   max_members:
     row.max_members === null || row.max_members === undefined ? null : Number(row.max_members),
   apply_by_student: normalizeBooleanOrNull(row.apply_by_student),
+  registration_mode: normalizeText(row.registration_mode).toUpperCase() || "TEAM",
   within_bit: normalizeBooleanOrNull(row.within_bit),
   related_to_special_lab: normalizeBooleanOrNull(row.related_to_special_lab),
   eligible_for_rewards: normalizeBooleanOrNull(row.eligible_for_rewards),
+  total_team_count: Number(row.total_team_count) || 0,
+  active_team_count: Number(row.active_team_count) || 0,
+  valid_team_count: Number(row.valid_team_count) || 0,
+  forming_team_count: Number(row.forming_team_count) || 0,
   team_count: Number(row.team_count) || 0,
   duration_days:
     row.duration_days !== undefined && row.duration_days !== null
@@ -241,39 +384,182 @@ const mapEventRow = (row) => ({
   balance_count:
     row.balance_count !== undefined && row.balance_count !== null
       ? Number(row.balance_count)
-      : calculateBalanceCount(row.maximum_count, row.applied_count)
+      : calculateBalanceCount(row.maximum_count, row.applied_count),
+  rounds: Array.isArray(row.rounds) ? row.rounds.map(mapRoundRow) : undefined,
+  allowed_hubs: Array.isArray(row.allowed_hubs) ? row.allowed_hubs.map(mapAllowedHubRow) : [],
+  allowed_hub_ids: Array.isArray(row.allowed_hubs)
+    ? row.allowed_hubs.map((hub) => Number(hub?.hub_id ?? hub?.team_id)).filter(Boolean)
+    : [],
+  allowed_hub_count: Array.isArray(row.allowed_hubs) ? row.allowed_hubs.length : 0,
+  hub_restriction_enabled: Array.isArray(row.allowed_hubs) && row.allowed_hubs.length > 0
 });
+
+const attachEventRelations = async (row, executor = undefined) => {
+  if (!row?.event_id) return row ? mapEventRow(row) : null;
+  const [rounds, allowedHubs] = await Promise.all([
+    repo.getRoundsByEventId(row.event_id, executor),
+    repo.getAllowedHubsByEventId(row.event_id, executor)
+  ]);
+  return mapEventRow({
+    ...row,
+    rounds,
+    allowed_hubs: allowedHubs
+  });
+};
+
+const attachEventRelationsToRows = async (rows = [], executor = undefined) => {
+  const normalizedRows = Array.isArray(rows) ? rows : [];
+  const eventIds = Array.from(
+    new Set(
+      normalizedRows
+        .map((row) => Number(row?.event_id))
+        .filter((value) => Number.isInteger(value) && value > 0)
+    )
+  );
+
+  if (eventIds.length === 0) {
+    return normalizedRows.map(mapEventRow);
+  }
+
+  const allowedHubRows = await repo.getAllowedHubsByEventIds(eventIds, executor);
+  const hubsByEventId = allowedHubRows.reduce((map, row) => {
+    const eventId = Number(row?.event_id);
+    if (!map.has(eventId)) {
+      map.set(eventId, []);
+    }
+    map.get(eventId).push(row);
+    return map;
+  }, new Map());
+
+  return normalizedRows.map((row) =>
+    mapEventRow({
+      ...row,
+      allowed_hubs: hubsByEventId.get(Number(row?.event_id)) || []
+    })
+  );
+};
+
+const ensureAllowedHubsExist = async (allowedHubIds = [], executor = undefined) => {
+  const normalizedHubIds = normalizeAllowedHubIds(allowedHubIds);
+  if (normalizedHubIds.length === 0) {
+    return [];
+  }
+
+  const hubRows = await hubRepo.getHubsByIds(normalizedHubIds, executor);
+  if (hubRows.length !== normalizedHubIds.length) {
+    const foundIds = new Set(hubRows.map((row) => Number(row.hub_id)));
+    const missingHubId = normalizedHubIds.find((hubId) => !foundIds.has(Number(hubId)));
+    throw new Error(`Hub ${missingHubId} not found`);
+  }
+
+  for (const hubRow of hubRows) {
+    if (normalizeText(hubRow?.status).toUpperCase() !== "ACTIVE") {
+      throw new Error(`Hub ${hubRow?.hub_code || hubRow?.hub_id} must be ACTIVE`);
+    }
+  }
+
+  return normalizedHubIds;
+};
+
+const haveSameIdList = (left = [], right = []) => {
+  const leftIds = normalizeAllowedHubIds(left).sort((a, b) => a - b);
+  const rightIds = normalizeAllowedHubIds(right).sort((a, b) => a - b);
+
+  if (leftIds.length !== rightIds.length) return false;
+  return leftIds.every((value, index) => value === rightIds[index]);
+};
+
+const replaceEventRounds = async (eventId, rounds, executor) => {
+  await repo.deleteRoundsByEventId(eventId, executor);
+
+  for (const round of Array.isArray(rounds) ? rounds : []) {
+    await repo.createEventRound(
+      {
+        ...round,
+        event_id: Number(eventId)
+      },
+      executor
+    );
+  }
+};
+
+const ensureRoundsDoNotConflictWithExistingProgress = async (
+  eventId,
+  rounds,
+  executor
+) => {
+  if (rounds === undefined) return;
+
+  const maxRoundsCleared = await teamRepo.getMaxRoundsClearedByEvent(eventId, executor);
+  const configuredRounds = Array.isArray(rounds) ? rounds.length : 0;
+
+  if (Number(maxRoundsCleared) > configuredRounds) {
+    throw new Error(
+      `Some event teams already show ${maxRoundsCleared} rounds cleared. Configure at least ${maxRoundsCleared} round(s).`
+    );
+  }
+};
 
 const createEvent = async (payload, actorUserId = null) => {
   const normalized = normalizePayload({
     ...payload,
-    status: payload?.status || "ACTIVE"
+    status: payload?.status || "ACTIVE",
+    registration_mode: payload?.registration_mode || "TEAM"
   });
   await ensureUniqueEventCode(normalized.event_code);
+  await ensureAllowedHubsExist(normalized.allowed_hub_ids);
 
-  const result = await repo.createEvent(
-    {
-      ...normalized,
-      created_by: actorUserId || null
-    }
-  );
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
 
-  return { event_id: result.insertId };
+    const result = await repo.createEvent(
+      {
+        ...normalized,
+        created_by: actorUserId || null
+      },
+      conn
+    );
+
+    await replaceEventRounds(result.insertId, normalized.rounds || [], conn);
+    await repo.replaceAllowedHubs(result.insertId, normalized.allowed_hub_ids, conn);
+    await participationService.syncEventParticipationCounts(
+      result.insertId,
+      {
+        eventLike: {
+          ...normalized,
+          event_id: result.insertId
+        },
+        requiredMinMembers: normalized.min_members,
+        maximumCount: normalized.maximum_count
+      },
+      conn
+    );
+
+    await conn.commit();
+    return { event_id: result.insertId };
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
 };
 
 const getEvents = async () => {
   const rows = await repo.getAllEvents();
-  return (rows || []).map(mapEventRow);
+  return attachEventRelationsToRows(rows || []);
 };
 
 const getEvent = async (eventId) => {
   const row = await repo.getEventById(eventId);
-  return row ? mapEventRow(row) : null;
+  return row ? attachEventRelations(row) : null;
 };
 
 const updateEvent = async (eventId, payload) => {
   const existing = await repo.getEventById(eventId);
   if (!existing) throw new Error("Event not found");
+  const existingAllowedHubIds = await repo.getAllowedHubIdsByEventId(eventId);
 
   const normalized = normalizePayload({
     event_code: payload?.event_code ?? existing.event_code,
@@ -315,12 +601,14 @@ const updateEvent = async (eventId, payload) => {
         : existing.selected_resources,
     maximum_count:
       payload?.maximum_count !== undefined ? payload.maximum_count : existing.maximum_count,
-    applied_count:
-      payload?.applied_count !== undefined ? payload.applied_count : existing.applied_count,
     apply_by_student:
       payload?.apply_by_student !== undefined
         ? payload.apply_by_student
         : existing.apply_by_student,
+    registration_mode:
+      payload?.registration_mode !== undefined
+        ? payload.registration_mode
+        : existing.registration_mode,
     start_date:
       payload?.start_date !== undefined ? payload.start_date : existing.start_date,
     end_date: payload?.end_date !== undefined ? payload.end_date : existing.end_date,
@@ -350,12 +638,82 @@ const updateEvent = async (eventId, payload) => {
         ? payload.reward_allocation
         : existing.reward_allocation,
     description:
-      payload?.description !== undefined ? payload.description : existing.description
+      payload?.description !== undefined ? payload.description : existing.description,
+    rounds: payload?.rounds,
+    allowed_hub_ids:
+      payload?.allowed_hub_ids !== undefined
+        ? payload.allowed_hub_ids
+        : existingAllowedHubIds
   });
 
-  await ensureUniqueEventCode(normalized.event_code, eventId);
-  await repo.updateEvent(eventId, normalized);
-  return { event_id: Number(eventId) };
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    await ensureUniqueEventCode(normalized.event_code, eventId, conn);
+    await ensureAllowedHubsExist(normalized.allowed_hub_ids, conn);
+    if (
+      normalized.registration_mode !==
+        (normalizeText(existing.registration_mode).toUpperCase() || "TEAM") &&
+      Number(existing.total_team_count) > 0
+    ) {
+      throw new Error(
+        "registration_mode cannot be changed after students have already registered"
+      );
+    }
+
+    if (
+      !haveSameIdList(existingAllowedHubIds, normalized.allowed_hub_ids) &&
+      Number(existing.total_team_count) > 0
+    ) {
+      throw new Error("allowed hubs cannot be changed after students have already registered");
+    }
+
+    const lockedEvent = await repo.lockEventById(eventId, conn);
+    if (!lockedEvent) throw new Error("Event not found");
+
+    await ensureRoundsDoNotConflictWithExistingProgress(eventId, normalized.rounds, conn);
+    await participationService.ensureEventConfigurationCapacity(
+      eventId,
+      {
+        eventLike: {
+          ...lockedEvent,
+          ...normalized
+        },
+        requiredMinMembers: normalized.min_members,
+        maximumCount: normalized.maximum_count
+      },
+      conn
+    );
+    await repo.updateEvent(eventId, normalized, conn);
+    await repo.replaceAllowedHubs(eventId, normalized.allowed_hub_ids, conn);
+
+    if (normalized.rounds !== undefined) {
+      await replaceEventRounds(eventId, normalized.rounds, conn);
+    }
+
+    await participationService.syncEventParticipationCounts(
+      eventId,
+      {
+        eventLike: {
+          ...lockedEvent,
+          ...normalized,
+          event_id: Number(eventId)
+        },
+        requiredMinMembers: normalized.min_members,
+        maximumCount: normalized.maximum_count
+      },
+      conn
+    );
+
+    await conn.commit();
+    return { event_id: Number(eventId) };
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
 };
 
 const setEventStatus = async (eventId, status) => {
@@ -373,6 +731,9 @@ const deleteEvent = async (eventId) => setEventStatus(eventId, "INACTIVE");
 
 module.exports = {
   EVENT_STATUSES,
+  EVENT_ROUND_STATUSES,
+  EVENT_ROUND_MODES,
+  EVENT_REGISTRATION_MODES,
   createEvent,
   getEvents,
   getEvent,

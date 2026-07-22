@@ -15,31 +15,24 @@ import {
   getScopeConfig
 } from "../components/teamManagement/teamManagement.constants";
 import {
-  activateHub,
   activateEventGroup,
   activateTeam,
-  archiveHub,
   archiveEventGroup,
   archiveTeam,
-  createHub,
   createTeam,
-  deleteHub,
   deleteEventGroup,
   deleteTeam,
   fetchEventGroupMemberships,
   fetchEventGroups,
-  fetchHubs,
   fetchTeamMemberships,
   fetchTeams,
-  freezeHub,
   freezeEventGroup,
   freezeTeam,
-  updateHub,
   updateEventGroup,
   updateTeam
 } from "../../service/teams.api";
 
-type ManagementScope = "TEAM" | "HUB" | "EVENT_GROUP";
+type ManagementScope = "TEAM" | "EVENT_GROUP";
 
 type TeamManagementProps = {
   scope?: ManagementScope;
@@ -48,7 +41,8 @@ type TeamManagementProps = {
 const buildInitialForm = (scope: ManagementScope) => ({
   team_code: "",
   team_name: "",
-  team_type: scope === "EVENT_GROUP" ? "EVENT" : scope === "HUB" ? "HUB" : "TEAM",
+  team_type: scope === "EVENT_GROUP" ? "EVENT" : "TEAM",
+  hub_priority: "",
   status: "ACTIVE",
   description: ""
 });
@@ -97,9 +91,7 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
       const data =
         scopeConfig.scope === "EVENT_GROUP"
           ? await fetchEventGroups()
-          : scopeConfig.scope === "HUB"
-            ? await fetchHubs()
-            : await fetchTeams({ team_type: scopeConfig.teamType });
+          : await fetchTeams({ team_type: scopeConfig.teamType });
       setRows(Array.isArray(data) ? data : []);
     } catch (err: any) {
       setError(
@@ -170,6 +162,7 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
       team_code: row.team_code || "",
       team_name: row.team_name || "",
       team_type: scopeConfig.teamType,
+      hub_priority: row.hub_priority || "",
       status: row.status || "ACTIVE",
       description: row.description || ""
     });
@@ -232,6 +225,7 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
         team_code: String(form.team_code || "").trim().toUpperCase(),
         team_name: String(form.team_name || "").trim(),
         team_type: scopeConfig.teamType,
+        hub_priority: undefined,
         status: form.status,
         description: String(form.description || "").trim()
       };
@@ -247,17 +241,11 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
       if (editingId) {
         if (isEventGroupScope) {
           await updateEventGroup(editingId, payload);
-        } else if (scopeConfig.scope === "HUB") {
-          await updateHub(editingId, payload);
         } else {
           await updateTeam(editingId, payload);
         }
       } else {
-        if (scopeConfig.scope === "HUB") {
-          await createHub(payload);
-        } else {
-          await createTeam(payload);
-        }
+        await createTeam(payload);
       }
 
       setSuccessMessage(
@@ -303,13 +291,10 @@ export default function TeamManagement({ scope = "TEAM" }: TeamManagementProps) 
     }
   };
 
-  const freezeHandler = isEventGroupScope ? freezeEventGroup : scopeConfig.scope === "HUB" ? freezeHub : freezeTeam;
-  const archiveHandler =
-    isEventGroupScope ? archiveEventGroup : scopeConfig.scope === "HUB" ? archiveHub : archiveTeam;
-  const deactivateHandler =
-    isEventGroupScope ? deleteEventGroup : scopeConfig.scope === "HUB" ? deleteHub : deleteTeam;
-  const scopedActivateHandler =
-    isEventGroupScope ? activateEventGroup : scopeConfig.scope === "HUB" ? activateHub : activateTeam;
+  const freezeHandler = isEventGroupScope ? freezeEventGroup : freezeTeam;
+  const archiveHandler = isEventGroupScope ? archiveEventGroup : archiveTeam;
+  const deactivateHandler = isEventGroupScope ? deleteEventGroup : deleteTeam;
+  const scopedActivateHandler = isEventGroupScope ? activateEventGroup : activateTeam;
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-5 md:px-6">

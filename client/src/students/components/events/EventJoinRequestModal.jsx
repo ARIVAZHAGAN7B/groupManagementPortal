@@ -15,7 +15,7 @@ export default function EventJoinRequestModal({
             <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-[#1754cf]">
               Join Request
             </p>
-            <h2 className="mt-2 text-xl font-bold text-slate-900">Send event group request</h2>
+            <h2 className="mt-2 text-xl font-bold text-slate-900">Send team join request</h2>
           </div>
           <button
             type="button"
@@ -28,16 +28,16 @@ export default function EventJoinRequestModal({
 
         <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <div className="text-sm font-semibold text-slate-900">
-            {group.team_name || group.team_code || "Selected group"}
+            {group.team_name || group.team_code || "Selected team"}
           </div>
           <div className="mt-1 text-xs text-slate-500">{group.team_code || "No code"}</div>
           <p className="mt-3 text-sm leading-6 text-slate-600">
-            {group.description || "No description added for this event group."}
+            {group.description || "No description added for this team."}
           </p>
         </div>
 
         <p className="mt-4 text-sm text-slate-600">
-          This will submit a join request to the selected event group.
+          This will submit a join request to the selected team.
         </p>
 
         <div className="mt-6 flex flex-wrap items-center justify-end gap-3">

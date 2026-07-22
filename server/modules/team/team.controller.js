@@ -1,5 +1,8 @@
 const teamService = require("./team.service");
-const { broadcastTeamMembershipChanged } = require("../../realtime/events");
+const {
+  broadcastEventTeamInvitationChanged,
+  broadcastTeamMembershipChanged
+} = require("../../realtime/events");
 
 const createTeam = async (req, res) => {
   try {
@@ -28,6 +31,21 @@ const getTeamsByEvent = async (req, res) => {
     res.json(data);
   } catch (error) {
     const status = error.message === "Event not found" ? 404 : 400;
+    res.status(status).json({ message: error.message });
+  }
+};
+
+const searchEventRegistrationCandidates = async (req, res) => {
+  try {
+    const rows = await teamService.searchEventRegistrationCandidates(
+      req.params.eventId,
+      req.user?.userId,
+      req.query || {}
+    );
+    res.json(Array.isArray(rows) ? rows : []);
+  } catch (error) {
+    const status =
+      error.message === "Event not found" || error.message === "Student not found" ? 404 : 400;
     res.status(status).json({ message: error.message });
   }
 };
@@ -115,12 +133,64 @@ const createTeamInEventByStudent = async (req, res) => {
       role: result?.captain_membership?.role || "CAPTAIN"
     });
 
+    for (const invitation of Array.isArray(result?.invitations) ? result.invitations : []) {
+      await broadcastEventTeamInvitationChanged({
+        action: "EVENT_TEAM_INVITATION_CREATED",
+        invitationId: invitation?.invitation_id || null,
+        eventId: invitation?.event_id || null,
+        teamId: invitation?.team_id || null,
+        studentId: invitation?.invitee_student_id || null,
+        status: invitation?.status || "PENDING"
+      });
+    }
+
     res.status(201).json({
       message: "Event group created successfully",
       data: result
     });
   } catch (error) {
     const status = ["Event not found", "Student not found"].includes(error.message) ? 404 : 400;
+    res.status(status).json({ message: error.message });
+  }
+};
+
+const registerIndividuallyInEvent = async (req, res) => {
+  try {
+    const result = await teamService.registerIndividuallyInEvent(
+      req.params.eventId,
+      req.user?.userId
+    );
+
+    await broadcastTeamMembershipChanged({
+      action: "EVENT_INDIVIDUAL_REGISTRATION_CREATED",
+      studentId: result?.captain_membership?.student_id || null,
+      teamId: result?.team?.team_id || null,
+      membershipId: result?.captain_membership?.team_membership_id || null,
+      role: result?.captain_membership?.role || "CAPTAIN"
+    });
+
+    res.status(201).json({
+      message: "Individual event registration completed successfully",
+      data: result
+    });
+  } catch (error) {
+    const status = ["Event not found", "Student not found"].includes(error.message) ? 404 : 400;
+    res.status(status).json({ message: error.message });
+  }
+};
+
+const updateEventTeamRoundsCleared = async (req, res) => {
+  try {
+    const row = await teamService.updateEventTeamRoundsCleared(
+      req.params.id,
+      req.body?.rounds_cleared
+    );
+    res.json({
+      message: "Event team round progress updated successfully",
+      data: row
+    });
+  } catch (error) {
+    const status = error.message === "Team not found" ? 404 : 400;
     res.status(status).json({ message: error.message });
   }
 };
@@ -269,12 +339,15 @@ module.exports = {
   createTeam,
   getTeams,
   getTeamsByEvent,
+  searchEventRegistrationCandidates,
   getTeam,
   getTeamMemberships,
   getAllTeamMemberships,
   getMyTeamMemberships,
   addTeamMember,
   createTeamInEventByStudent,
+  registerIndividuallyInEvent,
+  updateEventTeamRoundsCleared,
   joinTeamAsSelf,
   updateTeamMember,
   leaveTeamMember,

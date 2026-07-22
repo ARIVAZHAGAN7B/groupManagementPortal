@@ -13,6 +13,7 @@ const EventGroupsPage = lazy(() => import("./pages/eventGroups"));
 const EventGroupDetailsPage = lazy(() => import("./pages/eventGroupDetails"));
 const TeamsRegularPage = lazy(() => import("./pages/teamsRegular"));
 const HubsPage = lazy(() => import("./pages/hubs"));
+const OnDutyPage = lazy(() => import("./pages/onDuty"));
 const TeamDetailsPage = lazy(() => import("./pages/teamDetails"));
 const HubDetailsPage = lazy(() => import("./pages/hubDetails"));
 const MyTeamsPage = lazy(() => import("./pages/myRegularTeams"));
@@ -42,14 +43,16 @@ const StudentRoutes = () => {
           <Route path="/events" element={<EventsPage />} />
           <Route path="/events/:eventId" element={<EventGroupsPage />} />
           <Route path="/events/:eventId/groups/:groupId" element={<EventGroupDetailsPage />} />
+          <Route path="/on-duty" element={<OnDutyPage />} />
           <Route path="/event/:eventId" element={<EventGroupsPage />} />
           <Route path="/event/:eventId/groups/:groupId" element={<EventGroupDetailsPage />} />
           <Route path="/event-groups" element={<Navigate to="/events" replace />} />
           <Route path="/my-teams" element={<MyTeamsPage />} />
           <Route path="/my-hubs" element={<MyHubsPage />} />
           <Route path="/my-event-groups" element={<MyEventGroupsPage />} />
-          <Route path="/event-group-requests" element={<TeamRequestsPage />} />
-          <Route path="/team-requests" element={<Navigate to="/event-group-requests" replace />} />
+          <Route path="/requests" element={<TeamRequestsPage />} />
+          <Route path="/event-group-requests" element={<Navigate to="/requests" replace />} />
+          <Route path="/team-requests" element={<Navigate to="/requests" replace />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/eligibility" element={<EligibilityHistoryPage />} />
           <Route path="*" element={<Navigate to="/my-group" replace />} />

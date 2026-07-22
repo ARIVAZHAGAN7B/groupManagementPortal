@@ -3,7 +3,6 @@ import { useRealtimeEvents } from "../../hooks/useRealtimeEvents";
 import { REALTIME_EVENTS } from "../../lib/realtime";
 import { fetchStudentLeaderboards } from "../../service/eligibility.api";
 import { fetchAllPhases } from "../../service/phase.api";
-import LeaderboardFilters from "../components/leaderboard/LeaderboardFilters";
 import LeaderboardGroupCards from "../components/leaderboard/LeaderboardGroupCards";
 import LeaderboardGroupTable from "../components/leaderboard/LeaderboardGroupTable";
 import LeaderboardStudentCards from "../components/leaderboard/LeaderboardStudentCards";
@@ -13,6 +12,15 @@ import {
   LeaderboardPanel
 } from "../components/leaderboard/LeaderboardShared";
 import LeaderboardTabs from "../components/leaderboard/LeaderboardTabs";
+import {
+  getPhaseOptionLabel,
+  TIER_OPTIONS
+} from "../components/leaderboard/leaderboard.constants";
+import { WorkspaceFilterBar } from "../../shared/components/WorkspaceInlineFilters";
+import WorkspacePageHeader, {
+  WorkspacePageHeaderActionButton
+} from "../../shared/components/WorkspacePageHeader";
+import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 
 const createEmptyData = ({ phaseId = null, tier = null, pointsScope = "TOTAL" } = {}) => ({
   limit: 30,
@@ -123,6 +131,41 @@ export default function LeaderboardPage() {
     }),
     [data.groups.length, data.individual.length, data.leaders.length]
   );
+  const filterFields = useMemo(
+    () => [
+      {
+        key: "phase",
+        type: "select",
+        label: "Phase",
+        value: selectedPhaseId,
+        onChangeValue: setSelectedPhaseId,
+        wrapperClassName: "w-full xl:min-w-[20rem] xl:max-w-[28rem] xl:flex-1",
+        options: [
+          { value: "", label: "All Time" },
+          ...phases.map((phase) => ({
+            value: phase.phase_id,
+            label: getPhaseOptionLabel(phase)
+          }))
+        ]
+      },
+      {
+        key: "tier",
+        type: "select",
+        label: "Tier",
+        value: selectedTier,
+        onChangeValue: (value) => setSelectedTier(String(value || "").toUpperCase()),
+        wrapperClassName: "w-full sm:w-[170px]",
+        options: [
+          { value: "", label: "All Tiers" },
+          ...TIER_OPTIONS.map((tier) => ({
+            value: tier,
+            label: `Tier ${tier}`
+          }))
+        ]
+      }
+    ],
+    [phases, selectedPhaseId, selectedTier]
+  );
   const emptyMessage =
     activeTab === "groups"
       ? "No group leaderboard data is available for the selected filters."
@@ -130,21 +173,39 @@ export default function LeaderboardPage() {
 
   return (
     <div className="max-w-screen-2xl space-y-4 p-4 md:p-6">
-      <LeaderboardFilters
-        hasActiveFilters={hasActiveFilters}
-        onClearFilters={() => {
+      <WorkspacePageHeader
+        eyebrow="Student Workspace"
+        title="Leaderboard"
+        description="Compare individual, leader, and group rankings through a simpler view of points, tiers, and current placement."
+        actions={
+          <WorkspacePageHeaderActionButton
+            type="button"
+            onClick={() => {
+              void load({ phaseId: selectedPhaseId, tier: selectedTier });
+            }}
+            disabled={loading}
+            className="border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+          >
+            <RefreshRoundedIcon sx={{ fontSize: 18 }} />
+            {loading ? "Refreshing..." : "Refresh"}
+          </WorkspacePageHeaderActionButton>
+        }
+      />
+
+      <WorkspaceFilterBar
+        fields={filterFields}
+        onReset={() => {
           setSelectedPhaseId("");
           setSelectedTier("");
         }}
-        onPhaseChange={(event) => setSelectedPhaseId(event.target.value)}
-        onTierChange={(event) =>
-          setSelectedTier(String(event.target.value || "").toUpperCase())
-        }
-        phaseLoadError={phaseLoadError}
-        phases={phases}
-        selectedPhaseId={selectedPhaseId}
-        selectedTier={selectedTier}
+        hasActiveFilters={hasActiveFilters}
       />
+
+      {phaseLoadError ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          {phaseLoadError}
+        </div>
+      ) : null}
 
       <LeaderboardTabs activeTab={activeTab} counts={counts} onChange={setActiveTab} />
 

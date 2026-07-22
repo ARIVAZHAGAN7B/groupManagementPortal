@@ -60,6 +60,7 @@ const menuSections = [
     title: "Event Services",
     items: [
       { name: "Event Management", path: "/event-management", icon: Icons.EventManagement },
+      { name: "On Duty Management", path: "/on-duty-management", icon: Icons.EventManagement },
       { name: "Event Groups", path: "/event-group-management", icon: Icons.EventManagement },
       { name: "Event Group Memberships", path: "/event-group-membership-management", icon: Icons.MembershipManagement },
       { name: "Event Group Requests", path: "/event-join-requests", icon: Icons.EventManagement }

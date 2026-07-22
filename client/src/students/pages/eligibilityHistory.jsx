@@ -1,18 +1,11 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import HistoryEduRoundedIcon from "@mui/icons-material/HistoryEduRounded";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
-import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import { fetchMyEligibilityHistory } from "../../service/eligibility.api";
-
-const ELIGIBILITY_FILTERS = [
-  { value: "ALL", label: "All results" },
-  { value: "ELIGIBLE", label: "Eligible" },
-  { value: "NOT_ELIGIBLE", label: "Not eligible" },
-  { value: "NOT_AVAILABLE", label: "Not available" }
-];
-
-const inputClass =
-  "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 outline-none transition focus:border-[#1754cf] focus:ring-4 focus:ring-[#1754cf]/10";
+import { WorkspaceFilterBar } from "../../shared/components/WorkspaceInlineFilters";
+import WorkspacePageHeader, {
+  WorkspacePageHeaderActionButton
+} from "../../shared/components/WorkspacePageHeader";
 
 const tableHeaderClass =
   "px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500";
@@ -95,72 +88,12 @@ const getPhaseStatusBadgeClass = (value) => {
   return "border-slate-200 bg-slate-100 text-slate-600";
 };
 
-function PageHero({ loading, onRefresh }) {
-  return (
-    <section className="relative overflow-hidden rounded-3xl border border-[#1754cf]/10 bg-[#1754cf]/5 px-5 py-5 shadow-sm md:px-6 md:py-6">
-      <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="max-w-3xl">
-          <span className="mb-2 block text-[11px] font-bold uppercase tracking-[0.24em] text-[#1754cf]">
-            Student Workspace
-          </span>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-[2rem]">
-              Eligibility History
-            </h1>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={loading}
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-wait disabled:opacity-70"
-        >
-          <RefreshRoundedIcon sx={{ fontSize: 18 }} />
-          {loading ? "Refreshing..." : "Refresh"}
-        </button>
-      </div>
-
-      <div className="absolute -bottom-14 -right-10 h-52 w-52 rounded-full bg-[#1754cf]/10 blur-3xl" />
-      <div className="absolute -top-12 left-16 h-36 w-36 rounded-full bg-white/30 blur-3xl" />
-    </section>
-  );
-}
-
-function FiltersBar({ eligibilityFilter, onEligibilityChange, onQueryChange, query }) {
-  return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-        <div className="relative flex-1">
-          <SearchRoundedIcon
-            sx={{ fontSize: 18 }}
-            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
-          />
-          <input
-            value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
-            className={`${inputClass} pl-10`}
-            placeholder="Search by phase, reason, or result"
-          />
-        </div>
-
-        <div className="w-full lg:w-64">
-          <select
-            value={eligibilityFilter}
-            onChange={(event) => onEligibilityChange(event.target.value)}
-            className={inputClass}
-          >
-            {ELIGIBILITY_FILTERS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-    </section>
-  );
-}
+const ELIGIBILITY_FILTER_OPTIONS = [
+  { value: "ALL", label: "All results" },
+  { value: "ELIGIBLE", label: "Eligible" },
+  { value: "NOT_ELIGIBLE", label: "Not eligible" },
+  { value: "NOT_AVAILABLE", label: "Not available" }
+];
 
 function EmptyState({ filtered }) {
   return (
@@ -430,10 +363,47 @@ export default function EligibilityHistoryPage() {
 
   const activePhaseHidden = rows.length > previousRows.length && previousRows.length > 0;
   const hasFilters = Boolean(String(query || "").trim()) || eligibilityFilter !== "ALL";
+  const filterFields = useMemo(
+    () => [
+      {
+        key: "query",
+        type: "search",
+        label: "Search",
+        value: query,
+        placeholder: "Search by phase, reason, or result",
+        onChangeValue: setQuery
+      },
+      {
+        key: "eligibility",
+        type: "select",
+        label: "Result",
+        value: eligibilityFilter,
+        onChangeValue: setEligibilityFilter,
+        wrapperClassName: "w-full sm:w-[180px]",
+        options: ELIGIBILITY_FILTER_OPTIONS
+      }
+    ],
+    [eligibilityFilter, query]
+  );
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-5 px-4 py-5 font-[Inter] md:px-6">
-      <PageHero loading={loading} onRefresh={load} />
+      <WorkspacePageHeader
+        eyebrow="Student Workspace"
+        title="Eligibility History"
+        description="Review completed phase outcomes, reasons, and awarded points without the active-phase noise."
+        actions={
+          <WorkspacePageHeaderActionButton
+            type="button"
+            onClick={load}
+            disabled={loading}
+            className="border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+          >
+            <RefreshRoundedIcon sx={{ fontSize: 18 }} />
+            {loading ? "Refreshing..." : "Refresh"}
+          </WorkspacePageHeaderActionButton>
+        }
+      />
 
       {activePhaseHidden ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -448,11 +418,13 @@ export default function EligibilityHistoryPage() {
         </div>
       ) : null}
 
-      <FiltersBar
-        eligibilityFilter={eligibilityFilter}
-        onEligibilityChange={setEligibilityFilter}
-        onQueryChange={setQuery}
-        query={query}
+      <WorkspaceFilterBar
+        fields={filterFields}
+        onReset={() => {
+          setQuery("");
+          setEligibilityFilter("ALL");
+        }}
+        hasActiveFilters={hasFilters}
       />
 
       {loading && historyRows.length === 0 ? (

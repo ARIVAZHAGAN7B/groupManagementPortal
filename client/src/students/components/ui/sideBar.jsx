@@ -15,7 +15,8 @@ const menuItems = [
   { name: "All Hubs", path: "/hubs", icon: Icons.TeamManagement },
   { name: "Events", path: "/events", icon: Icons.EventManagement },
   { name: "My Event Groups", path: "/my-event-groups", icon: Icons.EventManagement },
-  { name: "Event Group Requests", path: "/event-group-requests", icon: Icons.EventManagement },
+  { name: "My OD", path: "/on-duty", icon: Icons.EventManagement },
+  { name: "Request Center", path: "/requests", icon: Icons.EventManagement },
   { name: "Leaderboard", path: "/leaderboard", icon: Icons.Leaderboard },
   { name: "Eligibility", path: "/eligibility", icon: Icons.PhaseConfiguration },
 ];

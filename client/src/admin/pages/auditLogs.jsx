@@ -2,9 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
 import { useRealtimeEvents } from "../../hooks/useRealtimeEvents";
 import { REALTIME_EVENTS } from "../../lib/realtime";
-import { useGetProfileQuery } from "../../store/api/sharedApi";
 import { fetchAuditLogs } from "../../service/audit.api";
-import { useAuth } from "../../utils/AuthContext";
+import {
+  WorkspaceInlineActionButton,
+  WorkspaceInlineFilters,
+  WorkspaceInlineInputField,
+  WorkspaceInlineSearchField
+} from "../../shared/components/WorkspaceInlineFilters";
 
 const emptyFilters = {
   q: "",
@@ -157,7 +161,6 @@ function AuditCard({ row }) {
 }
 
 export default function AuditLogs() {
-  const { user } = useAuth();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -165,12 +168,6 @@ export default function AuditLogs() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
   const [filters, setFilters] = useState(emptyFilters);
-  const profileQuery = useGetProfileQuery(
-    { userId: user?.userId },
-    { skip: !user?.userId }
-  );
-  const profile = profileQuery.data || null;
-  const profileLoading = Boolean(user?.userId) && profileQuery.isFetching && !profileQuery.data;
 
   const load = async (nextPage = page, nextLimit = limit, overrideFilters = null) => {
     setLoading(true);
@@ -208,47 +205,9 @@ export default function AuditLogs() {
   useRealtimeEvents(REALTIME_EVENTS.AUDIT, handleRealtimeRefresh);
 
   const pageCount = useMemo(() => Math.max(1, Math.ceil(total / limit)), [total, limit]);
-
-  const activeFilterCount = useMemo(
-    () => Object.values(filters).filter((value) => hasValue(value)).length,
+  const hasActiveFilters = useMemo(
+    () => Object.values(filters).some((value) => hasValue(value)),
     [filters]
-  );
-
-  const actorCoverage = useMemo(
-    () => rows.filter((row) => hasValue(row.actor_user_id)).length,
-    [rows]
-  );
-
-  const currentUserId = profile?.userId || "-";
-  const currentReferenceId = profile?.adminId || profile?.studentId || profile?.userId || "-";
-  const currentReferenceLabel = profile?.adminId
-    ? "Admin ID"
-    : profile?.studentId
-    ? "Student ID"
-    : "User ID";
-
-  const summary = useMemo(
-    () => [
-      {
-        label: "Total Records",
-        value: total,
-        helper: "Rows matching the current filters"
-      },
-      {
-        label: "Visible Rows",
-        value: rows.length,
-        helper: `Page ${page} of ${pageCount}`
-      },
-      {
-        label: "Rows With User ID",
-        value: `${actorCoverage}/${rows.length || 0}`,
-        helper:
-          actorCoverage === rows.length
-            ? "Audit actor data present"
-            : "Some rows are still missing actor data"
-      }
-    ],
-    [actorCoverage, page, pageCount, rows.length, total]
   );
 
   const onSearch = async (event) => {
@@ -263,169 +222,85 @@ export default function AuditLogs() {
 
   return (
     <div className="mx-auto w-full max-w-[1440px] space-y-6 bg-gradient-to-b from-blue-50 via-white to-blue-50/70 p-4 sm:p-6">
-      {/* <section className="rounded-[28px] border border-blue-200 bg-white p-5 shadow-sm shadow-blue-100/70 sm:p-6">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.32em] text-blue-500">
-              Audit Monitoring
-            </p>
-            <div>
-              <h1 className="text-2xl font-semibold text-blue-950 sm:text-3xl">Audit Logs</h1>
-              <p className="mt-2 max-w-2xl text-sm text-blue-700">
-                {profileLoading
-                  ? "Loading admin profile..."
-                  : `Signed in as ${profile?.name || "Admin"} | ${currentReferenceLabel}: ${currentReferenceId}`}
-              </p>
-              <p className="mt-1 break-all text-xs text-blue-500">User ID: {currentUserId}</p>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-              <div className="font-semibold text-blue-950">
-                {profile?.name || "Admin"}
-              </div>
-              <div>{formatRoleLabel(profile?.role || "ADMIN")}</div>
-            </div>
-            <button
-              onClick={() => load(page, limit)}
-              disabled={loading}
-              className="inline-flex items-center justify-center rounded-2xl border border-blue-300 px-4 py-2.5 text-sm font-medium text-blue-800 transition hover:border-blue-400 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {loading ? "Refreshing..." : "Refresh"}
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-6 grid gap-3 md:grid-cols-3">
-          {summary.map((item) => (
-            <div
-              key={item.label}
-              className="rounded-3xl border border-blue-200 bg-blue-50/80 p-4"
-            >
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-500">
-                {item.label}
-              </p>
-              <p className="mt-3 text-3xl font-semibold text-blue-950">{item.value}</p>
-              <p className="mt-2 text-sm text-blue-700">{item.helper}</p>
-            </div>
-          ))}
-        </div>
-      </section> */}
-
       <form
         onSubmit={onSearch}
-        className="rounded-[28px] border border-blue-200 bg-white p-5 shadow-sm shadow-blue-100/70 sm:p-6"
+        className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
       >
-        <div className="flex flex-col gap-2 border-b border-blue-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-blue-950">Filters</h2>
-            <p className="text-sm text-blue-700">
-              Search by action, entity, actor, UUID, or date range.
-            </p>
-          </div>
-          <div className="text-sm text-blue-500">
-            Active filters: <span className="font-semibold text-blue-950">{activeFilterCount}</span>
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-blue-800">Search</span>
-            <input
-              className="w-full rounded-2xl border border-blue-200 bg-blue-50/40 px-4 py-3 text-sm text-blue-950 outline-none transition placeholder:text-blue-300 focus:border-blue-400"
-              placeholder="Action, entity, actor, reason"
-              value={filters.q}
-              onChange={(event) => setFilters((prev) => ({ ...prev, q: event.target.value }))}
-            />
-          </label>
-
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-blue-800">Action</span>
-            <input
-              className="w-full rounded-2xl border border-blue-200 bg-blue-50/40 px-4 py-3 text-sm text-blue-950 outline-none transition placeholder:text-blue-300 focus:border-blue-400"
-              placeholder="GROUP_CREATED"
-              value={filters.action}
-              onChange={(event) => setFilters((prev) => ({ ...prev, action: event.target.value }))}
-            />
-          </label>
-
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-blue-800">Entity Type</span>
-            <input
-              className="w-full rounded-2xl border border-blue-200 bg-blue-50/40 px-4 py-3 text-sm text-blue-950 outline-none transition placeholder:text-blue-300 focus:border-blue-400"
-              placeholder="GROUP, MEMBERSHIP"
-              value={filters.entity_type}
-              onChange={(event) =>
-                setFilters((prev) => ({ ...prev, entity_type: event.target.value }))
-              }
-            />
-          </label>
-
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-blue-800">Actor Role</span>
-            <input
-              className="w-full rounded-2xl border border-blue-200 bg-blue-50/40 px-4 py-3 text-sm text-blue-950 outline-none transition placeholder:text-blue-300 focus:border-blue-400"
-              placeholder="ADMIN"
-              value={filters.actor_role}
-              onChange={(event) =>
-                setFilters((prev) => ({ ...prev, actor_role: event.target.value }))
-              }
-            />
-          </label>
-
-          <label className="space-y-2 md:col-span-2 xl:col-span-1">
-            <span className="text-sm font-medium text-blue-800">Actor User ID</span>
-            <input
-              className="w-full rounded-2xl border border-blue-200 bg-blue-50/40 px-4 py-3 text-sm text-blue-950 outline-none transition placeholder:text-blue-300 focus:border-blue-400"
-              placeholder="UUID user id"
-              value={filters.actor_user_id}
-              onChange={(event) =>
-                setFilters((prev) => ({ ...prev, actor_user_id: event.target.value }))
-              }
-            />
-          </label>
-
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-blue-800">From Date</span>
-            <input
-              type="date"
-              className="w-full rounded-2xl border border-blue-200 bg-blue-50/40 px-4 py-3 text-sm text-blue-950 outline-none transition focus:border-blue-400"
-              value={filters.from_date}
-              onChange={(event) =>
-                setFilters((prev) => ({ ...prev, from_date: event.target.value }))
-              }
-            />
-          </label>
-
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-blue-800">To Date</span>
-            <input
-              type="date"
-              className="w-full rounded-2xl border border-blue-200 bg-blue-50/40 px-4 py-3 text-sm text-blue-950 outline-none transition focus:border-blue-400"
-              value={filters.to_date}
-              onChange={(event) => setFilters((prev) => ({ ...prev, to_date: event.target.value }))}
-            />
-          </label>
-        </div>
-
-        <div className="mt-5 flex flex-col gap-3 border-t border-blue-200 pt-4 sm:flex-row sm:items-center">
-          <button
+        <WorkspaceInlineFilters className="border-0 p-0 shadow-none">
+          <WorkspaceInlineSearchField
+            label="Search"
+            value={filters.q}
+            placeholder="Action, entity, actor, reason"
+            onChange={(event) => setFilters((prev) => ({ ...prev, q: event.target.value }))}
+          />
+          <WorkspaceInlineInputField
+            label="Action"
+            value={filters.action}
+            placeholder="GROUP_CREATED"
+            wrapperClassName="w-full sm:w-[180px]"
+            onChange={(event) => setFilters((prev) => ({ ...prev, action: event.target.value }))}
+          />
+          <WorkspaceInlineInputField
+            label="Entity Type"
+            value={filters.entity_type}
+            placeholder="GROUP, MEMBERSHIP"
+            wrapperClassName="w-full sm:w-[180px]"
+            onChange={(event) =>
+              setFilters((prev) => ({ ...prev, entity_type: event.target.value }))
+            }
+          />
+          <WorkspaceInlineInputField
+            label="Actor Role"
+            value={filters.actor_role}
+            placeholder="ADMIN"
+            wrapperClassName="w-full sm:w-[180px]"
+            onChange={(event) =>
+              setFilters((prev) => ({ ...prev, actor_role: event.target.value }))
+            }
+          />
+          <WorkspaceInlineInputField
+            label="Actor User ID"
+            value={filters.actor_user_id}
+            placeholder="UUID user id"
+            wrapperClassName="w-full sm:w-[200px]"
+            onChange={(event) =>
+              setFilters((prev) => ({ ...prev, actor_user_id: event.target.value }))
+            }
+          />
+          <WorkspaceInlineInputField
+            label="From Date"
+            value={filters.from_date}
+            inputType="date"
+            wrapperClassName="w-full sm:w-[170px]"
+            onChange={(event) =>
+              setFilters((prev) => ({ ...prev, from_date: event.target.value }))
+            }
+          />
+          <WorkspaceInlineInputField
+            label="To Date"
+            value={filters.to_date}
+            inputType="date"
+            wrapperClassName="w-full sm:w-[170px]"
+            onChange={(event) =>
+              setFilters((prev) => ({ ...prev, to_date: event.target.value }))
+            }
+          />
+          <WorkspaceInlineActionButton
             type="submit"
             disabled={loading}
-            className="inline-flex items-center justify-center rounded-2xl bg-blue-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+            className="gap-2 border-[#1754cf]/15 bg-[#1754cf]/8 text-[#1754cf] hover:bg-[#1754cf]/12 xl:min-w-[8rem]"
           >
-            {loading ? "Loading..." : "Apply Filters"}
-          </button>
-          <button
+            {loading ? "Loading..." : "Apply"}
+          </WorkspaceInlineActionButton>
+          <WorkspaceInlineActionButton
             type="button"
             onClick={onReset}
-            className="inline-flex items-center justify-center rounded-2xl border border-blue-300 px-4 py-2.5 text-sm font-medium text-blue-800 transition hover:border-blue-400 hover:bg-blue-50"
+            disabled={!hasActiveFilters}
+            className="gap-2 xl:min-w-[9rem]"
           >
-            Reset
-          </button>
-          <div className="text-sm text-blue-500 sm:ml-auto">Current result count: {total}</div>
-        </div>
+            Clear Filters
+          </WorkspaceInlineActionButton>
+        </WorkspaceInlineFilters>
       </form>
 
       {error ? (

@@ -11,6 +11,7 @@ const REALTIME_EVENTS = {
   ADMIN_NOTIFICATIONS: "realtime:admin-notifications",
   JOIN_REQUESTS: "realtime:join-requests",
   EVENT_JOIN_REQUESTS: "realtime:event-join-requests",
+  EVENT_TEAM_INVITATIONS: "realtime:event-team-invitations",
   LEADERSHIP_REQUESTS: "realtime:leadership-requests",
   GROUP_TIER_REQUESTS: "realtime:group-tier-requests",
   MEMBERSHIPS: "realtime:memberships",
@@ -60,6 +61,14 @@ const broadcastEventJoinRequestChanged = async (payload = {}) => {
     emitToTeam(payload.teamId, REALTIME_EVENTS.TEAM_MEMBERSHIPS, data);
     emitToStudent(payload.studentId, REALTIME_EVENTS.TEAM_MEMBERSHIPS, data);
   }
+};
+
+const broadcastEventTeamInvitationChanged = async (payload = {}) => {
+  const data = withRealtimeMeta(payload);
+
+  emitToAdmins(REALTIME_EVENTS.EVENT_TEAM_INVITATIONS, data);
+  emitToTeam(payload.teamId, REALTIME_EVENTS.EVENT_TEAM_INVITATIONS, data);
+  emitToStudent(payload.studentId, REALTIME_EVENTS.EVENT_TEAM_INVITATIONS, data);
 };
 
 const broadcastLeadershipRequestChanged = async (payload = {}) => {
@@ -147,6 +156,7 @@ module.exports = {
   broadcastAdminNotifications,
   broadcastJoinRequestChanged,
   broadcastEventJoinRequestChanged,
+  broadcastEventTeamInvitationChanged,
   broadcastLeadershipRequestChanged,
   broadcastGroupTierRequestChanged,
   broadcastMembershipChanged,

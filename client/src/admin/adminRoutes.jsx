@@ -18,11 +18,14 @@ const StudentManagement = lazy(() => import("./pages/studentManagement"));
 const StudentManagementDetail = lazy(() => import("./pages/studentManagementDetail"));
 const BasePointsManagement = lazy(() => import("./pages/basePointsManagement"));
 const TeamManagement = lazy(() => import("./pages/teamManagement"));
+const HubManagement = lazy(() => import("./pages/hubManagement"));
 const TeamMembershipManagement = lazy(() => import("./pages/teamMembershipManagement"));
+const HubMembershipManagement = lazy(() => import("./pages/hubMembershipManagement"));
 const TeamTargetManagement = lazy(() => import("./pages/teamTargetManagement"));
 const EligibilityManagement = lazy(() => import("./pages/eligibilityManagement"));
 const EventJoinRequestManagement = lazy(() => import("./pages/eventJoinRequestManagement"));
 const LeadershipRequestManagement = lazy(() => import("./pages/leadershipRequestManagement"));
+const OnDutyManagement = lazy(() => import("./pages/onDutyManagement"));
 const TierChangeRequestManagement = lazy(() => import("./pages/tierChangeRequestManagement"));
 const EventDetailsPage = lazy(() => import("./pages/events/EventDetailsPage"));
 const GroupManagementPage = lazy(() => import("./pages/groups/GroupManagementPage"));
@@ -64,16 +67,17 @@ const AdminRoutes = () => {
           <Route path="/student-management/:studentId" element={<StudentManagementDetail />} />
           <Route path="/base-points" element={<BasePointsManagement />} />
           <Route path="/team-management" element={<TeamManagement scope="TEAM" />} />
-          <Route path="/hub-management" element={<TeamManagement scope="HUB" />} />
+          <Route path="/hub-management" element={<HubManagement />} />
           <Route path="/event-group-management" element={<TeamManagement scope="EVENT_GROUP" />} />
           <Route path="/team-membership-management" element={<TeamMembershipManagement scope="TEAM" />} />
-          <Route path="/hub-membership-management" element={<TeamMembershipManagement scope="HUB" />} />
+          <Route path="/hub-membership-management" element={<HubMembershipManagement />} />
           <Route
             path="/event-group-membership-management"
             element={<TeamMembershipManagement scope="EVENT_GROUP" />}
           />
           <Route path="/team-target-management" element={<TeamTargetManagement />} />
           <Route path="/event-join-requests" element={<EventJoinRequestManagement />} />
+          <Route path="/on-duty-management" element={<OnDutyManagement />} />
           <Route path="/leadership-management" element={<LeadershipRequestManagement />} />
           <Route path="/tier-management" element={<TierChangeRequestManagement />} />
           <Route path="*" element={<Navigate to="/" replace />} />

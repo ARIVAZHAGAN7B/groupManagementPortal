@@ -12,7 +12,7 @@ const DashboardGate = () => {
 
   if (!user) return <Navigate to="/login" replace />;
 
-  if (user.role === "ADMIN") return <AdminLayout />;
+  if (user.role === "ADMIN" || user.role === "SYSTEM_ADMIN") return <AdminLayout />;
   if (user.role === "STUDENT") return <StudentRoutes />;
 
   return <Navigate to="/login" replace />;

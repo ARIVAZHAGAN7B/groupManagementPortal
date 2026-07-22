@@ -1,0 +1,21 @@
+module.exports = [
+  "server/sql/core-auth.schema.sql",
+  "server/modules/group/group.schema.sql",
+  "server/modules/phase/phase.schema.sql",
+  "server/modules/systemConfig/systemConfig.schema.sql",
+  "server/modules/event/event.schema.sql",
+  "server/modules/hub/hub.schema.sql",
+  "server/modules/team/team.schema.sql",
+  "server/modules/eventTeamInvitation/eventTeamInvitation.schema.sql",
+  "server/modules/onDuty/onDuty.schema.sql",
+  "server/modules/membership/membership.schema.sql",
+  "server/modules/joinRequest/joinRequest.schema.sql",
+  "server/modules/eventJoinRequest/eventJoinRequest.schema.sql",
+  "server/modules/groupPoint/groupPoint.schema.sql",
+  "server/modules/eligibility/eligibility.schema.sql",
+  "server/modules/groupTierRequest/groupTierRequest.schema.sql",
+  "server/modules/leadershipRequest/leadershipRequest.schema.sql",
+  "server/modules/teamChangeTier/teamChangeTier.schema.sql",
+  "server/modules/teamTarget/teamTarget.schema.sql",
+  "server/modules/audit/audit.schema.sql"
+];

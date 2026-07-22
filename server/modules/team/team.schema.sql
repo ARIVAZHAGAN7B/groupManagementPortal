@@ -3,9 +3,10 @@ CREATE TABLE IF NOT EXISTS teams (
   event_id INT NULL,
   team_code VARCHAR(50) NOT NULL,
   team_name VARCHAR(120) NOT NULL,
-  team_type ENUM('TEAM','HUB','SECTION','EVENT') NOT NULL DEFAULT 'TEAM',
+  team_type ENUM('TEAM','SECTION','EVENT') NOT NULL DEFAULT 'TEAM',
   status ENUM('ACTIVE','INACTIVE','FROZEN','ARCHIVED') NOT NULL DEFAULT 'ACTIVE',
   description TEXT NULL,
+  rounds_cleared INT NOT NULL DEFAULT 0,
   created_by VARCHAR(36) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -14,6 +15,7 @@ CREATE TABLE IF NOT EXISTS teams (
   KEY idx_teams_status (status),
   KEY idx_teams_type_status (team_type, status),
   KEY idx_teams_event_status (event_id, status),
+  KEY idx_teams_event_rounds (event_id, rounds_cleared),
   KEY idx_teams_type_event_status (team_type, event_id, status),
   CONSTRAINT fk_teams_event
     FOREIGN KEY (event_id)
@@ -60,3 +62,28 @@ CREATE TABLE IF NOT EXISTS team_membership (
 --     FOREIGN KEY (event_id) REFERENCES events(event_id)
 --     ON UPDATE CASCADE ON DELETE SET NULL;
 
+SET @teams_schema := DATABASE();
+
+SET @ddl := IF(
+  EXISTS(
+    SELECT 1 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = @teams_schema AND TABLE_NAME = 'teams' AND COLUMN_NAME = 'rounds_cleared'
+  ),
+  'SELECT 1',
+  'ALTER TABLE teams ADD COLUMN rounds_cleared INT NOT NULL DEFAULT 0 AFTER description'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @ddl := IF(
+  EXISTS(
+    SELECT 1 FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = @teams_schema AND TABLE_NAME = 'teams' AND INDEX_NAME = 'idx_teams_event_rounds'
+  ),
+  'SELECT 1',
+  'ALTER TABLE teams ADD KEY idx_teams_event_rounds (event_id, rounds_cleared)'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;

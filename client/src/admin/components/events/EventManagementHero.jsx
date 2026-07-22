@@ -13,12 +13,12 @@ export default function EventManagementHero({
 }) {
   return (
     <AdminWorkspaceHero
-      eyebrow="Event Workspace"
-      title="Event Management"
+      eyebrow="Participation Workspace"
+      title="Event Listings"
       titleMeta={
         editingId ? (
           <AdminBadge className="border-[#1754cf]/15 bg-white/90 text-[#1754cf]">
-            Editing Event #{editingId}
+            Editing Listing #{editingId}
           </AdminBadge>
         ) : null
       }
@@ -40,7 +40,7 @@ export default function EventManagementHero({
             className="bg-[#1754cf] text-white shadow-lg shadow-[#1754cf]/20 hover:opacity-90"
           >
             <AddRoundedIcon sx={{ fontSize: 18 }} />
-            New Event
+            Add Event Listing
           </AdminWorkspaceHeroActionButton>
         </div>
       }

@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import AllGroupsBadge from "../allGroups/AllGroupsBadge";
-import {
-  TeamDesktopTableShell,
-  TeamTableSearchField,
-  TeamTableSelectField
-} from "./TeamDesktopTableControls";
+import { TeamDesktopTableShell } from "./TeamDesktopTableControls";
 import TeamMembersPreviewModal from "./TeamMembersPreviewModal";
 import TeamPageDetailTile from "./TeamPageDetailTile";
-import TeamPageFilters from "./TeamPageFilters";
 import TeamPageHero from "./TeamPageHero";
 import {
   fetchMyTeamMemberships,
@@ -16,14 +11,9 @@ import {
   fetchTeams,
   joinTeam
 } from "../../../service/teams.api";
+import { WorkspaceFilterBar } from "../../../shared/components/WorkspaceInlineFilters";
 import { formatLabel, formatMemberCount, formatShortDate } from "./teamPage.utils";
 import { getTeamScopeConfig, TEAM_STATUS_OPTIONS } from "./teamScope.constants";
-
-const inputClassName =
-  "w-full rounded-2xl border border-slate-300 bg-[#f3f4f6] px-4 py-3 text-sm font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#1754cf]/35 focus:ring-2 focus:ring-[#1754cf]/10";
-
-const selectClassName =
-  "w-full rounded-2xl border border-slate-300 bg-[#f3f4f6] px-4 py-3 text-sm font-medium text-slate-700 outline-none transition focus:border-[#1754cf]/35 focus:ring-2 focus:ring-[#1754cf]/10";
 
 const getLatestCreatedLabel = (rows) => {
   const timestamps = (Array.isArray(rows) ? rows : [])
@@ -34,9 +24,8 @@ const getLatestCreatedLabel = (rows) => {
   return formatShortDate(new Date(Math.max(...timestamps)));
 };
 
-export default function ScopedTeamDirectoryPage({ teamType = "TEAM" }) {
-  const scope = useMemo(() => getTeamScopeConfig(teamType), [teamType]);
-
+export default function ScopedTeamDirectoryPage() {
+  const scope = useMemo(() => getTeamScopeConfig(), []);
   const [rows, setRows] = useState([]);
   const [myMemberships, setMyMemberships] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -98,34 +87,46 @@ export default function ScopedTeamDirectoryPage({ teamType = "TEAM" }) {
     });
   }, [query, rows, statusFilter]);
 
-  const activeFilters = useMemo(() => {
-    const items = [];
-
-    if (String(query || "").trim()) {
-      items.push(`Search: ${String(query).trim()}`);
-    }
-    if (statusFilter !== "ALL") {
-      items.push(`Status: ${formatLabel(statusFilter)}`);
-    }
-
-    return items;
-  }, [query, statusFilter]);
-
   const activeRowsCount = useMemo(
     () => rows.filter((row) => String(row.status || "").toUpperCase() === "ACTIVE").length,
     [rows]
   );
   const latestCreatedLabel = useMemo(() => getLatestCreatedLabel(rows), [rows]);
-  const canResetFilters = activeFilters.length > 0;
-  const headerSummary =
-    filteredRows.length !== rows.length
-      ? `Showing ${filteredRows.length} of ${rows.length} ${scope.pluralLower}`
-      : `${rows.length} ${scope.pluralLower} in directory`;
+  const canResetFilters = Boolean(String(query || "").trim()) || statusFilter !== "ALL";
 
   const resetFilters = useCallback(() => {
     setQuery("");
     setStatusFilter("ALL");
   }, []);
+
+  const filterFields = useMemo(
+    () => [
+      {
+        key: "query",
+        type: "search",
+        label: "Team",
+        value: query,
+        placeholder: scope.searchPlaceholder,
+        onChangeValue: setQuery
+      },
+      {
+        key: "status",
+        type: "select",
+        label: "Status",
+        value: statusFilter,
+        onChangeValue: setStatusFilter,
+        wrapperClassName: "w-full sm:w-[180px]",
+        options: [
+          { value: "ALL", label: "All statuses" },
+          ...TEAM_STATUS_OPTIONS.map((status) => ({
+            value: status,
+            label: formatLabel(status)
+          }))
+        ]
+      }
+    ],
+    [query, scope.searchPlaceholder, statusFilter]
+  );
 
   const resolveJoinAction = useCallback(
     (row) => {
@@ -172,9 +173,7 @@ export default function ScopedTeamDirectoryPage({ teamType = "TEAM" }) {
       const joinAction = resolveJoinAction(row);
       if (joinAction.disabled || !row?.team_id) return;
 
-      const ok = window.confirm(
-        `${scope.joinConfirmLabel} ${row.team_name || row.team_code}?`
-      );
+      const ok = window.confirm(`${scope.joinConfirmLabel} ${row.team_name || row.team_code}?`);
       if (!ok) return;
 
       setBusyTeamId(Number(row.team_id));
@@ -226,6 +225,10 @@ export default function ScopedTeamDirectoryPage({ teamType = "TEAM" }) {
     [scope.singularLower]
   );
 
+  const headerSummary = canResetFilters
+    ? `${filteredRows.length} teams match the current filters`
+    : `${rows.length} teams in directory`;
+
   return (
     <div className="max-w-screen-2xl space-y-3 p-4 md:p-5">
       <TeamPageHero
@@ -239,10 +242,7 @@ export default function ScopedTeamDirectoryPage({ teamType = "TEAM" }) {
         stats={[
           {
             accentClass: "bg-[#1754cf]",
-            detail:
-              filteredRows.length !== rows.length
-                ? `Visible ${filteredRows.length} after filters`
-                : `All ${scope.pluralLower} currently listed`,
+            detail: "Team records currently available in the directory",
             label: "Total",
             value: rows.length
           },
@@ -260,7 +260,7 @@ export default function ScopedTeamDirectoryPage({ teamType = "TEAM" }) {
           },
           {
             accentClass: "bg-slate-400",
-            detail: `Most recently created ${scope.singularLower}`,
+            detail: "Most recently created team",
             label: "Latest Created",
             value: latestCreatedLabel
           }
@@ -273,49 +273,15 @@ export default function ScopedTeamDirectoryPage({ teamType = "TEAM" }) {
         </div>
       ) : null}
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:hidden">
-        <TeamPageFilters
-          className="lg:hidden"
-          activeFilters={activeFilters}
-          canReset={canResetFilters}
-          itemLabel={scope.pluralLower}
+      <div className="lg:hidden">
+        <WorkspaceFilterBar
+          fields={filterFields}
           onReset={resetFilters}
-          panelTitle={`Filter ${scope.title}`}
-          resultCount={filteredRows.length}
-          totalCount={rows.length}
-          withDivider
-        >
-          <label className="block">
-            <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-              Search
-            </span>
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={scope.searchPlaceholder}
-              className={inputClassName}
-            />
-          </label>
+          hasActiveFilters={canResetFilters}
+        />
+      </div>
 
-          <label className="block">
-            <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-              Status
-            </span>
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              className={selectClassName}
-            >
-              <option value="ALL">All statuses</option>
-              {TEAM_STATUS_OPTIONS.map((status) => (
-                <option key={status} value={status}>
-                  {formatLabel(status)}
-                </option>
-              ))}
-            </select>
-          </label>
-        </TeamPageFilters>
-
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:hidden">
         {loading ? (
           <div className="px-4 py-12 text-center text-sm text-slate-500">
             Loading {scope.pluralLower}...
@@ -355,10 +321,7 @@ export default function ScopedTeamDirectoryPage({ teamType = "TEAM" }) {
                       label="Members"
                       value={formatMemberCount(row.active_member_count)}
                     />
-                    <TeamPageDetailTile
-                      label="Created"
-                      value={formatShortDate(row.created_at)}
-                    />
+                    <TeamPageDetailTile label="Created" value={formatShortDate(row.created_at)} />
                   </div>
 
                   <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
@@ -401,29 +364,12 @@ export default function ScopedTeamDirectoryPage({ teamType = "TEAM" }) {
         canReset={canResetFilters}
         onReset={resetFilters}
         toolbar={
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-            <div className="min-w-0 xl:w-[22rem]">
-              <TeamTableSearchField
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={scope.searchPlaceholder}
-              />
-            </div>
-
-            <div className="min-w-0 xl:w-44">
-              <TeamTableSelectField
-                value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value)}
-              >
-                <option value="ALL">All statuses</option>
-                {TEAM_STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>
-                    {formatLabel(status)}
-                  </option>
-                ))}
-              </TeamTableSelectField>
-            </div>
-          </div>
+          <WorkspaceFilterBar
+            fields={filterFields}
+            onReset={resetFilters}
+            hasActiveFilters={canResetFilters}
+            showReset={false}
+          />
         }
       >
         <div className="overflow-x-auto overflow-y-visible rounded-2xl">

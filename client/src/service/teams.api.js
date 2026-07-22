@@ -24,14 +24,17 @@ export async function fetchTeams(params = {}) {
   return Array.isArray(data) ? data : [];
 }
 
-export async function fetchHubs(params = {}) {
-  return fetchTeams({ team_type: "HUB", ...params });
-}
-
 export async function fetchTeamsByEvent(eventId, params = {}) {
   const data = await cachedGet(`/api/teams/event/${eventId}`, { params }, {
     tags: [CLIENT_CACHE_TAGS.TEAMS],
     ttlMs: CLIENT_CACHE_TTL.MEDIUM
+  });
+  return Array.isArray(data) ? data : [];
+}
+
+export async function searchEventRegistrationCandidates(eventId, params = {}) {
+  const { data } = await api.get(`/api/event-groups/event/${eventId}/student-candidates`, {
+    params
   });
   return Array.isArray(data) ? data : [];
 }
@@ -120,18 +123,30 @@ export async function createEventTeam(eventId, payload) {
   });
 }
 
+export async function registerIndividualEvent(eventId) {
+  return postWithInvalidation(
+    `/api/event-groups/event/${eventId}/individual-registration`,
+    {},
+    {
+      invalidateTags: TEAM_INVALIDATION_TAGS
+    }
+  );
+}
+
 export async function createEventGroup(eventId, payload) {
   return createEventTeam(eventId, payload);
+}
+
+export async function updateEventGroupRoundProgress(id, payload) {
+  return putWithInvalidation(`/api/event-groups/${id}/round-progress`, payload, {
+    invalidateTags: TEAM_INVALIDATION_TAGS
+  });
 }
 
 export async function createTeam(payload) {
   return postWithInvalidation("/api/teams", payload, {
     invalidateTags: TEAM_INVALIDATION_TAGS
   });
-}
-
-export async function createHub(payload) {
-  return createTeam({ ...payload, team_type: "HUB" });
 }
 
 export async function updateEventGroup(id, payload) {
@@ -146,10 +161,6 @@ export async function updateTeam(id, payload) {
   });
 }
 
-export async function updateHub(id, payload) {
-  return updateTeam(id, { ...payload, team_type: "HUB" });
-}
-
 export async function updateTeamMembership(membershipId, payload) {
   return putWithInvalidation(`/api/teams/memberships/${membershipId}`, payload, {
     invalidateTags: TEAM_INVALIDATION_TAGS
@@ -160,10 +171,6 @@ export async function activateTeam(id) {
   return putWithInvalidation(`/api/teams/${id}/activate`, undefined, {
     invalidateTags: TEAM_INVALIDATION_TAGS
   });
-}
-
-export async function activateHub(id) {
-  return activateTeam(id);
 }
 
 export async function activateEventGroup(id) {
@@ -178,10 +185,6 @@ export async function freezeTeam(id) {
   });
 }
 
-export async function freezeHub(id) {
-  return freezeTeam(id);
-}
-
 export async function freezeEventGroup(id) {
   return putWithInvalidation(`/api/event-groups/${id}/freeze`, undefined, {
     invalidateTags: TEAM_INVALIDATION_TAGS
@@ -194,10 +197,6 @@ export async function archiveTeam(id) {
   });
 }
 
-export async function archiveHub(id) {
-  return archiveTeam(id);
-}
-
 export async function archiveEventGroup(id) {
   return putWithInvalidation(`/api/event-groups/${id}/archive`, undefined, {
     invalidateTags: TEAM_INVALIDATION_TAGS
@@ -208,10 +207,6 @@ export async function deleteTeam(id) {
   return deleteWithInvalidation(`/api/teams/${id}`, {}, {
     invalidateTags: TEAM_INVALIDATION_TAGS
   });
-}
-
-export async function deleteHub(id) {
-  return deleteTeam(id);
 }
 
 export async function leaveTeamMembership(membershipId, payload = {}) {

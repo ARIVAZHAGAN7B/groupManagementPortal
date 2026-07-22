@@ -86,7 +86,7 @@ export function AdminIconActionButton({
       title={label}
       aria-label={label}
       className={joinClasses(
-        "inline-flex items-center justify-center transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+        "inline-flex cursor-pointer items-center justify-center transition-colors disabled:cursor-not-allowed disabled:opacity-40",
         sizeClassName,
         baseClassName,
         className
@@ -111,8 +111,9 @@ export function AdminTextActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
+      title={label}
       className={joinClasses(
-        "rounded-md text-center transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+        "cursor-pointer rounded-md text-center transition-colors disabled:cursor-not-allowed disabled:opacity-40",
         fullWidth ? "w-full whitespace-nowrap" : "",
         sizeClassName,
         textClassName,

@@ -4,7 +4,11 @@ import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import { useNavigate, useParams } from "react-router-dom";
 import AllGroupsBadge from "../allGroups/AllGroupsBadge";
 import TeamPageDetailTile from "./TeamPageDetailTile";
-import { fetchMyTeamMemberships, fetchTeamById, fetchTeamMemberships } from "../../../service/teams.api";
+import {
+  fetchMyTeamMemberships,
+  fetchTeamById,
+  fetchTeamMemberships
+} from "../../../service/teams.api";
 import {
   formatDateTime,
   formatLabel,
@@ -32,11 +36,10 @@ function MemberCard({ row }) {
   );
 }
 
-export default function ScopedTeamDetailsPage({ teamType = "TEAM" }) {
+export default function ScopedTeamDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const scope = useMemo(() => getTeamScopeConfig(teamType), [teamType]);
-
+  const scope = useMemo(() => getTeamScopeConfig(), []);
   const [team, setTeam] = useState(null);
   const [members, setMembers] = useState([]);
   const [myMembership, setMyMembership] = useState(null);
@@ -66,7 +69,9 @@ export default function ScopedTeamDetailsPage({ teamType = "TEAM" }) {
         memberships.find((row) => Number(row.team_id) === Number(teamRow.team_id)) || null
       );
     } catch (err) {
-      setError(err?.response?.data?.message || err?.message || `Failed to load ${scope.singularLower}`);
+      setError(
+        err?.response?.data?.message || err?.message || `Failed to load ${scope.singularLower}`
+      );
       setTeam(null);
       setMembers([]);
       setMyMembership(null);
@@ -117,7 +122,9 @@ export default function ScopedTeamDetailsPage({ teamType = "TEAM" }) {
             <span className="mb-2 block text-xs font-bold uppercase tracking-[0.24em] text-[#1754cf]">
               {scope.detailsEyebrow}
             </span>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">{scope.detailsTitle}</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+              {scope.detailsTitle}
+            </h1>
             <p className="mt-2 text-xl font-bold text-slate-900">{team.team_name || "-"}</p>
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center rounded-full border border-white/80 bg-white/90 px-3 py-1 text-xs font-semibold text-[#1754cf]">

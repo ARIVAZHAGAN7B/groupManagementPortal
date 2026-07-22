@@ -67,6 +67,7 @@
     "jsonwebtoken": "^9.0.3",
     "jwa": "^2.0.1",
     "jws": "^4.0.1",
+    "knex": "^3.3.0",
     "lodash.includes": "^4.3.0",
     "lodash.isboolean": "^3.0.3",
     "lodash.isinteger": "^4.0.4",
@@ -133,10 +134,13 @@
   },
   "scripts": {
     "schema:apply": "node scripts/applySchema.js",
+    "migrate": "knex migrate:latest --knexfile knexfile.js",
+    "migrate:status": "knex migrate:status --knexfile knexfile.js",
     "admin:bootstrap": "node scripts/bootstrapAdmin.js",
     "indexes:apply": "node scripts/applyPerformanceIndexes.js",
+    "dev": "nodemon server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon server.js"
+    "start": "node server.js"
   },
   "keywords": [],
   "author": "",

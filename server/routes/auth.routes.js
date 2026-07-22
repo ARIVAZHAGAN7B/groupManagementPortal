@@ -1,11 +1,12 @@
 const express = require("express");
-const { login, logout } = require("../controllers/auth.controller");
+const { listDemoAccounts, login, logout } = require("../controllers/auth.controller");
 const { authenticate } = require("../middlewares/auth.middleware");
 const { getSessionExpiresAt } = require("../utils/jwt");
 
 const router = express.Router();
 
 router.post("/login", login);
+router.get("/demo-accounts", listDemoAccounts);
 router.post("/logout", authenticate, logout);
 router.get("/me", authenticate, (req, res) => {
   // req.user is set by authenticate middleware

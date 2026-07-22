@@ -40,9 +40,55 @@ const login = async (req, res) => {
   });
 };
 
+const listDemoAccounts = async (req, res) => {
+  try {
+    const [students] = await db.query(
+      `SELECT
+         u.user_id AS userId,
+         u.name,
+         u.email,
+         u.role,
+         s.student_id AS accountId,
+         s.department,
+         s.year
+       FROM users u
+       INNER JOIN students s ON s.user_id = u.user_id
+       WHERE u.status = 'ACTIVE'
+         AND s.status = 'ACTIVE'
+         AND u.role IN ('STUDENT', 'CAPTAIN')
+       ORDER BY u.created_at DESC
+       LIMIT 5`
+    );
+
+    const [admins] = await db.query(
+      `SELECT
+         u.user_id AS userId,
+         u.name,
+         u.email,
+         u.role,
+         a.admin_id AS accountId
+       FROM users u
+       INNER JOIN admins a ON a.user_id = u.user_id
+       WHERE u.status = 'ACTIVE'
+         AND a.status = 'ACTIVE'
+         AND u.role IN ('ADMIN', 'SYSTEM_ADMIN')
+       ORDER BY u.created_at DESC
+       LIMIT 5`
+    );
+
+    res.json({
+      students,
+      admins
+    });
+  } catch (error) {
+    console.error("Failed to load demo accounts:", error);
+    res.status(500).json({ message: "Failed to load demo accounts" });
+  }
+};
+
 const logout = (req, res) => {
   res.clearCookie("token", getCookieOptions());
   res.json({ message: "Logged out successfully" });
 };
 
-module.exports = { login, logout };
+module.exports = { listDemoAccounts, login, logout };

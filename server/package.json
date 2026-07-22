@@ -134,12 +134,9 @@
   },
   "scripts": {
     "schema:apply": "node scripts/applySchema.js",
-<<<<<<< HEAD
     "migrate": "knex migrate:latest --knexfile knexfile.js",
     "migrate:status": "knex migrate:status --knexfile knexfile.js",
-=======
     "schema:reset": "node scripts/resetDatabase.js",
->>>>>>> 87e94e8231058ee4bb28111484afa80acc4a11f4
     "admin:bootstrap": "node scripts/bootstrapAdmin.js",
     "indexes:apply": "node scripts/applyPerformanceIndexes.js",
     "dev": "nodemon server.js",

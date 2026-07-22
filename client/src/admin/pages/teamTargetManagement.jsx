@@ -322,30 +322,11 @@ export default function TeamTargetManagement() {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-<<<<<<< HEAD
           className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1754cf]/20 lg:max-w-md"
           placeholder="Search selected round..."
         />
 
         <select
-=======
-          className="w-full lg:max-w-md border border-gray-200 rounded-lg px-3 py-1.5 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 transition"
-          placeholder="Team, type, event..."
-        />
-
-        <select
-          value={teamTypeFilter}
-          onChange={(e) => setTeamTypeFilter(e.target.value)}
-          className="w-full lg:w-[170px] border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 transition"
-        >
-          <option value="ALL">All Types</option>
-          <option value="TEAM">TEAM</option>
-          <option value="SECTION">SECTION</option>
-          <option value="EVENT">EVENT</option>
-        </select>
-
-        <select
->>>>>>> 87e94e8231058ee4bb28111484afa80acc4a11f4
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1754cf]/20 lg:w-[180px]"

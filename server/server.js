@@ -16,6 +16,7 @@ const http = require("http");
 const env = require("./config/env");
 const app = require("./app");
 const db = require("./config/db"); // import your MySQL pool
+const { runMigrations } = require("./scripts/runMigrations");
 const { startPhaseEndScheduler } = require("./jobs/phaseEndScheduler");
 const { startPhaseFinalizationCron } = require("./jobs/phaseFinalization.cron");
 const { initializeRealtime } = require("./realtime/socket");
@@ -26,6 +27,8 @@ const PORT = env.port;
 
 const startServer = async () => {
   try {
+    await runMigrations();
+
     // Test the DB connection
     const [rows] = await db.query("SELECT 1 + 1 AS result");
     console.log("DB connected, test query result:", rows[0].result);

@@ -182,6 +182,7 @@ const LoginPage = ({ onLogin }) => {
                 type="button"
                 onClick={() => {
                   setEmail(account.email || "");
+                  setPassword("Password@123");
                   setError("");
                 }}
                 className="w-full rounded-xl border border-indigo-100 bg-white px-3 py-2 text-left transition hover:border-indigo-300 hover:bg-indigo-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-indigo-500"

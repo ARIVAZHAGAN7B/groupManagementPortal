@@ -149,18 +149,27 @@ export default function LeadershipRequestManagement() {
     setPage(1);
   }, [groupFilter, q, requestedRoleFilter, setPage]);
 
-  const stats = useMemo(
-    () => ({
+  const stats = useMemo(() => {
+    let captainRequests = 0;
+    let viceCaptainRequests = 0;
+    for (const r of rows) {
+      const role = String(r?.requested_role || "").toUpperCase();
+      if (role === "CAPTAIN") captainRequests++;
+      else if (role === "VICE_CAPTAIN") viceCaptainRequests++;
+    }
+
+    return {
       total: rows.length,
       uniqueGroups: distinctGroups.length,
       withoutLeadership:
         Number(
           notifications?.groups_with_missing_leadership_count ??
             notifications?.groups_without_leadership_count
-        ) || 0
-    }),
-    [distinctGroups.length, notifications, rows.length]
-  );
+        ) || 0,
+      captainRequests,
+      viceCaptainRequests
+    };
+  }, [distinctGroups.length, notifications, rows]);
 
   const closeModal = () => {
     if (actionBusy) return;

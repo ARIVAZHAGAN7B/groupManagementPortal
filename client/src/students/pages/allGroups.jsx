@@ -12,7 +12,8 @@ import { getMyJoinRequests, applyJoinRequest } from "../../service/joinRequests.
 import { useAuth } from "../../utils/AuthContext";
 import AllGroupsDesktopTable from "../components/allGroups/AllGroupsDesktopTable";
 import AllGroupsHero from "../components/allGroups/AllGroupsHero";
-import AllGroupsMobileCards from "../components/allGroups/AllGroupsMobileCards";
+import AllGroupsFilters from "../components/allGroups/AllGroupsFilters";
+import AllGroupsGridCards from "../components/allGroups/AllGroupsGridCards";
 import { hasRank } from "../components/allGroups/allGroups.constants";
 
 const toGroupRankMap = (groups = []) => {
@@ -151,6 +152,7 @@ export default function AllGroups() {
   const [pointsMinFilter, setPointsMinFilter] = useState("");
   const [acceptingFilter, setAcceptingFilter] = useState("ALL");
   const [sortState, setSortState] = useState(() => createDefaultSortState());
+  const [viewMode, setViewMode] = useState("cards");
   const debouncedGroupQuery = useDebouncedValue(groupQuery, 300);
   const debouncedCaptainFilter = useDebouncedValue(captainFilter, 300);
   const debouncedPointsMinFilter = useDebouncedValue(pointsMinFilter, 300);
@@ -317,6 +319,29 @@ export default function AllGroups() {
       }),
     [groups, groupRankMap]
   );
+
+  const directoryStats = useMemo(() => {
+    let total = mergedGroups.length;
+    let recruiting = 0;
+    let vacancies = 0;
+    const tiers = { A: 0, B: 0, C: 0, D: 0 };
+
+    for (const g of mergedGroups) {
+      if (g.status === "ACTIVE" && (g.accepting_applications === 1 || g.accepting_applications === true)) {
+        recruiting++;
+      }
+      const v = Number(g.vacancies);
+      if (Number.isFinite(v) && v > 0) {
+        vacancies += v;
+      }
+      const t = String(g.tier || "").toUpperCase();
+      if (tiers[t] !== undefined) {
+        tiers[t]++;
+      }
+    }
+
+    return { total, recruiting, vacancies, tiers };
+  }, [mergedGroups]);
 
   const tierOptions = useMemo(
     () => TIER_SORT_ORDER,
@@ -709,6 +734,7 @@ export default function AllGroups() {
       <AllGroupsHero
         loading={loading}
         onRefresh={refreshAll}
+        stats={directoryStats}
       />
 
       {err ? (
@@ -727,20 +753,28 @@ export default function AllGroups() {
         </div>
       ) : null}
 
-      <AllGroupsMobileCards
-        filterProps={filterProps}
-        rows={filtered}
-        onJoin={onJoin}
-        onView={(groupId) => nav(`/groups/${groupId}`)}
-        resolveJoinAction={resolveJoinAction}
+      <AllGroupsFilters
+        {...filterProps}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
       />
-      <AllGroupsDesktopTable
-        filterProps={filterProps}
-        rows={filtered}
-        onJoin={onJoin}
-        onView={(groupId) => nav(`/groups/${groupId}`)}
-        resolveJoinAction={resolveJoinAction}
-      />
+
+      {viewMode === "cards" ? (
+        <AllGroupsGridCards
+          rows={filtered}
+          onJoin={onJoin}
+          onView={(groupId) => nav(`/groups/${groupId}`)}
+          resolveJoinAction={resolveJoinAction}
+        />
+      ) : (
+        <AllGroupsDesktopTable
+          filterProps={filterProps}
+          rows={filtered}
+          onJoin={onJoin}
+          onView={(groupId) => nav(`/groups/${groupId}`)}
+          resolveJoinAction={resolveJoinAction}
+        />
+      )}
     </div>
   );
 }

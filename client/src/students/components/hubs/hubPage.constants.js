@@ -12,7 +12,7 @@ export const HUB_SCOPE = {
   discoveryEyebrow: "Hub Discovery",
   membershipEyebrow: "Membership Overview",
   detailsEyebrow: "Hub Workspace",
-  searchPlaceholder: "Search by code, name, priority, status, or description",
+  searchPlaceholder: "Search by code, name, status, or description",
   joinBusyLabel: "Joining...",
   joinTitle: "Join hub",
   joinDisabledTitle: "Only active hubs can be joined",
@@ -28,7 +28,9 @@ export const HUB_SCOPE = {
 };
 
 export const HUB_JOIN_RULE_MESSAGE =
-  "Hub rule: join up to 2 prominent, 2 medium, and 2 low priority hubs.";
+  "Hub rule: choose a priority when joining; keep up to 2 prominent, 2 medium, and 2 low priority hub memberships active.";
 
 export const HUB_MEMBERSHIP_RULE_MESSAGE =
   "Hub rule: keep 2 prominent, 2 medium, and 2 low priority hub memberships active.";
+
+export const HUB_PRIORITY_OPTIONS = ["PROMINENT", "MEDIUM", "LOW"];

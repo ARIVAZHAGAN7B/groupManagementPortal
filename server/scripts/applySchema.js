@@ -16,7 +16,8 @@ const applySchema = async () => {
     user: env.dbUser,
     password: env.dbPassword,
     database: env.dbName,
-    multipleStatements: true
+    multipleStatements: true,
+    ssl: env.dbSsl ? { rejectUnauthorized: false } : undefined
   });
 
   try {

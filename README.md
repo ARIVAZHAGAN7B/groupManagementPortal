@@ -28,6 +28,9 @@ Core domain areas already present in the codebase:
 - Leadership-role and group-tier request workflows
 - Audit logging
 - Real-time updates with Socket.IO
+- High-concurrency clustering & multi-tier caching (benchmarked at 1,234+ RPS / 2,000 active users)
+
+> 📖 **Architecture & Scaling Deep Dive:** For an in-depth breakdown of the 8-worker cluster design, Redis/in-memory caching, connection pool budgeting, and empirical benchmark evidence, see [docs/PERFORMANCE-ARCHITECTURE-AND-SCALING.md](docs/PERFORMANCE-ARCHITECTURE-AND-SCALING.md).
 
 ## Tech Stack
 

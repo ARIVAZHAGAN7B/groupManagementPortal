@@ -12,11 +12,11 @@ const PHASE_MEMBERSHIP_REFERENCE_AT_EXPR = `CASE
   ELSE ${PHASE_START_AT_EXPR}
 END`;
 const INDIVIDUAL_ELIGIBILITY_AWARDED_POINTS_EXPR = `CASE
-  WHEN iep.is_eligible = 1 THEN ROUND(iep.source_base_points * GREATEST(iep.multiplier - 1, 0), 2)
+  WHEN iep.is_eligible = 1 THEN COALESCE(iep.awarded_points, 0)
   ELSE 0
 END`;
 const GROUP_ELIGIBILITY_AWARDED_POINTS_EXPR = `CASE
-  WHEN gep.is_eligible = 1 THEN ROUND(gep.source_group_points * GREATEST(gep.multiplier - 1, 0), 2)
+  WHEN gep.is_eligible = 1 THEN COALESCE(gep.awarded_points, 0)
   ELSE 0
 END`;
 
@@ -151,16 +151,18 @@ const getStudentPhasePointsByStudent = async (studentId, startDate, endDate, exe
 
 const getAllStudentsWithActiveGroupAndBasePoints = async (executor) => {
   const [rows] = await getExecutor(executor).query(
-    `SELECT
-       s.student_id,
-       s.name,
-       s.email,
-       s.department,
-       s.year,
-       COALESCE(bph.total_base_points, bp.total_base_points, 0) AS total_base_points,
-       COALESCE(bph.last_updated, bp.last_updated) AS base_points_last_updated,
-       m.membership_id,
-       m.group_id,
+      `SELECT
+         s.student_id,
+         s.name,
+         s.email,
+         s.department,
+         s.year,
+         u.status AS student_status,
+         u.created_at AS student_created_at,
+         COALESCE(bp.total_base_points, 0) AS total_base_points,
+         bp.last_updated AS base_points_last_updated,
+         m.membership_id,
+         m.group_id,
        m.role AS membership_role,
        m.status AS membership_status,
        m.join_date,
@@ -170,17 +172,10 @@ const getAllStudentsWithActiveGroupAndBasePoints = async (executor) => {
        g.tier AS group_tier,
        g.status AS group_status
      FROM students s
+     LEFT JOIN users u
+       ON u.user_id = s.user_id
      LEFT JOIN base_points bp
        ON bp.student_id = s.student_id
-     LEFT JOIN (
-       SELECT
-         h.student_id,
-         COALESCE(SUM(h.points), 0) AS total_base_points,
-         MAX(h.created_at) AS last_updated
-       FROM base_point_history h
-       GROUP BY h.student_id
-     ) bph
-       ON bph.student_id = s.student_id
      LEFT JOIN memberships m
        ON m.student_id = s.student_id
       AND m.status = 'ACTIVE'
@@ -470,7 +465,7 @@ const getStudentBasePoints = async (studentId, executor) => {
   const [rows] = await getExecutor(executor).query(
     `SELECT
        s.student_id,
-       COALESCE(bph.total_base_points, bp.total_base_points, 0) AS total_base_points,
+       COALESCE(bp.total_base_points, 0) AS total_base_points,
        COALESCE(bph.last_updated, bp.last_updated) AS last_updated
      FROM students s
      LEFT JOIN base_points bp
@@ -528,6 +523,18 @@ const getIndividualEligibility = async (phaseId, filters = {}, executor) => {
        ie.this_phase_base_points,
        iep.multiplier AS eligibility_multiplier,
        ${INDIVIDUAL_ELIGIBILITY_AWARDED_POINTS_EXPR} AS eligibility_awarded_points,
+       COALESCE((
+         SELECT ipt.target
+         FROM individual_phase_target ipt
+         WHERE ipt.phase_id = ie.phase_id
+         ORDER BY ipt.id DESC
+         LIMIT 1
+       ), (
+         SELECT pt.individual_target
+         FROM phase_targets pt
+         WHERE pt.phase_id = ie.phase_id
+         LIMIT 1
+       )) AS target_points,
        ie.is_eligible,
        ie.reason_code,
        ie.evaluated_at,
@@ -571,6 +578,13 @@ const getGroupEligibility = async (phaseId, filters = {}, executor) => {
        COALESCE(gep.applied_tier, g.tier) AS allocation_tier,
        gep.multiplier AS eligibility_multiplier,
        ${GROUP_ELIGIBILITY_AWARDED_POINTS_EXPR} AS eligibility_awarded_points,
+       (
+         SELECT pt.group_target
+         FROM phase_targets pt
+         WHERE pt.phase_id = ge.phase_id
+           AND UPPER(pt.tier) = UPPER(COALESCE(gep.applied_tier, g.tier))
+         LIMIT 1
+       ) AS target_points,
        ge.is_eligible,
        ge.reason_code,
        ge.evaluated_at,
@@ -654,12 +668,10 @@ const getGroupEligiblePhaseCount = async (groupId, executor) => {
 
 const getStudentMultiplierCounts = async (studentId, executor) => {
   const [rows] = await getExecutor(executor).query(
-    `SELECT multiplier, COUNT(*) AS multiplier_count
-     FROM individual_eligibility_points
+    `SELECT 1.20 AS multiplier, COUNT(*) AS multiplier_count
+     FROM individual_eligibility
      WHERE student_id = ?
-       AND is_eligible = 1
-       AND multiplier IN (1.10, 1.20, 1.30, 1.40)
-     GROUP BY multiplier`,
+       AND is_eligible = 1`,
     [studentId]
   );
 
@@ -668,11 +680,30 @@ const getStudentMultiplierCounts = async (studentId, executor) => {
 
 const getGroupMultiplierCounts = async (groupId, executor) => {
   const [rows] = await getExecutor(executor).query(
-    `SELECT multiplier, COUNT(*) AS multiplier_count
-     FROM group_eligibility_points
-     WHERE group_id = ?
-       AND is_eligible = 1
-       AND multiplier IN (1.10, 1.20, 1.30, 1.40)
+    `SELECT
+       CASE UPPER(COALESCE(gep.applied_tier, g.tier))
+         WHEN 'D' THEN 1.10
+         WHEN 'C' THEN 1.20
+         WHEN 'B' THEN 1.30
+         WHEN 'A' THEN 1.40
+         ELSE 1.00
+       END AS multiplier,
+       COUNT(*) AS multiplier_count
+     FROM group_eligibility ge
+     INNER JOIN sgroup g
+       ON g.group_id = ge.group_id
+     LEFT JOIN (
+       SELECT
+         group_id,
+         phase_id,
+         MAX(applied_tier) AS applied_tier
+       FROM group_eligibility_points
+       GROUP BY group_id, phase_id
+     ) gep
+       ON gep.group_id = ge.group_id
+      AND gep.phase_id = ge.phase_id
+     WHERE ge.group_id = ?
+       AND ge.is_eligible = 1
      GROUP BY multiplier`,
     [Number(groupId)]
   );
@@ -684,7 +715,7 @@ const getDashboardStudentStats = async (studentId, executor) => {
   const [rows] = await getExecutor(executor).query(
     `SELECT
        s.student_id,
-       COALESCE(bph.total_base_points, bp.total_base_points, 0) AS total_base_points,
+       COALESCE(bp.total_base_points, 0) AS total_base_points,
        COALESCE(iept.total_points, 0) AS eligibility_total_points,
        COALESCE(iec.eligible_phase_count, 0) AS eligible_phase_count,
        COALESCE(mult.multiplier_11_count, 0) AS multiplier_11_count,
@@ -725,11 +756,11 @@ const getDashboardStudentStats = async (studentId, executor) => {
      LEFT JOIN (
        SELECT
          student_id,
-         SUM(CASE WHEN is_eligible = 1 AND ROUND(multiplier, 2) = 1.10 THEN 1 ELSE 0 END) AS multiplier_11_count,
-         SUM(CASE WHEN is_eligible = 1 AND ROUND(multiplier, 2) = 1.20 THEN 1 ELSE 0 END) AS multiplier_12_count,
-         SUM(CASE WHEN is_eligible = 1 AND ROUND(multiplier, 2) = 1.30 THEN 1 ELSE 0 END) AS multiplier_13_count,
-         SUM(CASE WHEN is_eligible = 1 AND ROUND(multiplier, 2) = 1.40 THEN 1 ELSE 0 END) AS multiplier_14_count
-       FROM individual_eligibility_points
+         0 AS multiplier_11_count,
+         SUM(CASE WHEN is_eligible = 1 THEN 1 ELSE 0 END) AS multiplier_12_count,
+         0 AS multiplier_13_count,
+         0 AS multiplier_14_count
+       FROM individual_eligibility
        WHERE student_id = ?
        GROUP BY student_id
      ) mult
@@ -775,14 +806,26 @@ const getDashboardGroupStats = async (groupId, executor) => {
        ON gec.group_id = g.group_id
      LEFT JOIN (
        SELECT
-         group_id,
-         SUM(CASE WHEN is_eligible = 1 AND ROUND(multiplier, 2) = 1.10 THEN 1 ELSE 0 END) AS multiplier_11_count,
-         SUM(CASE WHEN is_eligible = 1 AND ROUND(multiplier, 2) = 1.20 THEN 1 ELSE 0 END) AS multiplier_12_count,
-         SUM(CASE WHEN is_eligible = 1 AND ROUND(multiplier, 2) = 1.30 THEN 1 ELSE 0 END) AS multiplier_13_count,
-         SUM(CASE WHEN is_eligible = 1 AND ROUND(multiplier, 2) = 1.40 THEN 1 ELSE 0 END) AS multiplier_14_count
-       FROM group_eligibility_points
-       WHERE group_id = ?
-       GROUP BY group_id
+         ge.group_id,
+         SUM(CASE WHEN ge.is_eligible = 1 AND UPPER(COALESCE(gep.applied_tier, sg.tier)) = 'D' THEN 1 ELSE 0 END) AS multiplier_11_count,
+         SUM(CASE WHEN ge.is_eligible = 1 AND UPPER(COALESCE(gep.applied_tier, sg.tier)) = 'C' THEN 1 ELSE 0 END) AS multiplier_12_count,
+         SUM(CASE WHEN ge.is_eligible = 1 AND UPPER(COALESCE(gep.applied_tier, sg.tier)) = 'B' THEN 1 ELSE 0 END) AS multiplier_13_count,
+         SUM(CASE WHEN ge.is_eligible = 1 AND UPPER(COALESCE(gep.applied_tier, sg.tier)) = 'A' THEN 1 ELSE 0 END) AS multiplier_14_count
+       FROM group_eligibility ge
+       INNER JOIN sgroup sg
+         ON sg.group_id = ge.group_id
+       LEFT JOIN (
+         SELECT
+           group_id,
+           phase_id,
+           MAX(applied_tier) AS applied_tier
+         FROM group_eligibility_points
+         GROUP BY group_id, phase_id
+       ) gep
+         ON gep.group_id = ge.group_id
+        AND gep.phase_id = ge.phase_id
+       WHERE ge.group_id = ?
+       GROUP BY ge.group_id
      ) mult
        ON mult.group_id = g.group_id
      WHERE g.group_id = ?
@@ -1056,7 +1099,7 @@ const getIndividualLeaderboard = async (limit = 30, filters = {}, executor) => {
        s.email,
        s.department,
        s.year,
-       COALESCE(bph.total_base_points, bp.total_base_points, 0) AS total_base_points,
+       COALESCE(bp.total_base_points, 0) AS total_base_points,
        m.group_id,
        m.role AS membership_role,
        g.group_code,
@@ -1064,20 +1107,12 @@ const getIndividualLeaderboard = async (limit = 30, filters = {}, executor) => {
        g.tier AS group_tier
      FROM students s
      LEFT JOIN base_points bp ON bp.student_id = s.student_id
-     LEFT JOIN (
-       SELECT
-         h.student_id,
-         COALESCE(SUM(h.points), 0) AS total_base_points
-       FROM base_point_history h
-       GROUP BY h.student_id
-     ) bph
-       ON bph.student_id = s.student_id
      LEFT JOIN memberships m
        ON m.student_id = s.student_id
       AND m.status = 'ACTIVE'
      LEFT JOIN sgroup g ON g.group_id = m.group_id
      ${clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""}
-     ORDER BY COALESCE(bph.total_base_points, bp.total_base_points, 0) DESC, s.student_id ASC
+     ORDER BY COALESCE(bp.total_base_points, 0) DESC, s.student_id ASC
      LIMIT ?`,
     [...values, safeLimit]
   );
@@ -1150,7 +1185,7 @@ const getLeaderLeaderboard = async (roles = [], limit = 30, filters = {}, execut
        s.email,
        s.department,
        s.year,
-       COALESCE(bph.total_base_points, bp.total_base_points, 0) AS total_base_points,
+       COALESCE(bp.total_base_points, 0) AS total_base_points,
        m.membership_id,
        m.group_id,
        m.role AS membership_role,
@@ -1160,19 +1195,11 @@ const getLeaderLeaderboard = async (roles = [], limit = 30, filters = {}, execut
      FROM memberships m
      INNER JOIN students s ON s.student_id = m.student_id
      LEFT JOIN base_points bp ON bp.student_id = s.student_id
-     LEFT JOIN (
-       SELECT
-         h.student_id,
-         COALESCE(SUM(h.points), 0) AS total_base_points
-       FROM base_point_history h
-       GROUP BY h.student_id
-     ) bph
-       ON bph.student_id = s.student_id
      LEFT JOIN sgroup g ON g.group_id = m.group_id
      WHERE m.status = 'ACTIVE'
        AND m.role IN (${placeholders})
        ${tierClause}
-     ORDER BY COALESCE(bph.total_base_points, bp.total_base_points, 0) DESC, s.student_id ASC
+     ORDER BY COALESCE(bp.total_base_points, 0) DESC, s.student_id ASC
      LIMIT ?`,
     [...values, safeLimit]
   );
@@ -1268,7 +1295,11 @@ const getGroupLeaderboard = async (limit = 30, filters = {}, executor) => {
        g.tier,
        g.status AS group_status,
        COALESCE(mc.active_member_count, 0) AS active_member_count,
-       COALESCE(gpt.total_base_points, 0) AS total_base_points
+       COALESCE(gpt.total_base_points, 0) AS total_base_points,
+       COALESCE(gpt.total_base_points, 0) AS lifetime_base_points,
+       COALESCE(geb.eligibility_bonus_points, 0) AS eligibility_bonus_points,
+       COALESCE(gpt.total_base_points, 0) + COALESCE(geb.eligibility_bonus_points, 0) AS total_points,
+       COALESCE(gpt.total_base_points, 0) + COALESCE(geb.eligibility_bonus_points, 0) AS lifetime_total_points
      FROM sgroup g
      LEFT JOIN (
        SELECT group_id, COUNT(*) AS active_member_count
@@ -1285,8 +1316,24 @@ const getGroupLeaderboard = async (limit = 30, filters = {}, executor) => {
        GROUP BY gp.group_id
      ) gpt
        ON gpt.group_id = g.group_id
+     LEFT JOIN (
+       SELECT
+         gep.group_id,
+         COALESCE(
+           SUM(
+             CASE
+               WHEN gep.is_eligible = 1 THEN ROUND(gep.source_group_points * GREATEST(gep.multiplier - 1, 0), 2)
+               ELSE 0
+             END
+           ),
+           0
+         ) AS eligibility_bonus_points
+       FROM group_eligibility_points gep
+       GROUP BY gep.group_id
+     ) geb
+       ON geb.group_id = g.group_id
      ${clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""}
-     ORDER BY total_base_points DESC, active_member_count DESC, g.group_id ASC
+     ORDER BY lifetime_total_points DESC, total_base_points DESC, active_member_count DESC, g.group_id ASC
      LIMIT ?`,
     [...values, safeLimit]
   );
@@ -1321,7 +1368,11 @@ const getGroupLeaderboardByPhase = async (startAt, endAt, limit = 30, filters = 
        g.tier,
        g.status AS group_status,
        COALESCE(mc.active_member_count, 0) AS active_member_count,
-       COALESCE(gpt.total_base_points, 0) AS total_base_points
+       COALESCE(gpt.total_base_points, 0) AS total_base_points,
+       COALESCE(gpt.total_base_points, 0) AS lifetime_base_points,
+       COALESCE(geb.eligibility_bonus_points, 0) AS eligibility_bonus_points,
+       COALESCE(gpt.total_base_points, 0) + COALESCE(geb.eligibility_bonus_points, 0) AS total_points,
+       COALESCE(gpt.total_base_points, 0) + COALESCE(geb.eligibility_bonus_points, 0) AS lifetime_total_points
      FROM sgroup g
      LEFT JOIN (
        SELECT group_id, COUNT(*) AS active_member_count
@@ -1339,10 +1390,27 @@ const getGroupLeaderboardByPhase = async (startAt, endAt, limit = 30, filters = 
        GROUP BY gp.group_id
      ) gpt
        ON gpt.group_id = g.group_id
+     LEFT JOIN (
+       SELECT
+         gep.group_id,
+         COALESCE(
+           SUM(
+             CASE
+               WHEN gep.is_eligible = 1 THEN ROUND(gep.source_group_points * GREATEST(gep.multiplier - 1, 0), 2)
+               ELSE 0
+             END
+           ),
+           0
+         ) AS eligibility_bonus_points
+       FROM group_eligibility_points gep
+       WHERE gep.created_at BETWEEN ? AND ?
+       GROUP BY gep.group_id
+     ) geb
+       ON geb.group_id = g.group_id
      ${clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""}
-     ORDER BY total_base_points DESC, active_member_count DESC, g.group_id ASC
+     ORDER BY lifetime_total_points DESC, total_base_points DESC, active_member_count DESC, g.group_id ASC
      LIMIT ?`,
-    [...values, safeLimit]
+    [startAt, endAt, ...values, safeLimit]
   );
   return rows;
 };

@@ -138,9 +138,10 @@ const createEventRound = async (payload, executor) => {
         location,
         description,
         round_mode,
+        od_proof_required,
         status
       )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       payload.event_id,
       payload.round_order,
@@ -152,6 +153,7 @@ const createEventRound = async (payload, executor) => {
       payload.location || null,
       payload.description || null,
       payload.round_mode || "ONLINE",
+      payload.od_proof_required ? 1 : 0,
       payload.status || "SCHEDULED"
     ]
   );
@@ -230,6 +232,7 @@ const getRoundsByEventId = async (eventId, executor) => {
        location,
        description,
        round_mode,
+       COALESCE(od_proof_required, FALSE) as od_proof_required,
        status,
        created_at,
        updated_at
@@ -249,18 +252,11 @@ const getAllowedHubsByEventId = async (eventId, executor) => {
        h.hub_code AS team_code,
        h.hub_name AS team_name,
        'HUB' AS team_type,
-       h.hub_priority,
        h.status
      FROM event_hub_access eha
      INNER JOIN hubs h ON h.hub_id = eha.hub_id
      WHERE eha.event_id = ?
      ORDER BY
-       CASE h.hub_priority
-         WHEN 'PROMINENT' THEN 1
-         WHEN 'MEDIUM' THEN 2
-         WHEN 'LOW' THEN 3
-         ELSE 4
-       END,
        h.hub_name ASC,
        h.hub_id ASC`,
     [eventId]
@@ -282,19 +278,12 @@ const getAllowedHubsByEventIds = async (eventIds = [], executor) => {
        h.hub_code AS team_code,
        h.hub_name AS team_name,
        'HUB' AS team_type,
-       h.hub_priority,
        h.status
      FROM event_hub_access eha
      INNER JOIN hubs h ON h.hub_id = eha.hub_id
      WHERE eha.event_id IN (${placeholders})
      ORDER BY
        eha.event_id ASC,
-       CASE h.hub_priority
-         WHEN 'PROMINENT' THEN 1
-         WHEN 'MEDIUM' THEN 2
-         WHEN 'LOW' THEN 3
-         ELSE 4
-       END,
        h.hub_name ASC,
        h.hub_id ASC`,
     normalizedIds

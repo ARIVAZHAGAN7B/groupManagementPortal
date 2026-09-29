@@ -56,6 +56,15 @@ export async function fetchPhaseTargets(phaseId) {
   });
 }
 
+export async function fetchRecommendedPhaseTargets(startDate = "") {
+  return cachedGet("/api/phases/recommended-targets", {
+    params: startDate ? { start_date: startDate } : {}
+  }, {
+    tags: [CLIENT_CACHE_TAGS.PHASE_TARGETS, CLIENT_CACHE_TAGS.GROUP_ELIGIBILITY],
+    ttlMs: CLIENT_CACHE_TTL.SHORT
+  });
+}
+
 export async function setPhaseTargets(phaseId, targets, individualTarget) {
   return postWithInvalidation(`/api/phases/${phaseId}/targets`, {
     targets,

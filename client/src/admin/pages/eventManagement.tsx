@@ -31,6 +31,7 @@ type EventRoundFormState = {
   description: string;
   end_time: string;
   location: string;
+  od_proof_required: string;
   round_date: string;
   round_end_date: string;
   round_mode: string;
@@ -135,6 +136,7 @@ const buildEmptyRound = (index = 0): EventRoundFormState => ({
   description: "",
   end_time: "",
   location: "",
+  od_proof_required: index > 0 ? "true" : "false",
   round_date: "",
   round_end_date: "",
   round_mode: "ONLINE",
@@ -279,6 +281,9 @@ const buildRoundPayload = (rounds: EventRoundFormState[]) =>
       round_date: round.round_date || null,
       round_end_date: round.round_end_date || null,
       round_mode: String(round.round_mode || "ONLINE").trim().toUpperCase() || "ONLINE",
+      od_proof_required:
+        String(round.round_mode || "ONLINE").trim().toUpperCase() === "OFFLINE" &&
+        round.od_proof_required === "true",
       round_name: String(round.round_name || "").trim() || `Round ${index + 1}`,
       start_time: round.start_time || null,
       status: round.status || "SCHEDULED"
@@ -300,6 +305,7 @@ const toFormState = (row: EventRow): EventFormState => {
         description: round.description || "",
         end_time: round.end_time ? String(round.end_time).slice(0, 5) : "",
         location: round.location || "",
+        od_proof_required: toInputBoolean(round.od_proof_required, "false"),
         round_date: toInputDate(round.round_date),
         round_end_date: toInputDate(round.round_end_date || round.round_date),
         round_mode: round.round_mode || "ONLINE",
@@ -515,7 +521,15 @@ export default function EventManagement() {
     setForm((previous) => ({
       ...previous,
       rounds: previous.rounds.map((round, roundIndex) =>
-        roundIndex === index ? { ...round, [key]: value } : round
+        roundIndex === index
+          ? {
+              ...round,
+              [key]: value,
+              ...(key === "round_mode" && value !== "OFFLINE"
+                ? { od_proof_required: "false" }
+                : {})
+            }
+          : round
       )
     }));
   };

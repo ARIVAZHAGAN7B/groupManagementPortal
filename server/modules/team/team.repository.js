@@ -20,6 +20,7 @@ const TEAM_SELECT_WITH_COUNTS = `
   SELECT
     t.team_id,
     t.event_id,
+    t.parent_team_id,
     t.team_code,
     t.team_name,
     t.team_type,
@@ -42,10 +43,26 @@ const TEAM_SELECT_WITH_COUNTS = `
     e.maximum_count AS event_maximum_count,
     e.min_members AS event_min_members,
     e.max_members AS event_max_members,
+    pt.team_code AS parent_team_code,
+    pt.team_name AS parent_team_name,
+    pt.team_type AS parent_team_type,
+    pt.status AS parent_team_status,
     COALESCE(mc.active_member_count, 0) AS active_member_count
   FROM teams t
   LEFT JOIN events e
     ON e.event_id = t.event_id
+  LEFT JOIN teams pt
+    ON pt.team_id = t.parent_team_id
+  LEFT JOIN (
+    SELECT team_id, COUNT(*) AS active_member_count
+    FROM team_membership
+    WHERE status = 'ACTIVE'
+    GROUP BY team_id
+  ) mc
+    ON mc.team_id = t.team_id
+`;
+
+const ACTIVE_MEMBER_COUNT_JOIN = `
   LEFT JOIN (
     SELECT team_id, COUNT(*) AS active_member_count
     FROM team_membership
@@ -73,6 +90,7 @@ const createTeam = async (team, executor) => {
     `INSERT INTO teams
       (
         event_id,
+        parent_team_id,
         team_code,
         team_name,
         team_type,
@@ -81,9 +99,10 @@ const createTeam = async (team, executor) => {
         rounds_cleared,
         created_by
       )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       team.event_id ?? null,
+      team.parent_team_id ?? null,
       team.team_code,
       team.team_name,
       team.team_type,
@@ -112,6 +131,20 @@ const getAllTeams = async (filters = {}, options = {}, executor) => {
   if (filters.team_type) {
     clauses.push("t.team_type = ?");
     values.push(String(filters.team_type).toUpperCase());
+  }
+
+  if (filters.status) {
+    clauses.push("t.status = ?");
+    values.push(String(filters.status).toUpperCase());
+  }
+
+  if (filters.parent_team_id !== undefined) {
+    if (filters.parent_team_id === null) {
+      clauses.push("t.parent_team_id IS NULL");
+    } else {
+      clauses.push("t.parent_team_id = ?");
+      values.push(filters.parent_team_id);
+    }
   }
 
   if (filters.exclude_team_type) {
@@ -151,6 +184,15 @@ const getTeamsByEventId = async (eventId, filters = {}, options = {}, executor) 
   if (filters.team_type) {
     clauses.push("t.team_type = ?");
     values.push(String(filters.team_type).toUpperCase());
+  }
+
+  if (filters.parent_team_id !== undefined) {
+    if (filters.parent_team_id === null) {
+      clauses.push("t.parent_team_id IS NULL");
+    } else {
+      clauses.push("t.parent_team_id = ?");
+      values.push(filters.parent_team_id);
+    }
   }
 
   if (filters.exclude_team_type) {
@@ -198,6 +240,7 @@ const getTeamByCode = async (teamCode, executor) => {
     `SELECT
        t.team_id,
        t.event_id,
+       t.parent_team_id,
        t.team_code,
        t.team_name,
        t.team_type,
@@ -216,6 +259,7 @@ const updateTeam = async (teamId, team, executor) => {
     `UPDATE teams
      SET
        event_id = ?,
+       parent_team_id = ?,
        team_code = ?,
        team_name = ?,
        team_type = ?,
@@ -224,6 +268,7 @@ const updateTeam = async (teamId, team, executor) => {
      WHERE team_id = ?`,
     [
       team.event_id ?? null,
+      team.parent_team_id ?? null,
       team.team_code,
       team.team_name,
       team.team_type,
@@ -329,6 +374,7 @@ const getTeamsByIds = async (teamIds = [], executor) => {
     `SELECT
        team_id,
        event_id,
+       parent_team_id,
        team_code,
        team_name,
        team_type,
@@ -429,8 +475,10 @@ const getTeamMembershipById = async (membershipId, executor) => {
        e.event_code,
        e.event_name,
        e.status AS event_status,
+       e.min_members AS event_min_members,
        e.start_date AS event_start_date,
        e.end_date AS event_end_date,
+       COALESCE(mc.active_member_count, 0) AS active_member_count,
        s.name AS student_name,
        s.email AS student_email,
        s.department,
@@ -438,6 +486,7 @@ const getTeamMembershipById = async (membershipId, executor) => {
      FROM team_membership tm
      INNER JOIN teams t ON t.team_id = tm.team_id
      LEFT JOIN events e ON e.event_id = t.event_id
+     ${ACTIVE_MEMBER_COUNT_JOIN}
      INNER JOIN students s ON s.student_id = tm.student_id
      WHERE tm.team_membership_id = ?
      LIMIT 1`,
@@ -546,8 +595,10 @@ const getTeamMembershipsByTeamId = async (teamId, filters = {}, executor) => {
        e.event_code,
        e.event_name,
        e.status AS event_status,
+       e.min_members AS event_min_members,
        e.start_date AS event_start_date,
        e.end_date AS event_end_date,
+       COALESCE(mc.active_member_count, 0) AS active_member_count,
        s.name AS student_name,
        s.email AS student_email,
        s.department,
@@ -555,6 +606,7 @@ const getTeamMembershipsByTeamId = async (teamId, filters = {}, executor) => {
      FROM team_membership tm
      INNER JOIN teams t ON t.team_id = tm.team_id
      LEFT JOIN events e ON e.event_id = t.event_id
+     ${ACTIVE_MEMBER_COUNT_JOIN}
      INNER JOIN students s ON s.student_id = tm.student_id
      WHERE ${clauses.join(" AND ")}
      ORDER BY
@@ -621,8 +673,10 @@ const getAllTeamMemberships = async (filters = {}, options = {}, executor) => {
       e.event_code,
       e.event_name,
       e.status AS event_status,
+      e.min_members AS event_min_members,
       e.start_date AS event_start_date,
       e.end_date AS event_end_date,
+      COALESCE(mc.active_member_count, 0) AS active_member_count,
       s.name AS student_name,
       s.email AS student_email,
       s.department,
@@ -630,6 +684,7 @@ const getAllTeamMemberships = async (filters = {}, options = {}, executor) => {
     FROM team_membership tm
     INNER JOIN teams t ON t.team_id = tm.team_id
     LEFT JOIN events e ON e.event_id = t.event_id
+    ${ACTIVE_MEMBER_COUNT_JOIN}
     INNER JOIN students s ON s.student_id = tm.student_id
     WHERE ${clauses.join(" AND ")}
     ORDER BY

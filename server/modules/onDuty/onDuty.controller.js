@@ -59,10 +59,33 @@ const reviewRequest = async (req, res) => {
   }
 };
 
+const listEventsWithOd = async (req, res) => {
+  try {
+    const data = await service.getEventsWithOdDetails();
+    res.json(Array.isArray(data) ? data : []);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+const getEventTeamsWithOd = async (req, res) => {
+  try {
+    const data = await service.getEventTeamsWithOdRequests(req.params.eventId);
+    res.json({
+      teams: Array.isArray(data) ? data : []
+    });
+  } catch (error) {
+    const status = error.message === "Event not found" ? 404 : 400;
+    res.status(status).json({ message: error.message });
+  }
+};
+
 module.exports = {
   listRequests,
   getMyRequests,
   getTeamRequests,
   submitRequest,
-  reviewRequest
+  reviewRequest,
+  listEventsWithOd,
+  getEventTeamsWithOd
 };

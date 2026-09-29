@@ -3,6 +3,7 @@ const membershipRepo = require("../membership/membership.repository");
 const membershipService = require("../membership/membership.service");
 const db = require("../../config/db");
 const systemConfigService = require("../systemConfig/systemConfig.service");
+const activityPointsWriteService = require("../activityPointsWrite/activityPointsWrite.service");
 
 const ADMIN_ROLES = ["ADMIN", "SYSTEM_ADMIN"];
 const VALID_MEMBERSHIP_ROLES = ["CAPTAIN", "VICE_CAPTAIN", "STRATEGIST", "MANAGER", "MEMBER"];
@@ -27,8 +28,27 @@ const getAdminIdByUserIdFrom = async (queryable, userId) => {
     "SELECT admin_id FROM admins WHERE user_id=? LIMIT 1",
     [userId]
   );
-  if (rows.length === 0) throw new Error("Admin not found");
-  return rows[0].admin_id;
+  if (rows.length > 0) return rows[0].admin_id;
+
+  const [users] = await queryable.query(
+    "SELECT user_id, name, email, role FROM users WHERE user_id=? AND role IN ('ADMIN', 'SYSTEM_ADMIN') LIMIT 1",
+    [userId]
+  );
+  if (users.length > 0) {
+    const u = users[0];
+    const adminRole = u.role === 'ADMIN' ? 'SYSTEM_ADMIN' : u.role;
+    try {
+      await queryable.query(
+        "INSERT INTO admins (admin_id, user_id, name, email, role) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE user_id=VALUES(user_id)",
+        [u.user_id, u.user_id, u.name || 'Admin', u.email, adminRole]
+      );
+      return u.user_id;
+    } catch {
+      return u.user_id;
+    }
+  }
+
+  throw new Error("Admin not found");
 };
 
 const ensureCaptainAccessByUserId = async (queryable, userId, groupId) => {
@@ -50,13 +70,23 @@ const ensureCaptainAccessByUserId = async (queryable, userId, groupId) => {
 
 const resolveDecisionBy = async (queryable, actorUser, groupId) => {
   if (!actorUser?.userId || !actorUser?.role) throw new Error("Unauthorized");
+  const actorRole = String(actorUser.role).toUpperCase();
 
-  if (ADMIN_ROLES.includes(actorUser.role)) {
-    return getAdminIdByUserIdFrom(queryable, actorUser.userId);
+  if (ADMIN_ROLES.includes(actorRole)) {
+    const adminId = await getAdminIdByUserIdFrom(queryable, actorUser.userId);
+    return {
+      decision_by: adminId,
+      decision_by_user_id: actorUser.userId,
+      decision_by_role: actorRole
+    };
   }
 
   await ensureCaptainAccessByUserId(queryable, actorUser.userId, groupId);
-  return null;
+  return {
+    decision_by: null,
+    decision_by_user_id: actorUser.userId,
+    decision_by_role: "CAPTAIN"
+  };
 };
 
 const normalizeApprovedRole = (value) => {
@@ -109,6 +139,12 @@ exports.applyJoinRequest = async (studentId, groupId) => {
   if (String(group.status || "").toUpperCase() === "FROZEN") {
     throw new Error("Cannot apply to a frozen group");
   }
+  if (String(group.status || "").toUpperCase() === "ARCHIVED") {
+    throw new Error("Cannot apply to an archived group");
+  }
+  if (!(Number(group.accepting_applications) === 1 || group.accepting_applications === true)) {
+    throw new Error("This group is not accepting applications right now");
+  }
 
   const count = await membershipRepo.countGroupMembers(groupId);
   if (count >= Number(policy.max_group_members)) {
@@ -154,8 +190,17 @@ exports.decideJoinRequest = async (requestId, status, reason, actorUser, options
     if (!request) throw new Error("Request not found");
     if (request.status !== "PENDING") throw new Error("Request already processed");
 
-    const decisionBy = await resolveDecisionBy(conn, actorUser, request.group_id);
-    await repo.updateDecisionTx(conn, requestId, status, reason, decisionBy);
+    const decisionActor = await resolveDecisionBy(conn, actorUser, request.group_id);
+    await repo.updateDecisionTx(
+      conn,
+      requestId,
+      status,
+      reason,
+      decisionActor.decision_by,
+      decisionActor.decision_by_user_id,
+      decisionActor.decision_by_role,
+      approvedRole
+    );
 
     if (status === "APPROVED") {
       const membershipRole = approvedRole || "MEMBER";
@@ -165,7 +210,11 @@ exports.decideJoinRequest = async (requestId, status, reason, actorUser, options
       }
 
       const [targetGroupRows] = await conn.query(
-        "SELECT group_id, status FROM sgroup WHERE group_id=? LIMIT 1 FOR UPDATE",
+        `SELECT group_id, status, accepting_applications
+         FROM sgroup
+         WHERE group_id=?
+         LIMIT 1
+         FOR UPDATE`,
         [request.group_id]
       );
       const targetGroup = targetGroupRows[0];
@@ -174,6 +223,9 @@ exports.decideJoinRequest = async (requestId, status, reason, actorUser, options
       }
       if (String(targetGroup.status || "").toUpperCase() === "FROZEN") {
         throw new Error("Cannot approve request for a frozen group");
+      }
+      if (!(Number(targetGroup.accepting_applications) === 1 || targetGroup.accepting_applications === true)) {
+        throw new Error("This group is not accepting applications right now");
       }
 
       const [activeRows] = await conn.query(
@@ -233,6 +285,29 @@ exports.decideJoinRequest = async (requestId, status, reason, actorUser, options
         [request.student_id, request.group_id, membershipRole, "ACTIVE"]
       );
 
+      await activityPointsWriteService.writeStudentGroupRole(
+        {
+          student_id: request.student_id,
+          group_id: request.group_id,
+          role: membershipRole,
+          membership_status: "ACTIVE",
+          source_module: "JOIN_REQUEST",
+          sync_context: "JOIN_REQUEST_APPROVED"
+        },
+        conn
+      );
+      await activityPointsWriteService.writeIncubationStatus(
+        {
+          student_id: request.student_id,
+          group_id: request.group_id,
+          incubation_end_date: null,
+          is_in_incubation: false,
+          source_module: "JOIN_REQUEST",
+          sync_context: "JOIN_REQUEST_APPROVED"
+        },
+        conn
+      );
+
       const [[row]] = await conn.query(
         "SELECT COUNT(*) AS count FROM memberships WHERE group_id=? AND status='ACTIVE'",
         [request.group_id]
@@ -252,6 +327,8 @@ exports.decideJoinRequest = async (requestId, status, reason, actorUser, options
       group_id: request.group_id,
       status,
       message: `Request ${status} successfully`,
+      decision_by_user_id: decisionActor?.decision_by_user_id || null,
+      decision_by_role: decisionActor?.decision_by_role || null,
       approved_role: status === "APPROVED" ? approvedRole || "MEMBER" : null,
       all_leadership_roles_empty_before_approval:
         status === "APPROVED" ? Boolean(approvalMeta?.all_leadership_roles_empty_before_approval) : null,

@@ -2,6 +2,7 @@ const repo = require("./membership.repository");
 const db = require("../../config/db");
 const phaseRepo = require("../phase/phase.repository");
 const systemConfigService = require("../systemConfig/systemConfig.service");
+const activityPointsWriteService = require("../activityPointsWrite/activityPointsWrite.service");
 const { buildPaginatedResponse, parsePaginationQuery } = require("../../utils/pagination");
 
 const REJOIN_DEADLINE_HOURS = 24;
@@ -409,12 +410,11 @@ const attachCurrentRankMetrics = async (rows, groupId, executor) => {
   const rules = ruleConfig.effectiveRules;
   const reviewAt = toSqlDateTime(new Date());
   const membershipIds = safeRows.map((row) => Number(row.membership_id)).filter(Boolean);
-  const studentIds = [...new Set(safeRows.map((row) => row.student_id).filter(Boolean))];
 
   const [contributionRows, loyaltyRows, reliabilityRows] = await Promise.all([
     repo.getMembershipContributionTotals(membershipIds, reviewAt, executor),
     repo.getMembershipLoyaltyCounts(membershipIds, reviewAt, executor),
-    repo.getStudentReliabilityCounts(studentIds, reviewAt, executor)
+    repo.getMembershipReliabilityCounts(membershipIds, reviewAt, executor)
   ]);
 
   const contributionMap = new Map(
@@ -425,7 +425,7 @@ const attachCurrentRankMetrics = async (rows, groupId, executor) => {
   );
   const reliabilityMap = new Map(
     reliabilityRows.map((row) => [
-      String(row.student_id),
+      String(row.membership_id),
       normalizeIntegerMetric(row.reliability_eligible_phase_count)
     ])
   );
@@ -433,7 +433,7 @@ const attachCurrentRankMetrics = async (rows, groupId, executor) => {
   return safeRows.map((row) => {
     const loyaltyPhaseCount = loyaltyMap.get(String(row.membership_id)) || 0;
     const contributionPoints = contributionMap.get(String(row.membership_id)) || 0;
-    const reliabilityEligiblePhaseCount = reliabilityMap.get(String(row.student_id)) || 0;
+    const reliabilityEligiblePhaseCount = reliabilityMap.get(String(row.membership_id)) || 0;
 
     const loyaltyEligibleRank = resolveCriterionRank(loyaltyPhaseCount, rules.LOYALTY);
     const contributionEligibleRank = resolveCriterionRank(contributionPoints, rules.CONTRIBUTION);
@@ -624,12 +624,10 @@ const evaluateAndPersistGroupRankReview = async (phase, reviewCycleNumber) => {
     }
 
     const membershipIds = memberships.map((membership) => Number(membership.membership_id));
-    const studentIds = [...new Set(memberships.map((membership) => membership.student_id).filter(Boolean))];
-
     const [contributionRows, loyaltyRows, reliabilityRows, previousRankRows] = await Promise.all([
       repo.getMembershipContributionTotals(membershipIds, reviewAt, conn),
       repo.getMembershipLoyaltyCounts(membershipIds, reviewAt, conn),
-      repo.getStudentReliabilityCounts(studentIds, reviewAt, conn),
+      repo.getMembershipReliabilityCounts(membershipIds, reviewAt, conn),
       repo.getLatestGroupRanksByMembershipIdsBeforeCycle(membershipIds, reviewCycleNumber, conn)
     ]);
 
@@ -641,7 +639,7 @@ const evaluateAndPersistGroupRankReview = async (phase, reviewCycleNumber) => {
     );
     const reliabilityMap = new Map(
       reliabilityRows.map((row) => [
-        String(row.student_id),
+        String(row.membership_id),
         normalizeIntegerMetric(row.reliability_eligible_phase_count)
       ])
     );
@@ -654,7 +652,7 @@ const evaluateAndPersistGroupRankReview = async (phase, reviewCycleNumber) => {
     memberships.forEach((membership) => {
       const loyaltyPhaseCount = loyaltyMap.get(String(membership.membership_id)) || 0;
       const contributionPoints = contributionMap.get(String(membership.membership_id)) || 0;
-      const reliabilityEligiblePhaseCount = reliabilityMap.get(String(membership.student_id)) || 0;
+      const reliabilityEligiblePhaseCount = reliabilityMap.get(String(membership.membership_id)) || 0;
 
       const candidate = {
         review_phase_id: phase.phase_id,
@@ -910,7 +908,10 @@ const joinGroupService = async (student_id, groupId, role) => {
   await ensureRejoinDeadlineCompliance(student_id);
 
   const [groupRows] = await db.query(
-    "SELECT group_id, status FROM sgroup WHERE group_id=? LIMIT 1",
+    `SELECT group_id, status, accepting_applications
+     FROM sgroup
+     WHERE group_id=?
+     LIMIT 1`,
     [groupId]
   );
   const group = groupRows[0];
@@ -919,6 +920,9 @@ const joinGroupService = async (student_id, groupId, role) => {
   }
   if (String(group.status || "").toUpperCase() === "FROZEN") {
     throw new Error("Cannot join a frozen group");
+  }
+  if (!(Number(group.accepting_applications) === 1 || group.accepting_applications === true)) {
+    throw new Error("This group is not accepting applications right now");
   }
 
   const currentCount = await repo.countGroupMembers(groupId);
@@ -944,6 +948,22 @@ const joinGroupService = async (student_id, groupId, role) => {
   const count = await repo.countGroupMembers(groupId);
   const status = resolveGroupStatusByCount(count, policy);
   await repo.updateGroupStatus(groupId, status);
+  await activityPointsWriteService.writeStudentGroupRole({
+    student_id,
+    group_id: groupId,
+    role: normalizedRole,
+    membership_status: "ACTIVE",
+    source_module: "MEMBERSHIP",
+    sync_context: "DIRECT_JOIN"
+  });
+  await activityPointsWriteService.writeIncubationStatus({
+    student_id,
+    group_id: groupId,
+    incubation_end_date: null,
+    is_in_incubation: false,
+    source_module: "MEMBERSHIP",
+    sync_context: "DIRECT_JOIN"
+  });
 
   return {
     student_id,
@@ -967,6 +987,22 @@ const leaveGroupService = async (studentId, groupId, options = {}) => {
   const count = await repo.countGroupMembers(groupId);
   const status = resolveGroupStatusByCount(count, policy);
   await repo.updateGroupStatus(groupId, status);
+  await activityPointsWriteService.writeStudentGroupRole({
+    student_id: studentId,
+    group_id: groupId,
+    role: membership.role,
+    membership_status: "LEFT",
+    source_module: "MEMBERSHIP",
+    sync_context: options?.removalReason ? "MEMBER_REMOVED" : "LEFT_GROUP"
+  });
+  await activityPointsWriteService.writeIncubationStatus({
+    student_id: studentId,
+    group_id: groupId,
+    incubation_end_date: null,
+    is_in_incubation: false,
+    source_module: "MEMBERSHIP",
+    sync_context: options?.removalReason ? "MEMBER_REMOVED" : "LEFT_GROUP"
+  });
 
   const rejoinDeadlineAt = getRejoinDeadlineFromLeaveDate(new Date());
 
@@ -1134,6 +1170,17 @@ const updateRoleService = async (membershipId, newRole, actorUser) => {
       "UPDATE memberships SET role=? WHERE membership_id=?",
       [newRole, membershipId]
     );
+    await activityPointsWriteService.writeStudentGroupRole(
+      {
+        student_id: membership.student_id,
+        group_id: membership.group_id,
+        role: newRole,
+        membership_status: "ACTIVE",
+        source_module: "MEMBERSHIP",
+        sync_context: "ROLE_UPDATED"
+      },
+      conn
+    );
 
     await conn.commit();
     return {
@@ -1152,10 +1199,20 @@ const updateRoleService = async (membershipId, newRole, actorUser) => {
 };
 
 const updateRankService = async (membershipId, newRank, actorUser) => {
-  const rank = normalizeManualRank(newRank);
-  if (rank === null) throw new Error("Rank must be an integer between 1 and 5");
+  const shouldUseAutomatedRank =
+    newRank === null ||
+    newRank === undefined ||
+    String(newRank || "").trim().toUpperCase() === "AUTO";
+  const rank = shouldUseAutomatedRank ? null : normalizeManualRank(newRank);
+  if (!shouldUseAutomatedRank && rank === null) {
+    throw new Error("Rank must be AUTO or an integer between 1 and 5");
+  }
 
   const actorRole = String(actorUser?.role || "").toUpperCase();
+  const isAdminActor = ADMIN_ROLES.includes(actorRole);
+  if (!isAdminActor) {
+    throw new Error("Individual rank overrides are admin-only. Group ranks are normally assigned automatically after each 5-phase review.");
+  }
 
   const conn = await db.getConnection();
   try {
@@ -1170,15 +1227,6 @@ const updateRankService = async (membershipId, newRank, actorUser) => {
     if (membership.status !== "ACTIVE") throw new Error("Only ACTIVE membership can be updated");
 
     await ensureActorCanManageMembership(conn, actorUser, membership.group_id);
-
-    if (actorRole === "CAPTAIN") {
-      const activeLeadershipCount = await repo.countActiveLeadershipRoles(membership.group_id, conn);
-      if (activeLeadershipCount <= 2) {
-        throw new Error(
-          "Captain can override rank only when at least 3 active leadership roles are filled in the group"
-        );
-      }
-    }
 
     if (LIMITED_MEMBER_RANKS.includes(rank)) {
       const groupRows = await repo.getGroupMembers(membership.group_id, conn);
@@ -1198,11 +1246,14 @@ const updateRankService = async (membershipId, newRank, actorUser) => {
 
     await conn.commit();
     return {
-      message: "Rank updated successfully",
+      message: shouldUseAutomatedRank
+        ? "Rank override cleared. Automated review rank is active."
+        : "Rank override updated successfully",
       membership_id: Number(membershipId),
       student_id: membership.student_id,
       group_id: membership.group_id,
-      rank
+      rank,
+      rank_source: shouldUseAutomatedRank ? "AUTO" : "OVERRIDE"
     };
   } catch (e) {
     await conn.rollback();

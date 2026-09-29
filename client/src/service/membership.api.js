@@ -33,7 +33,7 @@ export async function leaveGroup(groupId) {
 export async function fetchGroupMembers(groupId) {
   const data = await cachedGet(`/api/membership/group/${groupId}`, {}, {
     storage: CLIENT_CACHE_STORAGE.MEMORY,
-    tags: [CLIENT_CACHE_TAGS.GROUP_MEMBERSHIPS],
+    tags: [CLIENT_CACHE_TAGS.GROUP_MEMBERSHIPS, CLIENT_CACHE_TAGS.GROUP_RANKS],
     ttlMs: CLIENT_CACHE_TTL.SHORT
   });
   return data; // array

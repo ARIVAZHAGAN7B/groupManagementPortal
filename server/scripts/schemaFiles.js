@@ -17,5 +17,6 @@ module.exports = [
   "server/modules/leadershipRequest/leadershipRequest.schema.sql",
   "server/modules/teamChangeTier/teamChangeTier.schema.sql",
   "server/modules/teamTarget/teamTarget.schema.sql",
+  "server/modules/activityPointsWrite/activityPointsWrite.schema.sql",
   "server/modules/audit/audit.schema.sql"
 ];

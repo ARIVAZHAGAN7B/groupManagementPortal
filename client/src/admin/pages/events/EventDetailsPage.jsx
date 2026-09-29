@@ -2,7 +2,7 @@ import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { fetchEventById } from "../../../service/events.api";
 import {
@@ -30,22 +30,22 @@ import {
 
 function SummaryCard({ children, className = "", title }) {
   return (
-    <section className={`rounded-3xl border border-slate-200 bg-white p-5 shadow-sm ${className}`}>
-      <h2 className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+    <section className={`overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ${className}`}>
+      <h2 className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
         {title}
       </h2>
-      <div className="mt-4 space-y-3">{children}</div>
+      <div className="divide-y divide-slate-100">{children}</div>
     </section>
   );
 }
 
 function SummaryRow({ label, value }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-3 last:border-b-0 last:pb-0">
-      <p className="min-w-[136px] text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+    <div className="grid gap-2 px-4 py-3 sm:grid-cols-[180px_minmax(0,1fr)]">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
         {label}
       </p>
-      <p className="text-right text-sm font-semibold text-slate-900">{value || "-"}</p>
+      <p className="text-sm font-semibold text-slate-900 sm:text-right">{value || "-"}</p>
     </div>
   );
 }
@@ -61,10 +61,35 @@ function StatusPill({ tone = "default", value }) {
 
   return (
     <span
-      className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${toneClassName}`}
+      className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold ${toneClassName}`}
     >
       {value || "-"}
     </span>
+  );
+}
+
+const TABLE_WRAP_CLASS = "overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm";
+const TABLE_HEAD_CLASS = "bg-slate-50 text-slate-600";
+const TH_CLASS = "whitespace-nowrap px-3.5 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.16em]";
+const TD_CLASS = "whitespace-nowrap px-3.5 py-2.5 align-middle";
+
+function SummaryMetric({ label, tone = "slate", value }) {
+  const toneClass =
+    tone === "amber"
+      ? "text-amber-600"
+      : tone === "emerald"
+        ? "text-emerald-600"
+        : tone === "rose"
+          ? "text-rose-600"
+          : "text-slate-900";
+
+  return (
+    <div className="min-w-[148px] flex-1 border-l border-slate-200 px-4 py-3 first:border-l-0">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+        {label}
+      </div>
+      <div className={`mt-1 text-lg font-bold ${toneClass}`}>{value}</div>
+    </div>
   );
 }
 
@@ -77,6 +102,23 @@ const getRequiredMinMembers = (event) => {
 };
 
 const getRegistrationState = (event, teamRow) => {
+  const explicitStatus = String(teamRow?.registration_status || "").toUpperCase();
+  if (explicitStatus === "REGISTERED") {
+    return {
+      tone: "success",
+      value: "Registered"
+    };
+  }
+  if (explicitStatus === "PENDING") {
+    const missingCount =
+      Number(teamRow?.registration_missing_member_count) ||
+      Math.max(getRequiredMinMembers(event) - (Number(teamRow?.active_member_count) || 0), 0);
+    return {
+      tone: "warning",
+      value: missingCount > 0 ? `Needs ${missingCount}` : "Pending"
+    };
+  }
+
   const activeMembers = Number(teamRow?.active_member_count) || 0;
   const teamStatus = String(teamRow?.status || "").toUpperCase();
   const requiredMinMembers = getRequiredMinMembers(event);
@@ -182,81 +224,20 @@ const getNextRoundLabelForTeam = (roundsCleared, rounds = []) => {
   return rounds[normalized]?.round_name || `Round ${normalized + 1}`;
 };
 
-const canParticipateInRound = (event, teamRow) => {
-  const activeMembers = Number(teamRow?.active_member_count) || 0;
-  const requiredMinMembers = getRequiredMinMembers(event);
-  const teamStatus = String(teamRow?.status || "").toUpperCase();
+const getRoundProgressOptions = ({ roundsCleared, roundCount, selectedRoundOrder }) => {
+  const currentRoundProgress = Math.max(0, Number(roundsCleared) || 0);
+  const cappedRoundCount = Math.max(0, Number(roundCount) || 0);
+  const currentTabRoundOrder = Number(selectedRoundOrder) || 0;
+  const maxProgress = currentTabRoundOrder
+    ? Math.max(currentRoundProgress, Math.min(currentTabRoundOrder, cappedRoundCount))
+    : Math.min(cappedRoundCount, currentRoundProgress + 1);
 
-  return activeMembers >= requiredMinMembers && teamStatus !== "INACTIVE";
+  return Array.from({ length: maxProgress + 1 }, (_, index) => index);
 };
-
-function RoundTimelineCard({
-  isIndividualRegistration,
-  onSelect,
-  participants,
-  round,
-  selected = false
-}) {
-  const roundOrder = Number(round?.round_order) || 1;
-  const timeLabel = getTimeLabel(round?.start_time, round?.end_time);
-  const dateLabel = getRoundDateLabel(round);
-  const participantHeading = isIndividualRegistration
-    ? "Participating Registrations"
-    : "Participating Teams";
-
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(roundOrder)}
-      className={`w-full rounded-3xl border bg-white p-5 text-left shadow-sm transition ${
-        selected
-          ? "border-[#1754cf] ring-2 ring-[#1754cf]/15"
-          : "border-slate-200 hover:border-[#1754cf]/25 hover:bg-[#1754cf]/[0.02]"
-      }`}
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#1754cf]">
-            Round {roundOrder}
-          </p>
-          <h3 className="mt-1 text-lg font-bold text-slate-900">
-            {round?.round_name || `Round ${roundOrder}`}
-          </h3>
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-3 md:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-            Date
-          </p>
-          <p className="mt-1 text-sm font-semibold text-slate-900">{dateLabel}</p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-            Time
-          </p>
-          <p className="mt-1 text-sm font-semibold text-slate-900">{timeLabel}</p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-            {participantHeading}
-          </p>
-          <p className="mt-1 text-sm font-semibold text-slate-900">
-            {formatCountValue(participants.length)}
-          </p>
-        </div>
-      </div>
-    </button>
-  );
-}
 
 export default function EventDetailsPage() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const trackingSectionRef = useRef(null);
   const [event, setEvent] = useState(null);
   const [teamRows, setTeamRows] = useState([]);
   const [membershipRows, setMembershipRows] = useState([]);
@@ -336,31 +317,21 @@ export default function EventDetailsPage() {
     [membershipRows]
   );
 
-  const eligibleParticipantRows = useMemo(() => {
-    return [...teamRows]
-      .filter((row) => canParticipateInRound(event, row))
-      .sort((left, right) => {
-        const leftMembers = membershipRowsByTeamId.get(Number(left?.team_id)) || [];
-        const rightMembers = membershipRowsByTeamId.get(Number(right?.team_id)) || [];
-        const leftLabel = getParticipantPrimaryLabel(
-          left,
-          leftMembers,
-          isIndividualRegistration
-        );
-        const rightLabel = getParticipantPrimaryLabel(
-          right,
-          rightMembers,
-          isIndividualRegistration
-        );
+  const registeredParticipantRows = useMemo(() => {
+    return [...teamRows].sort((left, right) => {
+      const leftMembers = membershipRowsByTeamId.get(Number(left?.team_id)) || [];
+      const rightMembers = membershipRowsByTeamId.get(Number(right?.team_id)) || [];
+      const leftLabel = getParticipantPrimaryLabel(left, leftMembers, isIndividualRegistration);
+      const rightLabel = getParticipantPrimaryLabel(right, rightMembers, isIndividualRegistration);
 
-        return String(leftLabel).localeCompare(String(rightLabel));
-      });
-  }, [event, isIndividualRegistration, membershipRowsByTeamId, teamRows]);
+      return String(leftLabel).localeCompare(String(rightLabel));
+    });
+  }, [isIndividualRegistration, membershipRowsByTeamId, teamRows]);
 
   const roundTimelineRows = useMemo(() => {
     return rounds.map((round, index) => {
       const roundOrder = Number(round?.round_order) || index + 1;
-      const participants = eligibleParticipantRows.filter(
+      const participants = registeredParticipantRows.filter(
         (row) => (Number(row?.rounds_cleared) || 0) >= roundOrder - 1
       );
 
@@ -371,7 +342,7 @@ export default function EventDetailsPage() {
         roundOrder
       };
     });
-  }, [eligibleParticipantRows, rounds]);
+  }, [registeredParticipantRows, rounds]);
   const selectedRoundEntry = useMemo(
     () =>
       roundTimelineRows.find(
@@ -379,19 +350,38 @@ export default function EventDetailsPage() {
       ) || null,
     [roundTimelineRows, selectedRoundOrder]
   );
-  const progressRows = isIndividualRegistration ? eligibleParticipantRows : teamRows;
+  const selectedRoundParticipantLabel = isIndividualRegistration ? "Entries" : "Teams";
+  const progressRows = registeredParticipantRows;
   const filteredProgressRows = useMemo(() => {
     if (!selectedRoundEntry) return progressRows;
     return Array.isArray(selectedRoundEntry.participants)
       ? selectedRoundEntry.participants
       : [];
   }, [progressRows, selectedRoundEntry]);
+  const eventMetrics = useMemo(() => {
+    const validRows = teamRows.filter((row) => {
+      const state = getRegistrationState(event, row);
+      return state.value === "Valid" || state.value === "Registered";
+    });
+    const activeRows = teamRows.filter(
+      (row) => String(row?.status || "").toUpperCase() === "ACTIVE"
+    );
+    const completeRows = teamRows.filter(
+      (row) => rounds.length > 0 && (Number(row?.rounds_cleared) || 0) >= rounds.length
+    );
+
+    return {
+      active: activeRows.length,
+      availableSlots: availableSlotsLabel,
+      complete: completeRows.length,
+      rounds: rounds.length,
+      total: teamRows.length,
+      valid: validRows.length
+    };
+  }, [availableSlotsLabel, event, rounds.length, teamRows]);
 
   const handleSelectRound = (roundOrder) => {
-    setSelectedRoundOrder((previousValue) =>
-      Number(previousValue) === Number(roundOrder) ? null : Number(roundOrder)
-    );
-    trackingSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setSelectedRoundOrder(roundOrder === null ? null : Number(roundOrder));
   };
 
   const handleSaveRoundsCleared = async (teamId) => {
@@ -531,7 +521,16 @@ export default function EventDetailsPage() {
           }
         />
 
-        <section className="grid gap-4 xl:grid-cols-2">
+        <section className="flex flex-wrap overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <SummaryMetric label={isIndividualRegistration ? "Entries" : "Teams"} value={eventMetrics.total} />
+          <SummaryMetric label="Active" tone="emerald" value={eventMetrics.active} />
+          <SummaryMetric label="Valid" tone="emerald" value={eventMetrics.valid} />
+          <SummaryMetric label="Rounds" value={eventMetrics.rounds} />
+          <SummaryMetric label="Completed" value={eventMetrics.complete} />
+          <SummaryMetric label="Slots" tone="amber" value={eventMetrics.availableSlots} />
+        </section>
+
+        <section className="grid gap-4 xl:grid-cols-3">
           <SummaryCard title="Event Summary">
             <SummaryRow label="Event Dates" value={getEventDateRangeLabel(event)} />
             <SummaryRow
@@ -555,7 +554,7 @@ export default function EventDetailsPage() {
             <SummaryRow label="Available Slots" value={availableSlotsLabel} />
           </SummaryCard>
 
-          <SummaryCard className="xl:col-span-2" title="Notes">
+          <SummaryCard title="Notes">
             <SummaryRow label="Host / Organizer" value={event.event_organizer || "-"} />
             <SummaryRow label="Configured Rounds" value={String(rounds.length || 0)} />
             <SummaryRow
@@ -566,135 +565,189 @@ export default function EventDetailsPage() {
           </SummaryCard>
         </section>
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <section className={TABLE_WRAP_CLASS}>
+          <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                Event Rounds
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                {isIndividualRegistration
-                  ? "Rounds are shown as a direct participant journey for this event."
-                  : "Rounds are listed here so event-group progress can be tracked stage by stage."}
-              </p>
-            </div>
-          </div>
-
-          {rounds.length === 0 ? (
-            <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-500">
-              No rounds configured for this event yet.
-            </div>
-          ) : (
-            <div className="relative mt-6 space-y-6 before:absolute before:bottom-2 before:left-[15px] before:top-2 before:w-px before:bg-slate-200 xl:before:left-1/2 xl:before:-translate-x-1/2">
-              {roundTimelineRows.map(({ alignment, participants, round, roundOrder }) => (
-                <div
-                  key={round?.round_id || roundOrder}
-                  className="relative xl:grid xl:grid-cols-[minmax(0,1fr)_4rem_minmax(0,1fr)] xl:gap-5"
-                >
-                  <div
-                    className={`pl-12 xl:pl-0 ${
-                      alignment === "left"
-                        ? "xl:col-start-1 xl:mr-8"
-                        : "xl:col-start-3 xl:ml-8"
-                    }`}
-                  >
-                    <RoundTimelineCard
-                      isIndividualRegistration={isIndividualRegistration}
-                      onSelect={handleSelectRound}
-                      participants={participants}
-                      round={round}
-                      selected={Number(selectedRoundOrder) === Number(roundOrder)}
-                    />
-                  </div>
-
-                  <div className="absolute left-0 top-8 flex h-8 w-8 items-center justify-center rounded-full border-4 border-white bg-[#1754cf] shadow-sm xl:left-1/2 xl:-translate-x-1/2">
-                    <span className="text-[11px] font-bold text-white">{roundOrder}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section
-          ref={trackingSectionRef}
-          className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
-        >
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+              <h2 className="text-sm font-bold text-slate-900">
                 {selectedRoundEntry
-                  ? `${selectedRoundEntry.round?.round_name || `Round ${selectedRoundOrder}`} Entries`
+                  ? `${selectedRoundEntry.round?.round_name || `Round ${selectedRoundOrder}`} Tracking`
                   : isIndividualRegistration
                     ? "Participant Tracking"
                     : "Team Tracking"}
               </h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-0.5 text-xs text-slate-500">
                 {selectedRoundEntry
-                  ? "Showing only the teams or entries registered for the selected round."
+                  ? selectedRoundEntry.roundOrder === 1
+                    ? "Round 1 starts with every registered team or entry."
+                    : "Only teams or entries shortlisted from the previous round are shown."
                   : isIndividualRegistration
-                    ? "Click a round card to open the participants for that round here."
-                    : "Click a round card to open the teams for that round here."}
+                    ? "Use round tabs to see registered entries first, then only shortlisted entries."
+                    : "Use round tabs to see registered teams first, then only shortlisted teams."}
               </p>
             </div>
-            {selectedRoundEntry ? (
+          </div>
+
+          <div className="border-b border-slate-200 bg-white px-4 py-3">
+            <div className="flex gap-2 overflow-x-auto pb-1">
               <button
                 type="button"
-                onClick={() => setSelectedRoundOrder(null)}
-                className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                onClick={() => handleSelectRound(null)}
+                className={`shrink-0 rounded-xl border px-3.5 py-2 text-xs font-bold transition ${
+                  selectedRoundEntry
+                    ? "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    : "border-[#1754cf]/20 bg-[#1754cf] text-white shadow-sm shadow-[#1754cf]/20"
+                }`}
               >
-                Show All
+                All {selectedRoundParticipantLabel}
               </button>
-            ) : null}
+
+              {roundTimelineRows.map(({ participants, round, roundOrder }) => {
+                const selected = Number(selectedRoundOrder) === Number(roundOrder);
+
+                return (
+                  <button
+                    type="button"
+                    key={round?.round_id || roundOrder}
+                    onClick={() => handleSelectRound(roundOrder)}
+                    className={`shrink-0 rounded-xl border px-3.5 py-2 text-left transition ${
+                      selected
+                        ? "border-[#1754cf]/20 bg-[#1754cf] text-white shadow-sm shadow-[#1754cf]/20"
+                        : "border-slate-200 bg-white text-slate-700 hover:border-[#1754cf]/25 hover:bg-[#1754cf]/[0.03]"
+                    }`}
+                  >
+                    <span className="block text-xs font-bold">
+                      {round?.round_name || `Round ${roundOrder}`}
+                    </span>
+                    <span
+                      className={`mt-0.5 block text-[10px] font-semibold ${
+                        selected ? "text-white/80" : "text-slate-500"
+                      }`}
+                    >
+                      {roundOrder === 1 ? "Registered" : "Shortlisted"} |{" "}
+                      {formatCountValue(participants.length)}{" "}
+                      {selectedRoundParticipantLabel}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="border-b border-slate-200 bg-slate-50 px-4 py-4">
+            {selectedRoundEntry ? (
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_repeat(4,minmax(130px,1fr))]">
+                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    Selected Round
+                  </p>
+                  <p className="mt-1 text-sm font-bold text-slate-900">
+                    {selectedRoundEntry.round?.round_name || `Round ${selectedRoundOrder}`}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    Round {selectedRoundEntry.roundOrder}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    Date
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">
+                    {getRoundDateLabel(selectedRoundEntry.round)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    Time
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">
+                    {getTimeLabel(
+                      selectedRoundEntry.round?.start_time,
+                      selectedRoundEntry.round?.end_time
+                    )}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    Mode
+                  </p>
+                  <div className="mt-1">
+                    <StatusPill tone="info" value={selectedRoundEntry.round?.round_mode || "-"} />
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    Status
+                  </p>
+                  <div className="mt-1">
+                    <StatusPill value={selectedRoundEntry.round?.status || "-"} />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-4">
+                <p className="text-sm font-semibold text-slate-900">
+                  {rounds.length === 0
+                    ? "No rounds configured for this event yet."
+                    : `Showing every ${selectedRoundParticipantLabel.toLowerCase()} registration.`}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {rounds.length === 0
+                    ? "Tracking is still available for the event registrations below."
+                    : "Round 1 includes every registration. Later rounds include only teams or entries shortlisted from the previous round."}
+                </p>
+              </div>
+            )}
           </div>
 
           {progressError ? (
-            <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            <div className="m-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
               {progressError}
             </div>
           ) : null}
 
           {filteredProgressRows.length === 0 ? (
-            <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+            <div className="px-4 py-8 text-center text-sm text-slate-500">
               {selectedRoundEntry
-                ? "No teams or entries are available for this round yet."
+                ? selectedRoundEntry.roundOrder === 1
+                  ? "No teams or entries have been registered for this event yet."
+                  : "No teams or entries have been shortlisted for this round yet."
                 : isIndividualRegistration
-                  ? "No valid individual registrations have been recorded for this event yet."
+                  ? "No individual registrations have been recorded for this event yet."
                   : "No teams have been registered for this event yet."}
             </div>
           ) : (
-            <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
-              <table className="min-w-[1240px] w-full text-xs">
-                <thead className="bg-slate-50 text-slate-600">
+            <div className="overflow-x-auto">
+              <table className="min-w-[1420px] w-full table-fixed text-xs">
+                <thead className={TABLE_HEAD_CLASS}>
                   <tr>
-                    <th className="px-3 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.16em]">
+                    <th className={`${TH_CLASS} w-[230px]`}>
                       {isIndividualRegistration ? "Participant" : "Team"}
                     </th>
-                    <th className="px-3 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.16em]">
+                    <th className={`${TH_CLASS} w-[140px]`}>
                       {isIndividualRegistration ? "Student ID" : "Code"}
                     </th>
-                    <th className="px-3 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.16em]">
+                    <th className={`${TH_CLASS} w-[86px]`}>
                       Members
                     </th>
-                    <th className="px-3 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.16em]">
+                    <th className={`${TH_CLASS} w-[130px]`}>
                       Registration
                     </th>
-                    <th className="px-3 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.16em]">
+                    <th className={`${TH_CLASS} w-[120px]`}>
                       Status
                     </th>
-                    <th className="px-3 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.16em]">
+                    <th className={`${TH_CLASS} w-[86px]`}>
                       Cleared
                     </th>
-                    <th className="px-3 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.16em]">
+                    <th className={`${TH_CLASS} w-[170px]`}>
                       Highest Round
                     </th>
-                    <th className="px-3 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.16em]">
+                    <th className={`${TH_CLASS} w-[170px]`}>
                       Next Round
                     </th>
-                    <th className="px-3 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.16em]">
+                    <th className={`${TH_CLASS} w-[112px] text-center`}>
                       Members View
                     </th>
-                    <th className="px-3 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.16em]">
+                    <th className={`${TH_CLASS} w-[176px]`}>
                       Update
                     </th>
                   </tr>
@@ -703,28 +756,33 @@ export default function EventDetailsPage() {
                   {filteredProgressRows.map((row) => {
                     const members = membershipRowsByTeamId.get(Number(row.team_id)) || [];
                     const roundsCleared = Number(row.rounds_cleared) || 0;
+                    const progressOptions = getRoundProgressOptions({
+                      roundsCleared,
+                      roundCount: rounds.length,
+                      selectedRoundOrder: selectedRoundEntry?.roundOrder
+                    });
                     const registrationState = getRegistrationState(event, row);
                     const highestClearedRound = getHighestClearedRoundLabel(roundsCleared, rounds);
                     const nextRoundLabel = getNextRoundLabelForTeam(roundsCleared, rounds);
 
                     return (
                       <tr key={row.team_id} className="hover:bg-slate-50/80">
-                        <td className="px-3 py-3 font-semibold text-slate-900">
+                        <td className={`${TD_CLASS} overflow-hidden text-ellipsis font-semibold text-slate-900`}>
                           {getParticipantPrimaryLabel(row, members, isIndividualRegistration)}
                         </td>
-                        <td className="px-3 py-3 font-mono text-slate-600">
+                        <td className={`${TD_CLASS} overflow-hidden text-ellipsis font-mono text-slate-600`}>
                           {getParticipantSecondaryLabel(row, members, isIndividualRegistration)}
                         </td>
-                        <td className="px-3 py-3 text-slate-700">
+                        <td className={`${TD_CLASS} text-slate-700`}>
                           {formatCountValue(row.active_member_count)}
                         </td>
-                        <td className="px-3 py-3">
+                        <td className={TD_CLASS}>
                           <StatusPill
                             tone={registrationState.tone}
                             value={registrationState.value}
                           />
                         </td>
-                        <td className="px-3 py-3">
+                        <td className={TD_CLASS}>
                           <StatusPill
                             tone={
                               String(row.status || "").toUpperCase() === "ACTIVE"
@@ -734,24 +792,28 @@ export default function EventDetailsPage() {
                             value={row.status || "-"}
                           />
                         </td>
-                        <td className="px-3 py-3 font-semibold text-slate-700">
+                        <td className={`${TD_CLASS} font-semibold text-slate-700`}>
                           {String(roundsCleared)}
                         </td>
-                        <td className="px-3 py-3 text-slate-700">{highestClearedRound}</td>
-                        <td className="px-3 py-3 text-slate-700">{nextRoundLabel}</td>
-                        <td className="px-3 py-3">
+                        <td className={`${TD_CLASS} overflow-hidden text-ellipsis text-slate-700`}>
+                          {highestClearedRound}
+                        </td>
+                        <td className={`${TD_CLASS} overflow-hidden text-ellipsis text-slate-700`}>
+                          {nextRoundLabel}
+                        </td>
+                        <td className={`${TD_CLASS} text-center`}>
                           <button
                             type="button"
                             onClick={() => handleOpenMembers(row)}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-600 transition hover:border-[#1754cf]/25 hover:text-[#1754cf]"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-600 transition hover:border-[#1754cf]/25 hover:text-[#1754cf]"
                             aria-label={`View members for ${row?.team_name || "entry"}`}
                             title="View members"
                           >
-                            <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
+                            <VisibilityOutlinedIcon sx={{ fontSize: 17 }} />
                           </button>
                         </td>
-                        <td className="px-3 py-3">
-                          <div className="flex items-center gap-2">
+                        <td className={TD_CLASS}>
+                          <div className="flex flex-nowrap items-center gap-2">
                             <select
                               value={roundProgressDrafts[String(row.team_id)] || "0"}
                               onChange={(eventValue) =>
@@ -760,9 +822,9 @@ export default function EventDetailsPage() {
                                   [String(row.team_id)]: eventValue.target.value
                                 }))
                               }
-                              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 outline-none transition focus:border-[#1754cf]/35 focus:ring-2 focus:ring-[#1754cf]/10"
+                              className="h-8 w-16 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 outline-none transition focus:border-[#1754cf]/35 focus:ring-2 focus:ring-[#1754cf]/10"
                             >
-                              {Array.from({ length: rounds.length + 1 }, (_, index) => (
+                              {progressOptions.map((index) => (
                                 <option key={`${row.team_id}-${index}`} value={String(index)}>
                                   {index}
                                 </option>
@@ -772,7 +834,7 @@ export default function EventDetailsPage() {
                               type="button"
                               onClick={() => handleSaveRoundsCleared(row.team_id)}
                               disabled={progressBusyTeamId === Number(row.team_id)}
-                              className="rounded-lg border border-[#1754cf]/15 bg-[#1754cf]/8 px-3 py-2 text-xs font-semibold text-[#1754cf] transition hover:bg-[#1754cf]/12 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                              className="h-8 rounded-lg border border-[#1754cf]/15 bg-[#1754cf]/8 px-2.5 text-xs font-semibold text-[#1754cf] transition hover:bg-[#1754cf]/12 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
                             >
                               {progressBusyTeamId === Number(row.team_id) ? "Saving..." : "Save"}
                             </button>

@@ -19,6 +19,7 @@ import {
 } from "../teams/teamPage.utils";
 import {
   HUB_JOIN_RULE_MESSAGE,
+  HUB_PRIORITY_OPTIONS,
   HUB_SCOPE,
   HUB_STATUS_OPTIONS
 } from "./hubPage.constants";
@@ -39,7 +40,6 @@ export default function HubDirectoryPage() {
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
-  const [priorityFilter, setPriorityFilter] = useState("ALL");
   const [busyHubId, setBusyHubId] = useState(null);
   const [viewHub, setViewHub] = useState(null);
   const [viewMembers, setViewMembers] = useState([]);
@@ -93,7 +93,6 @@ export default function HubDirectoryPage() {
           row.hub_name,
           row.team_code,
           row.team_name,
-          row.hub_priority,
           row.status,
           row.description
         ]
@@ -103,13 +102,9 @@ export default function HubDirectoryPage() {
 
       const matchesStatus =
         statusFilter === "ALL" || String(row.status || "").toUpperCase() === statusFilter;
-      const matchesPriority =
-        priorityFilter === "ALL" ||
-        String(row.hub_priority || "").toUpperCase() === priorityFilter;
-
-      return matchesQuery && matchesStatus && matchesPriority;
+      return matchesQuery && matchesStatus;
     });
-  }, [priorityFilter, query, rows, statusFilter]);
+  }, [query, rows, statusFilter]);
 
   const activeRowsCount = useMemo(
     () => rows.filter((row) => String(row.status || "").toUpperCase() === "ACTIVE").length,
@@ -117,25 +112,12 @@ export default function HubDirectoryPage() {
   );
   const latestCreatedLabel = useMemo(() => getLatestCreatedLabel(rows), [rows]);
   const canResetFilters =
-    Boolean(String(query || "").trim()) || statusFilter !== "ALL" || priorityFilter !== "ALL";
+    Boolean(String(query || "").trim()) || statusFilter !== "ALL";
 
   const resetFilters = useCallback(() => {
     setQuery("");
     setStatusFilter("ALL");
-    setPriorityFilter("ALL");
   }, []);
-
-  const hubPriorityOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          rows
-            .map((row) => String(row.hub_priority || "").toUpperCase())
-            .filter(Boolean)
-        )
-      ),
-    [rows]
-  );
 
   const filterFields = useMemo(
     () => [
@@ -161,24 +143,9 @@ export default function HubDirectoryPage() {
             label: formatLabel(status)
           }))
         ]
-      },
-      {
-        key: "priority",
-        type: "select",
-        label: "Priority",
-        value: priorityFilter,
-        onChangeValue: setPriorityFilter,
-        wrapperClassName: "w-full sm:w-[180px]",
-        options: [
-          { value: "ALL", label: "All priorities" },
-          ...hubPriorityOptions.map((priority) => ({
-            value: priority,
-            label: formatLabel(priority)
-          }))
-        ]
       }
     ],
-    [hubPriorityOptions, priorityFilter, query, statusFilter]
+    [query, statusFilter]
   );
 
   const resolveJoinAction = useCallback(
@@ -227,16 +194,22 @@ export default function HubDirectoryPage() {
       const hubId = Number(row?.hub_id ?? row?.team_id);
       if (joinAction.disabled || !hubId) return;
 
-      const ok = window.confirm(
-        `${HUB_SCOPE.joinConfirmLabel} ${row.team_name || row.team_code}?`
+      const priority = window.prompt(
+        `Choose priority for ${row.team_name || row.team_code}: PROMINENT, MEDIUM, or LOW`,
+        "LOW"
       );
-      if (!ok) return;
+      if (priority === null) return;
+      const normalizedPriority = String(priority || "").trim().toUpperCase();
+      if (!HUB_PRIORITY_OPTIONS.includes(normalizedPriority)) {
+        setError("Choose a valid hub membership priority: PROMINENT, MEDIUM, or LOW.");
+        return;
+      }
 
       setBusyHubId(hubId);
       setError("");
 
       try {
-        await joinHub(hubId);
+        await joinHub(hubId, { hub_priority: normalizedPriority });
         await loadBase();
       } catch (err) {
         setError(err?.response?.data?.message || "Failed to join hub");
@@ -369,7 +342,6 @@ export default function HubDirectoryPage() {
 
                   <div className="mt-3 flex flex-wrap gap-2">
                     <AllGroupsBadge value={HUB_SCOPE.singularLabel} />
-                    <AllGroupsBadge value={formatLabel(row.hub_priority, "Not set")} />
                     {myHubIdSet.has(hubId) ? <AllGroupsBadge value="Active Member" /> : null}
                   </div>
 
@@ -377,10 +349,6 @@ export default function HubDirectoryPage() {
                     <TeamPageDetailTile
                       label="Members"
                       value={formatMemberCount(row.active_member_count)}
-                    />
-                    <TeamPageDetailTile
-                      label="Priority"
-                      value={formatLabel(row.hub_priority, "Not set")}
                     />
                     <TeamPageDetailTile label="Created" value={formatShortDate(row.created_at)} />
                   </div>
@@ -439,7 +407,6 @@ export default function HubDirectoryPage() {
               <tr>
                 <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Hub</th>
                 <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Status</th>
-                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Priority</th>
                 <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Members</th>
                 <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Created</th>
                 <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Description</th>
@@ -451,13 +418,13 @@ export default function HubDirectoryPage() {
             <tbody className="divide-y divide-slate-200 bg-white">
               {loading ? (
                 <tr>
-                  <td className="px-4 py-12 text-center text-sm text-slate-500" colSpan={7}>
+                  <td className="px-4 py-12 text-center text-sm text-slate-500" colSpan={6}>
                     Loading hubs...
                   </td>
                 </tr>
               ) : filteredRows.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-12 text-center text-sm text-slate-500" colSpan={7}>
+                  <td className="px-4 py-12 text-center text-sm text-slate-500" colSpan={6}>
                     {HUB_SCOPE.emptyDirectoryState}
                   </td>
                 </tr>
@@ -478,9 +445,6 @@ export default function HubDirectoryPage() {
                       </td>
                       <td className="px-4 py-3">
                         <AllGroupsBadge value={formatLabel(row.status, "Unknown")} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <AllGroupsBadge value={formatLabel(row.hub_priority, "Not set")} />
                       </td>
                       <td className="px-4 py-3 font-medium text-slate-800">
                         {formatMemberCount(row.active_member_count)}

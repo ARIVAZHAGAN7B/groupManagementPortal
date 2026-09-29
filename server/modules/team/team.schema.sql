@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS teams (
   team_id INT NOT NULL AUTO_INCREMENT,
   event_id INT NULL,
+  parent_team_id INT NULL,
   team_code VARCHAR(50) NOT NULL,
   team_name VARCHAR(120) NOT NULL,
   team_type ENUM('TEAM','SECTION','EVENT') NOT NULL DEFAULT 'TEAM',
@@ -15,11 +16,17 @@ CREATE TABLE IF NOT EXISTS teams (
   KEY idx_teams_status (status),
   KEY idx_teams_type_status (team_type, status),
   KEY idx_teams_event_status (event_id, status),
+  KEY idx_teams_parent_status (parent_team_id, status),
   KEY idx_teams_event_rounds (event_id, rounds_cleared),
   KEY idx_teams_type_event_status (team_type, event_id, status),
   CONSTRAINT fk_teams_event
     FOREIGN KEY (event_id)
     REFERENCES events(event_id)
+    ON UPDATE CASCADE
+    ON DELETE SET NULL,
+  CONSTRAINT fk_teams_parent_team
+    FOREIGN KEY (parent_team_id)
+    REFERENCES teams(team_id)
     ON UPDATE CASCADE
     ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -63,6 +70,30 @@ CREATE TABLE IF NOT EXISTS team_membership (
 --     ON UPDATE CASCADE ON DELETE SET NULL;
 
 SET @teams_schema := DATABASE();
+
+SET @ddl := IF(
+  EXISTS(
+    SELECT 1 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = @teams_schema AND TABLE_NAME = 'teams' AND COLUMN_NAME = 'parent_team_id'
+  ),
+  'SELECT 1',
+  'ALTER TABLE teams ADD COLUMN parent_team_id INT NULL AFTER event_id'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @ddl := IF(
+  EXISTS(
+    SELECT 1 FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = @teams_schema AND TABLE_NAME = 'teams' AND INDEX_NAME = 'idx_teams_parent_status'
+  ),
+  'SELECT 1',
+  'ALTER TABLE teams ADD KEY idx_teams_parent_status (parent_team_id, status)'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 SET @ddl := IF(
   EXISTS(

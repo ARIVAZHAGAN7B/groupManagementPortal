@@ -3,10 +3,10 @@ import ErrorOutlineRoundedIcon from "@mui/icons-material/ErrorOutlineRounded";
 
 const toneConfig = {
   success: {
-    wrapper: "border-blue-100 bg-blue-50",
-    iconWrap: "bg-blue-100 text-[#1754cf]",
-    title: "text-blue-900",
-    body: "text-blue-700",
+    wrapper: "border-emerald-100 bg-emerald-50",
+    iconWrap: "bg-emerald-100 text-emerald-600",
+    title: "text-emerald-900",
+    body: "text-emerald-700",
     icon: CheckCircleRoundedIcon
   },
   error: {
@@ -24,10 +24,10 @@ export default function ChangeDayManagementStatusBanner({ message, tone }) {
   const subtitle =
     tone === "error"
       ? "Review the current values and try again."
-      : "The configuration has been synchronized across all student records.";
+      : "Your latest configuration update has been saved successfully.";
 
   return (
-    <div className={`rounded-xl border p-4 ${config.wrapper}`}>
+    <div className={`rounded-2xl border p-4 shadow-[0_16px_40px_-32px_rgba(15,23,42,0.55)] ${config.wrapper}`}>
       <div className="flex items-start gap-3">
         <div
           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${config.iconWrap}`}
@@ -37,7 +37,7 @@ export default function ChangeDayManagementStatusBanner({ message, tone }) {
 
         <div>
           <p className={`text-sm font-bold ${config.title}`}>{message}</p>
-          <p className={`text-sm ${config.body}`}>{subtitle}</p>
+          <p className={`mt-1 text-sm ${config.body}`}>{subtitle}</p>
         </div>
       </div>
     </div>

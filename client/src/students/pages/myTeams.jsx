@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import AllGroupsBadge from "../components/allGroups/AllGroupsBadge";
 import {
   TeamDesktopTableShell
 } from "../components/teams/TeamDesktopTableControls";
 import TeamPageDetailTile from "../components/teams/TeamPageDetailTile";
 import TeamPageHero from "../components/teams/TeamPageHero";
-import { fetchMyEventGroupMemberships } from "../../service/teams.api";
+import TeamMembersPreviewModal from "../components/teams/TeamMembersPreviewModal";
+import {
+  fetchEventGroupMemberships,
+  fetchMyEventGroupMemberships
+} from "../../service/teams.api";
 import { WorkspaceFilterBar } from "../../shared/components/WorkspaceInlineFilters";
 import {
   formatLabel,
@@ -13,6 +18,16 @@ import {
   getUniqueCount,
   normalizeValue
 } from "../components/teams/teamPage.utils";
+
+const getNotesPreview = (notes) => {
+  const words = String(notes || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (words.length === 0) return "No notes";
+  return words.slice(0, 3).join(" ");
+};
 
 export default function MyTeamsPage() {
   const [rows, setRows] = useState([]);
@@ -22,6 +37,12 @@ export default function MyTeamsPage() {
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
   const [eventStatusFilter, setEventStatusFilter] = useState("ALL");
+  const [viewTeam, setViewTeam] = useState(null);
+  const [viewMembers, setViewMembers] = useState([]);
+  const [viewMembersLoading, setViewMembersLoading] = useState(false);
+  const [viewMembersError, setViewMembersError] = useState("");
+  const [viewBusyTeamId, setViewBusyTeamId] = useState(null);
+  const [notesDetail, setNotesDetail] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -117,6 +138,49 @@ export default function MyTeamsPage() {
     setQuery("");
     setRoleFilter("ALL");
     setEventStatusFilter("ALL");
+  }, []);
+
+  const closeViewMembers = useCallback(() => {
+    setViewTeam(null);
+    setViewMembers([]);
+    setViewMembersError("");
+    setViewMembersLoading(false);
+    setViewBusyTeamId(null);
+  }, []);
+
+  const handleViewMembers = useCallback(async (row) => {
+    const teamId = Number(row?.team_id);
+    if (!teamId) return;
+
+    setViewTeam(row);
+    setViewMembers([]);
+    setViewMembersError("");
+    setViewMembersLoading(true);
+    setViewBusyTeamId(teamId);
+
+    try {
+      const memberships = await fetchEventGroupMemberships(teamId, { status: "ACTIVE" });
+      setViewMembers(Array.isArray(memberships) ? memberships : []);
+    } catch (err) {
+      setViewMembersError(err?.response?.data?.message || "Failed to load group members");
+      setViewMembers([]);
+    } finally {
+      setViewMembersLoading(false);
+      setViewBusyTeamId(null);
+    }
+  }, []);
+
+  const openNotesDetail = useCallback((row) => {
+    setNotesDetail({
+      eventName: row?.event_name || "No event",
+      teamCode: row?.team_code || "No code",
+      teamName: row?.team_name || "Event Group",
+      notes: row?.notes || "No notes added for this membership."
+    });
+  }, []);
+
+  const closeNotesDetail = useCallback(() => {
+    setNotesDetail(null);
   }, []);
   const hasActiveFilters =
     Boolean(String(query || "").trim()) ||
@@ -257,7 +321,9 @@ export default function MyTeamsPage() {
 
                   <div className="mt-3 flex flex-wrap gap-2">
                     <AllGroupsBadge value={formatLabel(row.status, "Unknown")} />
-                    <AllGroupsBadge value={formatLabel(row.team_status, "Unknown")} />
+                    <AllGroupsBadge
+                      value={formatLabel(row.registration_status || row.team_status, "Unknown")}
+                    />
                     <AllGroupsBadge value={formatLabel(row.event_status, "Unknown")} />
                   </div>
 
@@ -272,14 +338,30 @@ export default function MyTeamsPage() {
                     />
                   </div>
 
-                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <button
+                    type="button"
+                    onClick={() => openNotesDetail(row)}
+                    className="mt-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-left transition hover:border-[#1754cf]/35 hover:bg-[#1754cf]/5"
+                    title="Show note details"
+                  >
                     <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                       Notes
                     </div>
-                    <p className="mt-1 text-sm leading-6 text-slate-600">
-                      {row.notes || "No notes added for this membership."}
+                    <p className="mt-1 truncate text-sm font-semibold text-slate-800">
+                      {getNotesPreview(row.notes)}
                     </p>
-                  </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleViewMembers(row)}
+                    disabled={viewBusyTeamId === Number(row.team_id)}
+                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#1754cf]/25 bg-[#1754cf] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1247b4] disabled:cursor-wait disabled:opacity-70"
+                    title="View group members"
+                  >
+                    <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
+                    {viewBusyTeamId === Number(row.team_id) ? "Loading members..." : "View Members"}
+                  </button>
                 </article>
               ))}
             </div>
@@ -316,18 +398,19 @@ export default function MyTeamsPage() {
                 <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Event Status</th>
                 <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Joined</th>
                 <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Notes</th>
+                <th className="px-4 py-3 text-right font-semibold whitespace-nowrap">Members</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 bg-white">
               {loading ? (
                 <tr>
-                  <td className="px-4 py-12 text-center text-sm text-slate-500" colSpan={8}>
+                  <td className="px-4 py-12 text-center text-sm text-slate-500" colSpan={9}>
                     Loading memberships...
                   </td>
                 </tr>
               ) : filteredRows.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-12 text-center text-sm text-slate-500" colSpan={8}>
+                  <td className="px-4 py-12 text-center text-sm text-slate-500" colSpan={9}>
                     No memberships found for the current filters.
                   </td>
                 </tr>
@@ -356,7 +439,9 @@ export default function MyTeamsPage() {
                       <AllGroupsBadge value={formatLabel(row.status, "Unknown")} />
                     </td>
                     <td className="px-4 py-3">
-                      <AllGroupsBadge value={formatLabel(row.team_status, "Unknown")} />
+                      <AllGroupsBadge
+                        value={formatLabel(row.registration_status || row.team_status, "Unknown")}
+                      />
                     </td>
                     <td className="px-4 py-3">
                       <AllGroupsBadge value={formatLabel(row.event_status, "Unknown")} />
@@ -365,9 +450,26 @@ export default function MyTeamsPage() {
                       {formatShortDate(row.join_date)}
                     </td>
                     <td className="px-4 py-3">
-                      <p className="max-w-sm leading-6 text-slate-600">
-                        {row.notes || "No notes added for this membership."}
-                      </p>
+                      <button
+                        type="button"
+                        onClick={() => openNotesDetail(row)}
+                        className="inline-flex max-w-[180px] items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm font-semibold text-slate-700 transition hover:border-[#1754cf]/35 hover:bg-[#1754cf]/5 hover:text-[#1754cf]"
+                        title="Show note details"
+                      >
+                        <span className="truncate">{getNotesPreview(row.notes)}</span>
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleViewMembers(row)}
+                        disabled={viewBusyTeamId === Number(row.team_id)}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-[#1754cf]/40 hover:bg-[#1754cf]/5 hover:text-[#1754cf] disabled:cursor-wait disabled:opacity-60"
+                        title="View group members"
+                        aria-label={`View members of ${row.team_name || "event group"}`}
+                      >
+                        <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -376,6 +478,66 @@ export default function MyTeamsPage() {
           </table>
         </div>
       </TeamDesktopTableShell>
+
+      <TeamMembersPreviewModal
+        emptyText="No active members found for this event group."
+        error={viewMembersError}
+        loading={viewMembersLoading}
+        onClose={closeViewMembers}
+        rows={viewMembers}
+        subtitle={
+          viewTeam
+            ? `${viewTeam.event_name || "No event"} - ${viewTeam.team_code || "No code"}`
+            : undefined
+        }
+        team={viewTeam}
+        title={viewTeam?.team_name || "Event Group Members"}
+      />
+
+      {notesDetail ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"
+          onClick={closeNotesDetail}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="notes-detail-title"
+        >
+          <div
+            className="w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-[#1754cf]">
+                    Membership Notes
+                  </p>
+                  <h2 id="notes-detail-title" className="mt-1 truncate text-xl font-bold text-slate-900">
+                    {notesDetail.teamName}
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {notesDetail.eventName} - {notesDetail.teamCode}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closeNotesDetail}
+                  className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <div className="px-5 py-5">
+              <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">
+                {notesDetail.notes}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

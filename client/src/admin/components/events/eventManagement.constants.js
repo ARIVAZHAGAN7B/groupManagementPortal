@@ -355,7 +355,7 @@ export const filterEventRows = (
       row?.description,
       row?.team_count,
       ...(Array.isArray(row?.allowed_hubs)
-        ? row.allowed_hubs.flatMap((hub) => [hub?.team_code, hub?.team_name, hub?.hub_priority])
+        ? row.allowed_hubs.flatMap((hub) => [hub?.team_code, hub?.team_name])
         : [])
     ]
       .map((value) => String(value ?? "").toLowerCase())

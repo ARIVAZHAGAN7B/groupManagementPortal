@@ -36,7 +36,6 @@ const tableCellClass = "px-3 py-2 align-top text-sm text-slate-700";
 export default function MyGroupRankSection({
   currentStudentId,
   isCaptain = false,
-  canOverrideRank = false,
   members = [],
   rankHistory = [],
   rankRules = null,
@@ -54,10 +53,9 @@ export default function MyGroupRankSection({
     [currentStudentId, members]
   );
 
-  const eligibleMembers = useMemo(
+  const rankedMembers = useMemo(
     () =>
       (Array.isArray(members) ? members : [])
-        .filter((member) => Boolean(member?.current_rank_review_eligible))
         .sort((a, b) => {
           const rankDiff = (Number(a?.member_rank) || 5) - (Number(b?.member_rank) || 5);
           if (rankDiff !== 0) return rankDiff;
@@ -70,16 +68,28 @@ export default function MyGroupRankSection({
     [members]
   );
 
-  const myReviewHistory = useMemo(
+  const groupReviewHistory = useMemo(
     () =>
       (Array.isArray(rankHistory) ? rankHistory : [])
-        .filter((row) => String(row?.student_id) === String(currentStudentId))
         .sort((a, b) => {
           const cycleDiff = (Number(b?.review_cycle_number) || 0) - (Number(a?.review_cycle_number) || 0);
           if (cycleDiff !== 0) return cycleDiff;
-          return String(b?.review_phase_id || "").localeCompare(String(a?.review_phase_id || ""));
+          const rankDiff = (Number(a?.overall_rank) || 5) - (Number(b?.overall_rank) || 5);
+          if (rankDiff !== 0) return rankDiff;
+          const scoreDiff = (Number(b?.total_score) || 0) - (Number(a?.total_score) || 0);
+          if (scoreDiff !== 0) return scoreDiff;
+          return String(a?.student_name || "").localeCompare(String(b?.student_name || ""));
         }),
-    [currentStudentId, rankHistory]
+    [rankHistory]
+  );
+
+  const rankCounts = useMemo(
+    () =>
+      [1, 2, 3, 4, 5].map((rank) => ({
+        rank,
+        count: rankedMembers.filter((member) => (Number(member?.member_rank) || 5) === rank).length
+      })),
+    [rankedMembers]
   );
 
   const effectiveRules = useMemo(
@@ -322,17 +332,39 @@ export default function MyGroupRankSection({
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 bg-slate-50/80 px-4 py-3">
-          <h3 className="text-sm font-semibold text-slate-900">Rank Table</h3>
+          <h3 className="text-sm font-semibold text-slate-900">Current Group Rank Table</h3>
           <p className="mt-1 text-xs text-slate-500">
-            Only members with at least 5 completed phases in this group are shown here.
+            All active group members are shown here across Rank 1 to Rank 5. Rank 5 includes members awaiting their first 5-phase review.
           </p>
         </div>
 
+        <div className="grid gap-3 border-b border-slate-200 bg-white p-4 sm:grid-cols-5">
+          {rankCounts.map((row) => (
+            <div key={`rank-count-${row.rank}`} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                Rank {row.rank}
+              </p>
+              <p className="mt-1 text-lg font-bold text-slate-900">{formatNumber(row.count)}</p>
+            </div>
+          ))}
+        </div>
+
         <div className="overflow-auto">
-          <table className="min-w-[980px] w-full text-sm">
+          <table className="min-w-[1180px] w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                {["Name", "ID", "Official Rank", "Live Score", "Loyalty", "Contribution", "Reliability", "Last Review"].map((header) => (
+                {[
+                  "Name",
+                  "ID",
+                  "Official Rank",
+                  "Source",
+                  "Live Score",
+                  "Loyalty",
+                  "Contribution",
+                  "Reliability",
+                  "Last Review",
+                  "Criteria"
+                ].map((header) => (
                   <th key={header} className={tableHeaderClass}>
                     {header}
                   </th>
@@ -340,24 +372,28 @@ export default function MyGroupRankSection({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {eligibleMembers.map((member) => (
+              {rankedMembers.map((member) => (
                 <tr key={`rank-row-${member.membership_id}`}>
                   <td className={tableCellClass}>
                     <div className="font-semibold text-slate-900">{member?.name || "-"}</div>
                   </td>
                   <td className={`${tableCellClass} font-mono text-xs text-slate-500`}>{member?.student_id || "-"}</td>
                   <td className={tableCellClass}>{member?.member_rank_label || "Rank 5"}</td>
+                  <td className={tableCellClass}>{member?.member_rank_source || "-"}</td>
                   <td className={tableCellClass}>{formatNumber(member?.current_total_score)}</td>
                   <td className={tableCellClass}>{formatRuleValue("LOYALTY", member?.current_loyalty_phase_count)}</td>
                   <td className={tableCellClass}>{formatRuleValue("CONTRIBUTION", member?.current_contribution_points)}</td>
                   <td className={tableCellClass}>{formatRuleValue("RELIABILITY", member?.current_reliability_eligible_phase_count)}</td>
                   <td className={tableCellClass}>{member?.member_rank_review_phase_name || "-"}</td>
+                  <td className={`${tableCellClass} max-w-[280px]`}>
+                    <p className="line-clamp-2">{member?.member_rank_criteria || "-"}</p>
+                  </td>
                 </tr>
               ))}
-              {!loading && eligibleMembers.length === 0 ? (
+              {!loading && rankedMembers.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-500">
-                    No active member has completed 5 phases in this group yet.
+                  <td colSpan={10} className="px-4 py-8 text-center text-sm text-slate-500">
+                    No active members found for this group.
                   </td>
                 </tr>
               ) : null}
@@ -368,9 +404,9 @@ export default function MyGroupRankSection({
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 bg-slate-50/80 px-4 py-3">
-          <h3 className="text-sm font-semibold text-slate-900">My Review History</h3>
+          <h3 className="text-sm font-semibold text-slate-900">Group Review History</h3>
           <p className="mt-1 text-xs text-slate-500">
-            Stored 5-phase review snapshots from the `group_rank` history.
+            Stored 5-phase review snapshots from the `group_rank` history for every member in this group.
           </p>
         </div>
 
@@ -378,7 +414,7 @@ export default function MyGroupRankSection({
           <table className="min-w-[900px] w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                {["Phase", "Cycle", "Rank", "Score", "Loyalty", "Contribution", "Reliability", "Movement"].map((header) => (
+                {["Phase", "Member", "Cycle", "Rank", "Score", "Loyalty", "Contribution", "Reliability", "Movement"].map((header) => (
                   <th key={header} className={tableHeaderClass}>
                     {header}
                   </th>
@@ -386,11 +422,15 @@ export default function MyGroupRankSection({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {myReviewHistory.map((row) => (
+              {groupReviewHistory.map((row) => (
                 <tr key={`history-${row.group_rank_id}`}>
                   <td className={tableCellClass}>
                     <div className="font-semibold text-slate-900">{row?.phase_name || row?.review_phase_id || "-"}</div>
                     <div className="mt-1 text-xs text-slate-500">{formatDateTime(row?.reviewed_at)}</div>
+                  </td>
+                  <td className={tableCellClass}>
+                    <div className="font-semibold text-slate-900">{row?.student_name || "-"}</div>
+                    <div className="mt-1 font-mono text-xs text-slate-500">{row?.student_id || "-"}</div>
                   </td>
                   <td className={tableCellClass}>{row?.review_cycle_number || "-"}</td>
                   <td className={tableCellClass}>{formatRank(row?.overall_rank)}</td>
@@ -401,10 +441,10 @@ export default function MyGroupRankSection({
                   <td className={tableCellClass}>{row?.rank_movement || "-"}</td>
                 </tr>
               ))}
-              {!loading && myReviewHistory.length === 0 ? (
+              {!loading && groupReviewHistory.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-500">
-                    No 5-phase rank review has been stored for your membership yet.
+                  <td colSpan={9} className="px-4 py-8 text-center text-sm text-slate-500">
+                    No 5-phase rank review has been stored for this group yet.
                   </td>
                 </tr>
               ) : null}

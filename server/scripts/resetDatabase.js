@@ -72,7 +72,8 @@ const resetDatabase = async () => {
     user: env.dbUser,
     password: env.dbPassword,
     database: env.dbName,
-    multipleStatements: true
+    multipleStatements: true,
+    ssl: env.dbSsl ? { rejectUnauthorized: false } : undefined
   });
 
   let foreignKeyChecksDisabled = false;

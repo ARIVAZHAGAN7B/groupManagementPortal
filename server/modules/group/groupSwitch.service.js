@@ -1,6 +1,7 @@
 const db = require("../../config/db");
 const phaseRepo = require("../phase/phase.repository");
 const systemConfigService = require("../systemConfig/systemConfig.service");
+const activityPointsWriteService = require("../activityPointsWrite/activityPointsWrite.service");
 
 const toDateOnly = (value) => {
   const date = new Date(value);
@@ -90,6 +91,17 @@ exports.switchGroup = async (studentId, newGroupId) => {
        WHERE membership_id=?`,
       [currentMembership.membership_id]
     );
+    await activityPointsWriteService.writeStudentGroupRole(
+      {
+        student_id: studentId,
+        group_id: currentMembership.group_id,
+        role: currentMembership.role || "MEMBER",
+        membership_status: "LEFT",
+        source_module: "GROUP_SWITCH",
+        sync_context: "SWITCH_OLD_GROUP_LEFT"
+      },
+      conn
+    );
 
     let incubationEndDate = null;
     if (Number(policy.incubation_duration_days) > 0) {
@@ -103,6 +115,28 @@ exports.switchGroup = async (studentId, newGroupId) => {
          (student_id, group_id, role, status, join_date, incubation_end_date)
        VALUES (?, ?, 'MEMBER', 'ACTIVE', NOW(), ?)`,
       [studentId, newGroupId, incubationEndDate]
+    );
+    await activityPointsWriteService.writeStudentGroupRole(
+      {
+        student_id: studentId,
+        group_id: newGroupId,
+        role: "MEMBER",
+        membership_status: "ACTIVE",
+        source_module: "GROUP_SWITCH",
+        sync_context: "SWITCH_NEW_GROUP_JOINED"
+      },
+      conn
+    );
+    await activityPointsWriteService.writeIncubationStatus(
+      {
+        student_id: studentId,
+        group_id: newGroupId,
+        incubation_end_date: incubationEndDate,
+        is_in_incubation: Boolean(incubationEndDate),
+        source_module: "GROUP_SWITCH",
+        sync_context: "SWITCH_NEW_GROUP_JOINED"
+      },
+      conn
     );
 
     const [[oldCountRow]] = await conn.query(
@@ -135,7 +169,7 @@ exports.switchGroup = async (studentId, newGroupId) => {
     return {
       message: "Group switched successfully",
       membership_id: insertResult.insertId,
-      student_id: Number(studentId),
+      student_id: studentId,
       old_group_id: Number(currentMembership.group_id),
       new_group_id: Number(newGroupId),
       incubation_end_date: incubationEndDate,

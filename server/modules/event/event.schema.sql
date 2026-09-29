@@ -317,3 +317,18 @@ DEALLOCATE PREPARE stmt;
 --     FOREIGN KEY (event_id) REFERENCES events(event_id)
 --     ON UPDATE CASCADE ON DELETE SET NULL;
 
+-- Add OD proof requirement flag to event_rounds
+SET @events_schema := DATABASE();
+
+SET @ddl := IF(
+  EXISTS(
+    SELECT 1 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = @events_schema AND TABLE_NAME = 'event_rounds' AND COLUMN_NAME = 'od_proof_required'
+  ),
+  'SELECT 1',
+  'ALTER TABLE event_rounds ADD COLUMN od_proof_required BOOLEAN NOT NULL DEFAULT FALSE AFTER round_mode'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+

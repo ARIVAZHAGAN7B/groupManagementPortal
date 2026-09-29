@@ -34,11 +34,18 @@ const getCorsConfig = () => ({
   credentials: true
 });
 
+if (env.nodeEnv === "production" && !env.cookieSecure) {
+  console.warn(
+    "[SECURITY WARNING] COOKIE_SECURE is false in production. Auth cookies may be transmitted over unencrypted HTTP."
+  );
+}
+
 const getCookieOptions = () => {
   return {
     httpOnly: true,
     secure: env.cookieSecure,
     sameSite: env.cookieSameSite,
+    path: "/",
     ...(env.cookieDomain ? { domain: env.cookieDomain } : {})
   };
 };

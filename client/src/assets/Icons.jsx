@@ -10,14 +10,23 @@ import EventIcon from "@mui/icons-material/Event";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import SettingsIcon from "@mui/icons-material/Settings";
 import ScienceIcon from "@mui/icons-material/Science";
-
 import PersonIcon from "@mui/icons-material/Person";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import TimerIcon from "@mui/icons-material/Timer";
 import LeaderboardIcon from "@mui/icons-material/Leaderboard";
+import TimelineIcon from "@mui/icons-material/Timeline";
+import MilitaryTechIcon from "@mui/icons-material/MilitaryTech";
+import StarsIcon from "@mui/icons-material/Stars";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import VolunteerActivismIcon from "@mui/icons-material/VolunteerActivism";
+import BadgeIcon from "@mui/icons-material/Badge";
+import ExploreIcon from "@mui/icons-material/Explore";
+import BookmarkBorderIcon from "@mui/icons-material/BookmarkBorder";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import HandshakeIcon from "@mui/icons-material/Handshake";
 
 const Icons = {
-  // sidebar
+  // Sidebar standard
   Dashboard: DashboardIcon,
   AuditLogs: AssignmentIcon,
   CreateGroup: AddBoxIcon,
@@ -30,7 +39,20 @@ const Icons = {
   IncubationConfiguration: ScienceIcon,
   HolidayManagement: CalendarMonthIcon,
 
-  // header/footer extras (MUST exist)
+  // Semantic feature additions
+  Timeline: TimelineIcon,
+  Tier: MilitaryTechIcon,
+  BasePoints: StarsIcon,
+  Eligibility: CheckCircleOutlineIcon,
+  Leadership: VolunteerActivismIcon,
+  OnDuty: BadgeIcon,
+  Badge: BadgeIcon,
+  Explore: ExploreIcon,
+  MySpace: BookmarkBorderIcon,
+  ChangeDay: SwapHorizIcon,
+  Requests: HandshakeIcon,
+
+  // Header/footer extras (MUST exist)
   School: SchoolIcon,
   Person: PersonIcon,
   Notifications: NotificationsIcon,

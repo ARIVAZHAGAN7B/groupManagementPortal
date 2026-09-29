@@ -37,6 +37,12 @@ router.put(
   phaseController.updatePhaseSettings
 );
 
+router.get(
+  "/recommended-targets",
+  authorize("ADMIN", "SYSTEM_ADMIN"),
+  phaseController.getRecommendedTargets
+);
+
 /**
  * Authenticated users (Student / Captain / Admin can view)
  */

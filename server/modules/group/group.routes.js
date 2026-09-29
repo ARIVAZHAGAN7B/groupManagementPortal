@@ -43,6 +43,13 @@ router.put(
   controller.updateGroup
 );
 
+router.put(
+  "/:id/application-settings",
+  authenticate,
+  authorize("ADMIN", "SYSTEM_ADMIN", "CAPTAIN"),
+  controller.updateApplicationSettings
+);
+
 router.delete(
   "/:id",
   authenticate,

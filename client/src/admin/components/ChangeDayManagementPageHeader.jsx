@@ -1,26 +1,73 @@
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
+import AdminWorkspaceHero, {
+  AdminWorkspaceHeroActionButton
+} from "./ui/AdminWorkspaceHero";
 
-export default function ChangeDayManagementPageHeader({ loading, onRefresh }) {
+const formatStatusLabel = (status) => {
+  const normalized = String(status || "").trim();
+  return normalized ? normalized.toUpperCase() : "NO ACTIVE PHASE";
+};
+
+const buildWindowLabel = (changeDayRange, formatDate) => {
+  if (!changeDayRange?.hasWindow) {
+    return "Allowed window: not available yet";
+  }
+
+  return `Allowed window: ${formatDate(changeDayRange.min)} - ${formatDate(changeDayRange.max)}`;
+};
+
+export default function ChangeDayManagementPageHeader({
+  changeDayRange,
+  currentPhase,
+  formatDate,
+  loading,
+  onRefresh
+}) {
+  const phaseName = currentPhase?.phase_name || currentPhase?.phase_id || "No active phase";
+  const phaseRange = currentPhase?.phase_id
+    ? `${formatDate(currentPhase?.start_date)} - ${formatDate(currentPhase?.end_date)}`
+    : "No active phase schedule loaded";
+  const currentChangeDay = currentPhase?.change_day
+    ? `Current change day: ${formatDate(currentPhase.change_day)}`
+    : "Current change day: not set";
+
   return (
-    <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
-      <div className="space-y-1">
-        <h1 className="text-3xl font-black tracking-tight text-slate-900">
-          Change Day Management
-        </h1>
-        <p className="text-sm text-slate-500">
-          Update change day and phase configuration settings for the active phase.
-        </p>
-      </div>
-
-      <button
-        type="button"
-        onClick={onRefresh}
-        disabled={loading}
-        className="inline-flex w-fit items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-wait disabled:opacity-70"
-      >
-        <RefreshRoundedIcon sx={{ fontSize: 18 }} />
-        {loading ? "Refreshing..." : "Refresh"}
-      </button>
-    </div>
+    <AdminWorkspaceHero
+      eyebrow="Active Phase Controls"
+      title="Change Day Management"
+      titleMeta={
+        <span className="rounded-full border border-[#1754cf]/15 bg-white/85 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-[#1754cf]">
+          {formatStatusLabel(currentPhase?.status)}
+        </span>
+      }
+      description={
+        <div className="flex flex-wrap gap-2">
+          <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-semibold text-slate-600">
+            {phaseName}
+          </span>
+          <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-semibold text-slate-600">
+            Phase range: {phaseRange}
+          </span>
+          <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-semibold text-slate-600">
+            {currentChangeDay}
+          </span>
+          <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-semibold text-slate-600">
+            {buildWindowLabel(changeDayRange, formatDate)}
+          </span>
+        </div>
+      }
+      descriptionClassName="mt-3"
+      actions={
+        <AdminWorkspaceHeroActionButton
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          className="border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50"
+        >
+          <RefreshRoundedIcon sx={{ fontSize: 18 }} />
+          {loading ? "Refreshing..." : "Refresh"}
+        </AdminWorkspaceHeroActionButton>
+      }
+    />
   );
 }

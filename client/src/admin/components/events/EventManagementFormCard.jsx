@@ -84,6 +84,7 @@ function InputField({
 }
 
 function SelectField({
+  disabled = false,
   label,
   onChange,
   options,
@@ -93,7 +94,7 @@ function SelectField({
     <div>
       <label className={labelClass}>{label}</label>
       <div className="relative">
-        <select value={value} onChange={onChange} className={selectClass}>
+        <select disabled={disabled} value={value} onChange={onChange} className={selectClass}>
           {options.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -478,10 +479,6 @@ export default function EventManagementFormCard({
                 {hubOptions.map((hub) => {
                   const hubId = Number(hub.team_id);
                   const selected = selectedAllowedHubIds.has(hubId);
-                  const priorityLabel = String(hub.hub_priority || "")
-                    .trim()
-                    .toLowerCase();
-
                   return (
                     <button
                       key={hubId}
@@ -497,11 +494,6 @@ export default function EventManagementFormCard({
                         <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">
                           {hub.team_code || `Hub ${hubId}`}
                         </span>
-                        {priorityLabel ? (
-                          <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">
-                            {priorityLabel}
-                          </span>
-                        ) : null}
                         {selected ? (
                           <span className="inline-flex rounded-full border border-[#0f6cbd]/20 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#0f6cbd]">
                             Selected
@@ -603,6 +595,23 @@ export default function EventManagementFormCard({
                         onChangeRound(index, "round_mode", event.target.value)
                       }
                       options={ROUND_MODE_OPTIONS}
+                    />
+
+                    <SelectField
+                      label="OD Proof"
+                      disabled={String(round.round_mode || "ONLINE").toUpperCase() !== "OFFLINE"}
+                      value={
+                        String(round.round_mode || "ONLINE").toUpperCase() === "OFFLINE"
+                          ? round.od_proof_required || "false"
+                          : "false"
+                      }
+                      onChange={(event) =>
+                        onChangeRound(index, "od_proof_required", event.target.value)
+                      }
+                      options={[
+                        { value: "false", label: "Not Required" },
+                        { value: "true", label: "Required" }
+                      ]}
                     />
 
                     <SelectField

@@ -10,6 +10,22 @@ const KNOWN_KEYS = [
 ];
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const CONFIG_CACHE_TTL_MS = 5 * 60 * 1000;
+let cachedPolicy = null;
+let policyExpiresAt = 0;
+let cachedHolidays = null;
+let holidaysExpiresAt = 0;
+
+const invalidateConfigCache = () => {
+  cachedPolicy = null;
+  policyExpiresAt = 0;
+};
+
+const invalidateHolidaysCache = () => {
+  cachedHolidays = null;
+  holidaysExpiresAt = 0;
+};
+
 
 const toSettingsMap = (rows = []) => {
   const map = new Map();
@@ -128,6 +144,10 @@ const normalizePolicyPayload = (payload = {}, current) => {
 };
 
 const getOperationalPolicy = async () => {
+  const now = Date.now();
+  if (cachedPolicy && now < policyExpiresAt) {
+    return cachedPolicy;
+  }
   const rows = await repo.getSettingsByKeys(KNOWN_KEYS);
   const map = toSettingsMap(rows);
 
@@ -163,10 +183,13 @@ const getOperationalPolicy = async () => {
     settings.incubation_duration_days = 1;
   }
 
+  cachedPolicy = settings;
+  policyExpiresAt = Date.now() + CONFIG_CACHE_TTL_MS;
   return settings;
 };
 
 const updateOperationalPolicy = async (payload = {}) => {
+  invalidateConfigCache();
   const current = await getOperationalPolicy();
   const normalized = normalizePolicyPayload(payload, current);
 
@@ -189,6 +212,7 @@ const getIncubationConfig = async () => {
 };
 
 const updateIncubationConfig = async (payload = {}) => {
+  invalidateConfigCache();
   const current = await getOperationalPolicy();
   const next = {
     incubation_duration_days:
@@ -221,8 +245,14 @@ const updateIncubationConfig = async (payload = {}) => {
 };
 
 const listHolidays = async () => {
+  const now = Date.now();
+  if (cachedHolidays && now < holidaysExpiresAt) {
+    return cachedHolidays;
+  }
   const rows = await repo.getAllHolidays();
-  return rows.map(normalizeHolidayRow);
+  cachedHolidays = rows.map(normalizeHolidayRow);
+  holidaysExpiresAt = now + CONFIG_CACHE_TTL_MS;
+  return cachedHolidays;
 };
 
 const getHolidayById = async (holidayId) => {
@@ -236,6 +266,7 @@ const getHolidayById = async (holidayId) => {
 };
 
 const createHoliday = async (payload = {}) => {
+  invalidateHolidaysCache();
   const holiday = {
     holiday_date: parseDateOnly(payload.holiday_date),
     holiday_name: parseRequiredText(payload.holiday_name, "holiday_name", 150),
@@ -254,6 +285,7 @@ const createHoliday = async (payload = {}) => {
 };
 
 const updateHoliday = async (holidayId, payload = {}) => {
+  invalidateHolidaysCache();
   const parsedHolidayId = parsePositiveInt(holidayId, "holiday_id", 1, 1000000000);
   const existing = await repo.getHolidayById(parsedHolidayId);
   if (!existing) {
@@ -286,6 +318,7 @@ const updateHoliday = async (holidayId, payload = {}) => {
 };
 
 const deleteHoliday = async (holidayId) => {
+  invalidateHolidaysCache();
   const parsedHolidayId = parsePositiveInt(holidayId, "holiday_id", 1, 1000000000);
   const existing = await repo.getHolidayById(parsedHolidayId);
   if (!existing) {

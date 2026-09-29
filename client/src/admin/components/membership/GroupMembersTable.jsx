@@ -75,9 +75,9 @@ const roleSelectBaseClass =
   "rounded-md border px-2.5 py-1 text-xs font-semibold outline-none transition focus:ring-2 focus:ring-slate-200 disabled:opacity-60";
 
 const rankSelectBaseClass =
-  "w-[5.35rem] appearance-none rounded-md border pl-2.5 pr-5 py-1 text-xs font-semibold outline-none transition focus:ring-2 focus:ring-slate-200 disabled:opacity-60";
+  "w-[7.25rem] appearance-none rounded-md border pl-2.5 pr-5 py-1 text-xs font-semibold outline-none transition focus:ring-2 focus:ring-slate-200 disabled:opacity-60";
 const compactRankSelectBaseClass =
-  "w-[4.7rem] appearance-none rounded-md border pl-2 pr-4 py-0.5 text-[11px] font-semibold outline-none transition focus:ring-2 focus:ring-slate-200 disabled:opacity-60";
+  "w-[6.6rem] appearance-none rounded-md border pl-2 pr-4 py-0.5 text-[11px] font-semibold outline-none transition focus:ring-2 focus:ring-slate-200 disabled:opacity-60";
 
 const rankSelectStyle = {
   backgroundImage:
@@ -135,6 +135,11 @@ const getRoleRank = (role) => {
 const getMemberRankValue = (member) => {
   const rank = Number(member?.member_rank);
   return Number.isInteger(rank) && rank >= 1 && rank <= 5 ? rank : 5;
+};
+
+const getMemberRankOverrideValue = (member) => {
+  const rank = Number(member?.member_rank_override);
+  return Number.isInteger(rank) && rank >= 1 && rank <= 5 ? String(rank) : "AUTO";
 };
 
 const getMemberRankBadge = (member) => {
@@ -330,7 +335,7 @@ export default function GroupMembersTable({
   const changeRank = async (membershipId, rank) => {
     setSavingId(membershipId);
     try {
-      await updateMemberRank(membershipId, Number(rank));
+      await updateMemberRank(membershipId, String(rank).toUpperCase() === "AUTO" ? null : Number(rank));
       onChanged?.();
     } catch (e) {
       const apiMessage = e?.response?.data?.message || e?.response?.data?.error || "";
@@ -599,10 +604,11 @@ export default function GroupMembersTable({
                   <select
                     className={getRankSelectClass(m, compactRank)}
                     style={compactRank ? compactRankSelectStyle : rankSelectStyle}
-                    value={String(getMemberRankValue(m))}
+                    value={getMemberRankOverrideValue(m)}
                     disabled={isBusy}
                     onChange={(e) => changeRank(m.membership_id, e.target.value)}
                   >
+                    <option value="AUTO">Automated</option>
                     {RANK_OPTIONS.map((rank) => (
                       <option key={rank} value={rank}>
                         {`Rank ${rank}`}
@@ -791,10 +797,11 @@ export default function GroupMembersTable({
                         <select
                           className={getRankSelectClass(m, compactRank)}
                           style={compactRank ? compactRankSelectStyle : rankSelectStyle}
-                          value={String(getMemberRankValue(m))}
+                          value={getMemberRankOverrideValue(m)}
                           disabled={isBusy}
                           onChange={(e) => changeRank(m.membership_id, e.target.value)}
                         >
+                          <option value="AUTO">Automated</option>
                           {RANK_OPTIONS.map((rank) => (
                             <option key={rank} value={rank}>
                               {`Rank ${rank}`}

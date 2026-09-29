@@ -177,6 +177,10 @@ const normalizeRounds = (value) => {
     const location = normalizeText(row?.location) || null;
     const description = normalizeText(row?.description) || null;
     const round_mode = normalizeRoundMode(row?.round_mode);
+    const od_proof_required =
+      round_mode === "OFFLINE"
+        ? normalizeOptionalBoolean(row?.od_proof_required, "round od_proof_required")
+        : false;
     const status = normalizeRoundStatus(row?.status);
 
     if (!round_name) {
@@ -207,6 +211,7 @@ const normalizeRounds = (value) => {
       location,
       description,
       round_mode,
+      od_proof_required: od_proof_required === null ? index > 0 : od_proof_required,
       status
     };
   });
@@ -337,7 +342,8 @@ const mapRoundRow = (row) => ({
   event_id: Number(row.event_id),
   round_order: Number(row.round_order),
   round_end_date: row.round_end_date || row.round_date || null,
-  round_mode: normalizeText(row.round_mode).toUpperCase() || "ONLINE"
+  round_mode: normalizeText(row.round_mode).toUpperCase() || "ONLINE",
+  od_proof_required: normalizeBooleanOrNull(row.od_proof_required) || false
 });
 
 const mapAllowedHubRow = (row) => ({

@@ -102,7 +102,7 @@ export default function EventOnDutySection({
     const roundId = Number(round?.round_id);
     if (!teamId || !roundId) return;
 
-    const proofRequired = Number(round?.round_order) > 1;
+    const proofRequired = Boolean(round?.od_proof_required);
     const file = selectedFilesByRoundId[String(roundId)] || null;
 
     setSubmitBusyRoundId(roundId);
@@ -121,7 +121,7 @@ export default function EventOnDutySection({
       }
 
       if (proofRequired && !proof) {
-        throw new Error("Shortlist proof is required from round 2 onward");
+        throw new Error("Shortlist proof is required for this round");
       }
 
       await submitTeamOnDutyRequest(teamId, {
@@ -150,8 +150,8 @@ export default function EventOnDutySection({
             On Duty Support
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            Submit OD round by round for offline stages only. Later rounds require shortlist proof,
-            so unused OD days from future rounds cannot be claimed early.
+            Submit OD round by round for offline stages only. Proof is required when the event
+            round is configured for shortlist verification.
           </p>
         </div>
 
@@ -194,7 +194,7 @@ export default function EventOnDutySection({
             const request = requestsByRoundId.get(Number(round?.round_id)) || null;
             const roundId = Number(round?.round_id) || 0;
             const selectedFile = selectedFilesByRoundId[String(roundId)] || null;
-            const proofRequired = Number(round?.round_order) > 1;
+            const proofRequired = Boolean(round?.od_proof_required);
             const adminStatus = String(request?.admin_status || "").toUpperCase();
             const unlockedByProgress =
               (Number(group?.rounds_cleared) || 0) >= (Number(round?.round_order) || 1) - 1;
@@ -324,8 +324,8 @@ export default function EventOnDutySection({
                         />
                         <p className="mt-2 text-xs text-slate-500">
                           {proofRequired
-                            ? "Upload the shortlist proof from the previous round to unlock this OD."
-                            : "Round 1 OD can be submitted directly for the configured offline dates."}
+                            ? "Upload the configured shortlist or approval proof for this round."
+                            : "This OD can be submitted directly for the configured offline dates."}
                         </p>
                         {selectedFile ? (
                           <p className="mt-2 text-xs font-medium text-slate-600">

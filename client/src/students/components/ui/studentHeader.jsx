@@ -180,7 +180,7 @@ const StudentHeader = ({ onMenuClick }) => {
       return {
         visible: true,
         text: "Unavailable",
-        toneClass: "text-gray-600",
+        toneClass: "text-slate-500 dark:text-slate-400",
         title: "Join deadline unavailable"
       };
     }
@@ -191,27 +191,22 @@ const StudentHeader = ({ onMenuClick }) => {
     return {
       visible: true,
       text: expired ? "Expired" : `${formatCountdown(remainingMs)} left`,
-      toneClass: expired ? "text-red-700" : "text-amber-700",
+      toneClass: expired ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400",
       title: `Join another group by ${deadline.toLocaleString()} (next working day deadline)`
     };
   }, [myGroup, rejoinDeadline, nowMs]);
 
   const initials = getInitials(studentName);
 
-  // =========================
-  // UI
-  // =========================
-
   return (
     <div className="flex w-full items-center justify-between gap-3">
-
       {/* Left */}
       <div className="flex items-center gap-3">
         <button
           type="button"
           aria-label="Open navigation menu"
           onClick={() => onMenuClick?.()}
-          className="grid h-10 w-10 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden"
+          className="grid h-10 w-10 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 lg:hidden"
         >
           <MenuRoundedIcon fontSize="small" />
         </button>
@@ -226,8 +221,8 @@ const StudentHeader = ({ onMenuClick }) => {
         />
 
         <div className="hidden sm:block">
-          <h1 className="text-lg font-bold text-slate-900">GM Portal</h1>
-          <p className="text-[10px] font-semibold uppercase text-slate-500">
+          <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">GM Portal</h1>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
             Student Portal
           </p>
         </div>
@@ -235,36 +230,35 @@ const StudentHeader = ({ onMenuClick }) => {
 
       {/* Right */}
       <div className="flex items-center gap-4">
-
-        <div className="hidden sm:flex text-xs font-bold text-[#3211d4]">
+        <div className="hidden rounded-full bg-brand-50 px-3 py-1 text-xs font-bold text-brand-700 dark:bg-brand-950/60 dark:text-brand-300 sm:flex">
           {remainingText}
         </div>
 
-        <div className="hidden lg:flex text-xs">
+        <div className="hidden text-xs text-slate-600 dark:text-slate-400 lg:flex">
           Change Date:{" "}
-          <span className="font-bold ml-1">
+          <span className="ml-1 font-bold text-slate-900 dark:text-slate-100">
             {changeDateText}
           </span>
         </div>
 
-        <div className="hidden md:flex text-xs">
+        <div className="hidden text-xs text-slate-600 dark:text-slate-400 md:flex">
           Eligibility:{" "}
-          <span className="font-bold ml-1">
+          <span className="ml-1 font-bold text-slate-900 dark:text-slate-100">
             {eligibilityTargetText}
           </span>
         </div>
 
-        <div className="hidden md:flex text-xs">
+        <div className="hidden text-xs text-slate-600 dark:text-slate-400 md:flex">
           {groupTierWidget.label}:{" "}
-          <span className="font-bold ml-1">
+          <span className="ml-1 font-bold text-slate-900 dark:text-slate-100">
             {groupTierWidget.value}
           </span>
         </div>
 
         {rejoinDeadlineWidget?.visible && (
-          <div className="hidden lg:flex text-xs" title={rejoinDeadlineWidget.title}>
+          <div className="hidden text-xs lg:flex" title={rejoinDeadlineWidget.title}>
             Join Deadline:{" "}
-            <span className={`font-bold ml-1 ${rejoinDeadlineWidget.toneClass}`}>
+            <span className={`ml-1 font-bold ${rejoinDeadlineWidget.toneClass}`}>
               {rejoinDeadlineWidget.text}
             </span>
           </div>
@@ -273,11 +267,11 @@ const StudentHeader = ({ onMenuClick }) => {
         <ThemeModeControl />
 
         <div className="flex items-center gap-3">
-          <div className="hidden lg:block text-right">
-            <p className="text-sm font-bold text-slate-900">
+          <div className="hidden text-right lg:block">
+            <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
               {studentName}
             </p>
-            <p className="text-[10px] text-slate-500">
+            <p className="text-[10px] text-slate-500 dark:text-slate-400">
               {profileLoading
                 ? "Loading profile..."
                 : studentId
@@ -286,7 +280,7 @@ const StudentHeader = ({ onMenuClick }) => {
             </p>
           </div>
 
-          <div className="grid h-10 w-10 place-items-center rounded-full bg-slate-200 text-xs font-bold text-slate-700">
+          <div className="grid h-10 w-10 place-items-center rounded-full bg-brand-100 text-xs font-bold text-brand-700 dark:bg-brand-950 dark:text-brand-300">
             {initials}
           </div>
         </div>

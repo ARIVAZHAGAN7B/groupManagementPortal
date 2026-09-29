@@ -20,6 +20,12 @@ const MAX_PROOF_FILE_BYTES = 5 * 1024 * 1024;
 const UPLOAD_DIRECTORY = path.resolve(__dirname, "../../uploads/on-duty-proofs");
 
 const normalizeText = (value) => String(value || "").trim();
+const normalizeBoolean = (value) => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  const normalized = normalizeText(value).toLowerCase();
+  return ["1", "true", "yes", "y"].includes(normalized);
+};
 
 const normalizeId = (value, fieldName) => {
   const parsed = Number(value);
@@ -94,6 +100,11 @@ const calculateInclusiveDayCount = (startValue, endValue) => {
 
 const isAdminUser = (actorUser) =>
   ["ADMIN", "SYSTEM_ADMIN"].includes(String(actorUser?.role || "").trim().toUpperCase());
+
+const getRequiredMinMembers = (teamLike) => {
+  const parsed = Number(teamLike?.event_min_members ?? teamLike?.min_members);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+};
 
 const getRoundWindow = (round) => {
   const startDate = toIsoDate(round?.round_date);
@@ -174,7 +185,8 @@ const mapRequestRow = (row) => ({
   requested_day_count: Number(row.requested_day_count) || 0,
   round_order: Number(row.round_order) || 0,
   rounds_cleared: Number(row.rounds_cleared) || 0,
-  proof_required: (Number(row.round_order) || 0) > 1
+  od_proof_required: normalizeBoolean(row.od_proof_required),
+  proof_required: normalizeBoolean(row.od_proof_required)
 });
 
 const ensureTeamAndRoundContext = async (teamId, roundId, executor) => {
@@ -186,6 +198,11 @@ const ensureTeamAndRoundContext = async (teamId, roundId, executor) => {
   }
   if (String(team.status || "").toUpperCase() !== "ACTIVE") {
     throw new Error("Only active event registrations can request OD");
+  }
+  if ((Number(team.active_member_count) || 0) < getRequiredMinMembers(team)) {
+    throw new Error(
+      `Registration is pending until it reaches ${getRequiredMinMembers(team)} active member(s)`
+    );
   }
 
   const event = await eventRepo.getEventById(team.event_id, executor);
@@ -305,13 +322,13 @@ const submitRequest = async (teamIdValue, payload = {}, actorUser) => {
 
     const actorContext = await ensureStudentCanManageTeamOd(teamId, actorUser, conn);
     const { event, round, team } = await ensureTeamAndRoundContext(teamId, roundId, conn);
-    const proofRequired = Number(round.round_order) > 1;
+    const proofRequired = normalizeBoolean(round.od_proof_required);
     const existing = await repo.lockRequestByRoundAndTeam(roundId, teamId, conn);
     const hasReusableProof = Boolean(existing?.shortlist_proof_path);
     const shouldUploadNewProof = Boolean(payload?.proof?.content_base64);
 
     if (proofRequired && !shouldUploadNewProof && !hasReusableProof) {
-      throw new Error("Shortlist proof is required from round 2 onward");
+      throw new Error("Shortlist proof is required for this round");
     }
 
     if (existing) {
@@ -418,6 +435,22 @@ const reviewRequest = async (odRequestIdValue, payload = {}, actorUser) => {
       conn
     );
 
+    if (admin_status === "APPROVED") {
+      const team = await teamRepo.lockTeamById(existing.team_id, conn);
+      if (!team) throw new Error("Team not found");
+      if ((Number(team.active_member_count) || 0) < getRequiredMinMembers(team)) {
+        throw new Error(
+          `Registration is pending until it reaches ${getRequiredMinMembers(team)} active member(s)`
+        );
+      }
+
+      const currentRoundsCleared = Number(team.rounds_cleared) || 0;
+      const approvedRoundOrder = Number(existing.round_order) || 0;
+      if (approvedRoundOrder > currentRoundsCleared) {
+        await teamRepo.updateTeamRoundsCleared(team.team_id, approvedRoundOrder, conn);
+      }
+    }
+
     await conn.commit();
 
     const row = await repo.getRequestById(odRequestId);
@@ -430,6 +463,99 @@ const reviewRequest = async (odRequestIdValue, payload = {}, actorUser) => {
   }
 };
 
+const getEventsWithOdDetails = async () => {
+  const events = await eventRepo.getAllEvents();
+  if (!Array.isArray(events)) return [];
+
+  const eventsWithDetails = await Promise.all(
+    events.map(async (event) => {
+      const rounds = await eventRepo.getRoundsByEventId(event.event_id);
+      const odRequests = await repo.listRequests({ event_id: event.event_id });
+
+      return {
+        event_id: Number(event.event_id),
+        event_code: event.event_code,
+        event_name: event.event_name,
+        event_organizer: event.event_organizer,
+        status: event.status,
+        start_date: event.start_date,
+        end_date: event.end_date,
+        registration_mode: event.registration_mode,
+        round_count: (rounds || []).length,
+        total_od_requests: (odRequests || []).length,
+        pending_od_requests: (odRequests || []).filter((r) =>
+          ["PENDING"].includes(String(r.admin_status || "").toUpperCase())
+        ).length,
+        rounds: (rounds || []).map((round) => ({
+          round_id: Number(round.round_id),
+          round_order: Number(round.round_order),
+          round_name: round.round_name,
+          round_date: round.round_date,
+          round_end_date: round.round_end_date,
+          round_mode: round.round_mode,
+          status: round.status,
+          od_proof_required: normalizeBoolean(round.od_proof_required)
+        }))
+      };
+    })
+  );
+
+  return eventsWithDetails;
+};
+
+const getEventTeamsWithOdRequests = async (eventIdValue) => {
+  const eventId = normalizeId(eventIdValue, "event_id");
+  const event = await eventRepo.getEventById(eventId);
+  if (!event) throw new Error("Event not found");
+
+  const teams = await teamRepo.getTeamsByEventId(eventId);
+  const allOdRequests = await repo.listRequests({ event_id: eventId });
+
+  const teamsWithOd = (teams || [])
+    .filter((team) => String(team.team_type || "").toUpperCase() === "EVENT")
+    .map((team) => {
+      const teamRequests = (allOdRequests || []).filter(
+        (req) => Number(req.team_id) === Number(team.team_id)
+      );
+
+      return {
+        team_id: Number(team.team_id),
+        team_code: team.team_code,
+        team_name: team.team_name,
+        status: team.status,
+        rounds_cleared: Number(team.rounds_cleared),
+        member_count: Number(team.active_member_count) || 0,
+        od_requests_count: teamRequests.length,
+        od_requests: teamRequests.map((req) => ({
+          od_request_id: Number(req.od_request_id),
+          round_id: Number(req.round_id),
+          round_order: Number(req.round_order),
+          round_name: req.round_name,
+          od_proof_required: normalizeBoolean(req.od_proof_required),
+          proof_required: normalizeBoolean(req.od_proof_required),
+          requested_from_date: req.requested_from_date,
+          requested_to_date: req.requested_to_date,
+          requested_day_count: Number(req.requested_day_count),
+          requested_by_student_id: req.requested_by_student_id,
+          requested_by_student_name: req.requested_by_student_name,
+          faculty_status: req.faculty_status,
+          hod_status: req.hod_status,
+          admin_status: req.admin_status,
+          faculty_notes: req.faculty_notes,
+          hod_notes: req.hod_notes,
+          admin_notes: req.admin_notes,
+          shortlist_proof_path: req.shortlist_proof_path,
+          shortlist_proof_name: req.shortlist_proof_name,
+          shortlist_proof_type: req.shortlist_proof_type,
+          reviewed_at: req.reviewed_at,
+          created_at: req.created_at
+        }))
+      };
+    });
+
+  return teamsWithOd;
+};
+
 module.exports = {
   EXTERNAL_APPROVAL_STATUSES,
   ADMIN_APPROVAL_STATUSES,
@@ -437,5 +563,7 @@ module.exports = {
   getMyRequests,
   getTeamRequests,
   submitRequest,
-  reviewRequest
+  reviewRequest,
+  getEventsWithOdDetails,
+  getEventTeamsWithOdRequests
 };

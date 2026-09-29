@@ -9,7 +9,7 @@ export const HUB_MANAGEMENT_SCOPE_CONFIG = {
   teamType: "HUB",
   scopeLabel: "Hub",
   scopeLabelPlural: "Hubs",
-  searchPlaceholder: "Search by hub code, name, priority, status, or notes",
+  searchPlaceholder: "Search by hub code, name, status, or notes",
   workspaceLabel: "Hub Workspace"
 };
 

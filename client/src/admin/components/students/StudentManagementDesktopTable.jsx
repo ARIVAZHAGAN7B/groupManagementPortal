@@ -1,3 +1,4 @@
+import React, { memo } from "react";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import StudentManagementBadge from "./StudentManagementBadge";
 import { AdminIconActionButton } from "../ui/AdminUiPrimitives";
@@ -15,6 +16,72 @@ const getStudentLabel = (row) => {
   const studentId = row?.student_id ? ` (${row.student_id})` : "";
   return `${name}${studentId}`;
 };
+
+const StudentDesktopRow = memo(function StudentDesktopRow({ row, onView }) {
+  return (
+    <tr className="transition-colors hover:bg-slate-50/80">
+      <td className="max-w-[200px] px-4 py-3 text-xs font-semibold text-slate-900">
+        <span className="block truncate whitespace-nowrap" title={getStudentLabel(row)}>
+          {getStudentLabel(row)}
+        </span>
+      </td>
+
+      <td className="max-w-[220px] px-4 py-3 text-xs text-slate-600">
+        <span className="block truncate whitespace-nowrap" title={row.email || "-"}>
+          {row.email || "-"}
+        </span>
+      </td>
+
+      <td className="max-w-[190px] px-4 py-3 text-xs text-slate-600">
+        <span
+          className="block truncate whitespace-nowrap"
+          title={getAcademicMeta(row)}
+        >
+          {getAcademicMeta(row)}
+        </span>
+      </td>
+
+      <td className="max-w-[180px] px-4 py-3 text-xs font-medium text-slate-700">
+        <span
+          className="block truncate whitespace-nowrap"
+          title={getGroupLabel(row)}
+        >
+          {getGroupLabel(row)}
+        </span>
+      </td>
+
+      <td className="whitespace-nowrap px-4 py-3 text-xs">
+        <StudentManagementBadge value={row.group_tier} map={TIER_STYLES} />
+      </td>
+
+      <td className="whitespace-nowrap px-4 py-3 text-xs">
+        <StudentManagementBadge value={row.membership_role} map={ROLE_STYLES} />
+      </td>
+
+      <td className="whitespace-nowrap px-4 py-3 text-xs font-semibold text-slate-900 tabular-nums">
+        {formatNumber(row.total_base_points)}
+      </td>
+
+      <td className="whitespace-nowrap px-4 py-3 text-xs font-semibold text-[#1754cf] tabular-nums">
+        {formatNumber(row.this_phase_base_points)}
+      </td>
+
+      <td className="whitespace-nowrap px-4 py-3 text-xs font-medium text-slate-600">
+        {formatDate(row.join_date)}
+      </td>
+
+      <td className="whitespace-nowrap px-4 py-3 text-right">
+        <AdminIconActionButton
+          label={`View ${row.name || row.student_id}`}
+          onClick={() => onView?.(row.student_id)}
+          className="rounded-full border border-slate-200 bg-white text-slate-500 hover:border-[#1754cf] hover:text-[#1754cf]"
+        >
+          <VisibilityRoundedIcon sx={{ fontSize: 18 }} />
+        </AdminIconActionButton>
+      </td>
+    </tr>
+  );
+});
 
 export default function StudentManagementDesktopTable({ students, onView }) {
   return (
@@ -48,70 +115,11 @@ export default function StudentManagementDesktopTable({ students, onView }) {
           <tbody className="divide-y divide-slate-100">
             {students.length > 0 ? (
               students.map((row) => (
-                <tr
+                <StudentDesktopRow
                   key={String(row.student_id)}
-                  className="transition-colors hover:bg-slate-50/80"
-                >
-                  <td className="max-w-[200px] px-4 py-3 text-xs font-semibold text-slate-900">
-                    <span className="block truncate whitespace-nowrap" title={getStudentLabel(row)}>
-                      {getStudentLabel(row)}
-                    </span>
-                  </td>
-
-                  <td className="max-w-[220px] px-4 py-3 text-xs text-slate-600">
-                    <span className="block truncate whitespace-nowrap" title={row.email || "-"}>
-                      {row.email || "-"}
-                    </span>
-                  </td>
-
-                  <td className="max-w-[190px] px-4 py-3 text-xs text-slate-600">
-                    <span
-                      className="block truncate whitespace-nowrap"
-                      title={getAcademicMeta(row)}
-                    >
-                      {getAcademicMeta(row)}
-                    </span>
-                  </td>
-
-                  <td className="max-w-[180px] px-4 py-3 text-xs font-medium text-slate-700">
-                    <span
-                      className="block truncate whitespace-nowrap"
-                      title={getGroupLabel(row)}
-                    >
-                      {getGroupLabel(row)}
-                    </span>
-                  </td>
-
-                  <td className="whitespace-nowrap px-4 py-3 text-xs">
-                    <StudentManagementBadge value={row.group_tier} map={TIER_STYLES} />
-                  </td>
-
-                  <td className="whitespace-nowrap px-4 py-3 text-xs">
-                    <StudentManagementBadge value={row.membership_role} map={ROLE_STYLES} />
-                  </td>
-
-                  <td className="whitespace-nowrap px-4 py-3 text-xs font-semibold text-slate-900 tabular-nums">
-                    {formatNumber(row.total_base_points)}
-                  </td>
-
-                  <td className="whitespace-nowrap px-4 py-3 text-xs font-semibold text-[#1754cf] tabular-nums">
-                    {formatNumber(row.this_phase_base_points)}
-                  </td>
-
-                  <td className="whitespace-nowrap px-4 py-3 text-xs font-medium text-slate-600">
-                    {formatDate(row.join_date)}
-                  </td>
-
-                  <td className="whitespace-nowrap px-4 py-3 text-right">
-                    <AdminIconActionButton
-                      label={`View ${row.name || row.student_id}`}
-                      onClick={() => onView?.(row.student_id)}
-                      className="rounded-full border border-slate-200 bg-white text-slate-500 hover:border-[#1754cf] hover:text-[#1754cf]"
-                    >
-                      <VisibilityRoundedIcon sx={{ fontSize: 18 }} />
-                    </AdminIconActionButton>
-                  </td>
-                </tr>
+                  row={row}
+                  onView={onView}
+                />
               ))
             ) : (
               <tr>

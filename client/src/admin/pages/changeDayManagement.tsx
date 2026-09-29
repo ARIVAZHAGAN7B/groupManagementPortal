@@ -112,10 +112,7 @@ export default function ChangeDayManagement() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const changeDayRange = useMemo(
-    () => getValidChangeDayRange(currentPhase),
-    [currentPhase]
-  );
+  const changeDayRange = useMemo(() => getValidChangeDayRange(currentPhase), [currentPhase]);
 
   const minEndDate = useMemo(() => {
     const startDate = parseDateValue(currentPhase?.start_date);
@@ -146,6 +143,7 @@ export default function ChangeDayManagement() {
     setLoading(true);
     setError("");
     setSuccess("");
+
     try {
       const active = await fetchCurrentPhase();
       setCurrentPhase(active || null);
@@ -203,19 +201,15 @@ export default function ChangeDayManagement() {
       return;
     }
 
-    if (
-      selectedChangeDay < changeDayRange.min ||
-      selectedChangeDay > changeDayRange.max
-    ) {
-      setError(
-        `Change day must be between ${changeDayRange.min} and ${changeDayRange.max}.`
-      );
+    if (selectedChangeDay < changeDayRange.min || selectedChangeDay > changeDayRange.max) {
+      setError(`Change day must be between ${changeDayRange.min} and ${changeDayRange.max}.`);
       return;
     }
 
     setSavingChangeDay(true);
     setError("");
     setSuccess("");
+
     try {
       const res = await updatePhaseChangeDay(currentPhase.phase_id, selectedChangeDay);
       const updatedPhase = res?.phase || null;
@@ -261,6 +255,7 @@ export default function ChangeDayManagement() {
     setSavingPhaseSettings(true);
     setError("");
     setSuccess("");
+
     try {
       const res = await updatePhaseSettings(currentPhase.phase_id, {
         end_date: settingsForm.end_date,
@@ -275,13 +270,11 @@ export default function ChangeDayManagement() {
         start_time: toTimeInput(updatedPhase?.start_time) || settingsForm.start_time,
         end_time: toTimeInput(updatedPhase?.end_time) || settingsForm.end_time
       });
-      setSelectedChangeDay((prev) =>
-        toDateInput(updatedPhase?.change_day || prev)
-      );
+      setSelectedChangeDay((prev) => toDateInput(updatedPhase?.change_day || prev));
       dispatch(loadPhaseContext({ force: true }));
       dispatch(sharedApi.util.invalidateTags([{ type: "PhaseContext", id: "CURRENT" }]));
       setSuccess(res?.message || "Phase settings updated successfully.");
-    } catch (err) { 
+    } catch (err) {
       setError(err?.response?.data?.error || "Failed to update phase settings");
     } finally {
       setSavingPhaseSettings(false);
@@ -325,6 +318,7 @@ export default function ChangeDayManagement() {
     setSavingTargets(true);
     setError("");
     setSuccess("");
+
     try {
       await setPhaseTargets(currentPhase.phase_id, payload, parsedIndividualTarget);
       dispatch(loadPhaseContext({ force: true }));
@@ -346,29 +340,35 @@ export default function ChangeDayManagement() {
   }
 
   return (
-    <section className="mx-auto w-full max-w-6xl space-y-6 font-[Inter] text-slate-900">
-      <ChangeDayManagementPageHeader loading={loading} onRefresh={load} />
+    <section className="mx-auto w-full max-w-7xl space-y-6 px-4 py-5 font-[Inter] text-slate-900 md:px-6">
+      <ChangeDayManagementPageHeader
+        changeDayRange={changeDayRange}
+        currentPhase={currentPhase}
+        formatDate={formatDate}
+        loading={loading}
+        onRefresh={load}
+      />
 
-      {error ? (
-        <ChangeDayManagementStatusBanner tone="error" message={error} />
-      ) : null}
+      {error ? <ChangeDayManagementStatusBanner tone="error" message={error} /> : null}
 
-      {success ? (
-        <ChangeDayManagementStatusBanner tone="success" message={success} />
-      ) : null}
+      {success ? <ChangeDayManagementStatusBanner tone="success" message={success} /> : null}
 
       {!currentPhase ? (
-        <div className="rounded-xl border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500 shadow-sm">
+        <div className="rounded-3xl border border-slate-200 bg-white px-6 py-12 text-center text-sm font-medium text-slate-500 shadow-[0_20px_50px_-35px_rgba(15,23,42,0.45)]">
           No active phase found.
         </div>
       ) : (
         <>
           <ChangeDayManagementOverviewCards
+            changeDayRange={changeDayRange}
             currentPhase={currentPhase}
             formatDate={formatDate}
+            individualTarget={individualTarget}
+            settingsForm={settingsForm}
+            targets={targets}
           />
 
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
             <ChangeDayManagementChangeDaySection
               changeDayRange={changeDayRange}
               formatDate={formatDate}
@@ -385,21 +385,21 @@ export default function ChangeDayManagement() {
               setSettingsForm={setSettingsForm}
               settingsForm={settingsForm}
             />
-
-            <ChangeDayManagementTargetsSection
-              individualTarget={individualTarget}
-              onSave={onSaveTargets}
-              onTargetChange={onTargetChange}
-              saving={savingTargets || !currentPhase?.phase_id}
-              setIndividualTarget={setIndividualTarget}
-              targets={targets}
-            />
           </div>
+
+          <ChangeDayManagementTargetsSection
+            individualTarget={individualTarget}
+            onSave={onSaveTargets}
+            onTargetChange={onTargetChange}
+            saving={savingTargets || !currentPhase?.phase_id}
+            setIndividualTarget={setIndividualTarget}
+            targets={targets}
+          />
         </>
       )}
 
-      <footer className="pt-2 text-center text-sm text-slate-400">
-        © 2024 Student Portal Management System. All rights reserved.
+      <footer className="pb-2 pt-1 text-center text-xs font-medium tracking-[0.16em] text-slate-400">
+        Copyright 2024 Student Portal Management System
       </footer>
     </section>
   );

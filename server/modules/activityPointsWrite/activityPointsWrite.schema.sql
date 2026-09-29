@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS activity_points_write_log (
+  activity_points_write_log_id BIGINT NOT NULL AUTO_INCREMENT,
+  sync_type VARCHAR(50) NOT NULL,
+  entity_key VARCHAR(150) NOT NULL,
+  phase_id VARCHAR(36) NULL,
+  student_id VARCHAR(36) NULL,
+  group_id INT NULL,
+  payload_json JSON NOT NULL,
+  connection_mode ENUM('MIMICKED_INTERNAL','EXTERNAL_READY') NOT NULL DEFAULT 'MIMICKED_INTERNAL',
+  status ENUM('SYNCED','PENDING','FAILED') NOT NULL DEFAULT 'SYNCED',
+  source_module VARCHAR(80) NULL,
+  synced_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (activity_points_write_log_id),
+  KEY idx_apwl_sync_type_created (sync_type, created_at),
+  KEY idx_apwl_student_created (student_id, created_at),
+  KEY idx_apwl_group_created (group_id, created_at),
+  KEY idx_apwl_phase_created (phase_id, created_at),
+  KEY idx_apwl_entity_key (entity_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

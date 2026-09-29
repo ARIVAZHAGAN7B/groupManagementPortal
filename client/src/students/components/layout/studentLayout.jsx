@@ -14,8 +14,8 @@ const StudentLayout = ({ children }) => {
   }, [location.pathname]);
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-slate-50">
-      <header className="z-50 h-16 w-full shrink-0 border-b border-slate-200 bg-white">
+    <div className="flex h-screen flex-col overflow-hidden bg-slate-50 dark:bg-slate-950">
+      <header className="z-50 h-16 w-full shrink-0 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <div className="flex h-full items-center px-4 lg:px-8">
           <StudentHeader onMenuClick={() => setMobileMenuOpen(true)} />
         </div>
@@ -32,7 +32,7 @@ const StudentLayout = ({ children }) => {
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <aside
-          className={`fixed inset-y-0 left-0 z-50 flex h-full transform flex-col border-r border-slate-200 bg-slate-50 transition-transform duration-200 lg:static lg:z-auto lg:translate-x-0 ${
+          className={`fixed inset-y-0 left-0 z-50 flex h-full transform flex-col border-r border-slate-200 bg-slate-50 transition-transform duration-200 dark:border-slate-800 dark:bg-slate-950 lg:static lg:z-auto lg:translate-x-0 ${
             mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
           }`}
           style={{ width: SIDEBAR_W }}
@@ -42,7 +42,7 @@ const StudentLayout = ({ children }) => {
           </div>
         </aside>
 
-        <main className="flex-1 min-w-0 overflow-y-auto bg-slate-50">
+        <main className="flex-1 min-w-0 overflow-y-auto bg-slate-50 dark:bg-slate-950">
           <div className="min-h-full w-full">
             {children}
           </div>

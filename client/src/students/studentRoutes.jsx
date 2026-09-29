@@ -20,6 +20,7 @@ const MyTeamsPage = lazy(() => import("./pages/myRegularTeams"));
 const MyHubsPage = lazy(() => import("./pages/myHubs"));
 const MyEventGroupsPage = lazy(() => import("./pages/myTeams"));
 const TeamRequestsPage = lazy(() => import("./pages/teamRequests"));
+const SupportPage = lazy(() => import("../shared/pages/SupportPage"));
 
 const RouteFallback = () => (
   <div className="flex min-h-[240px] items-center justify-center px-4 py-10 text-sm font-medium text-slate-500">
@@ -53,6 +54,7 @@ const StudentRoutes = () => {
           <Route path="/requests" element={<TeamRequestsPage />} />
           <Route path="/event-group-requests" element={<Navigate to="/requests" replace />} />
           <Route path="/team-requests" element={<Navigate to="/requests" replace />} />
+          <Route path="/support" element={<SupportPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/eligibility" element={<EligibilityHistoryPage />} />
           <Route path="*" element={<Navigate to="/my-group" replace />} />

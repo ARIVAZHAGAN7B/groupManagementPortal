@@ -71,6 +71,15 @@ const getPhaseTargets = async (req, res) => {
   }
 };
 
+const getRecommendedTargets = async (req, res) => {
+  try {
+    const data = await phaseService.getRecommendedTargets(req.query || {});
+    res.json(data);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
 const getCurrentPhase = async (req, res) => {
   try {
     const phase = await phaseService.getCurrentPhase();
@@ -199,6 +208,7 @@ module.exports = {
   createPhase,
   setPhaseTargets,
   getPhaseTargets,
+  getRecommendedTargets,
   getCurrentPhase,
   getAllPhases,
   previewWorkingDays,

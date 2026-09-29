@@ -7,7 +7,6 @@ const { buildPaginatedResponse, parsePaginationQuery } = require("../../utils/pa
 const {
   HUB_PRIORITY_REQUIREMENTS,
   formatHubPriorityLabel,
-  formatHubPriorityRequirementSummary,
   normalizeHubPriority
 } = require("./hubRules");
 
@@ -43,10 +42,6 @@ const normalizeNotes = (value) => {
 const normalizePayload = (payload = {}) => {
   const hub_code = normalizeCode(payload.hub_code ?? payload.team_code);
   const hub_name = normalizeText(payload.hub_name ?? payload.team_name);
-  const hub_priority = normalizeHubPriority(payload.hub_priority, {
-    fieldName: "hub_priority",
-    required: true
-  });
   const status = normalizeHubStatus(payload.status);
   const description = normalizeText(payload.description);
 
@@ -56,7 +51,6 @@ const normalizePayload = (payload = {}) => {
   return {
     hub_code,
     hub_name,
-    hub_priority,
     status,
     description: description || null
   };
@@ -104,8 +98,8 @@ const ensureUniqueHubCode = async (hubCode, excludeHubId = null, executor = unde
   throw new Error("hub_code already exists");
 };
 
-const ensureStudentCanJoinHubPriority = async (hubLike, studentId, executor) => {
-  const hubPriority = normalizeHubPriority(hubLike?.hub_priority, {
+const ensureStudentCanJoinHubPriority = async (hubPriorityValue, studentId, executor) => {
+  const hubPriority = normalizeHubPriority(hubPriorityValue, {
     fieldName: "hub_priority",
     required: true
   });
@@ -151,41 +145,6 @@ const ensureStudentCanLeaveHubWhileInEvents = async (hubLike, studentId, executo
 
   const remainingHubMemberships = (Array.isArray(activeHubMemberships) ? activeHubMemberships : [])
     .filter((membership) => Number(membership.hub_id) !== Number(hubLike.hub_id));
-  const remainingPriorityCounts = {
-    PROMINENT: 0,
-    MEDIUM: 0,
-    LOW: 0
-  };
-
-  for (const membership of remainingHubMemberships) {
-    const membershipPriority = normalizeHubPriority(membership?.hub_priority, {
-      allowNull: true
-    });
-    if (!membershipPriority) continue;
-
-    remainingPriorityCounts[membershipPriority] =
-      (Number(remainingPriorityCounts[membershipPriority]) || 0) + 1;
-  }
-
-  const missingRequirements = Object.entries(HUB_PRIORITY_REQUIREMENTS).reduce(
-    (accumulator, [priority, requiredCount]) => {
-      const currentCount = Number(remainingPriorityCounts[priority]) || 0;
-      if (currentCount < Number(requiredCount || 0)) {
-        accumulator.push(
-          `${Number(requiredCount || 0) - currentCount} ${formatHubPriorityLabel(priority)}`
-        );
-      }
-      return accumulator;
-    },
-    []
-  );
-
-  if (missingRequirements.length > 0) {
-    throw new Error(
-      `You cannot leave this hub while participating in events. Active participants must keep ${formatHubPriorityRequirementSummary()} priority hubs.`
-    );
-  }
-
   const remainingHubIdSet = new Set(
     remainingHubMemberships
       .map((membership) => Number(membership.hub_id))
@@ -217,10 +176,7 @@ const ensureStudentCanLeaveHubWhileInEvents = async (hubLike, studentId, executo
     const allowedHubLabels = allowedHubs
       .map((hub) => {
         const hubName = hub?.team_name || hub?.hub_name || hub?.team_code || `Hub ${hub?.hub_id}`;
-        const hubPriorityLabel = hub?.hub_priority
-          ? ` (${formatHubPriorityLabel(hub.hub_priority)})`
-          : "";
-        return `${hubName}${hubPriorityLabel}`;
+        return hubName;
       })
       .join(", ");
 
@@ -251,13 +207,7 @@ const createHub = async (payload, actorUserId = null) => {
 
 const getHubs = async (query = {}) => {
   const filters = {
-    status: query?.status ? normalizeHubStatus(query.status) : undefined,
-    hub_priority:
-      query?.hub_priority !== undefined && query?.hub_priority !== null && query?.hub_priority !== ""
-        ? normalizeHubPriority(query.hub_priority, {
-            fieldName: "hub_priority"
-          })
-        : undefined
+    status: query?.status ? normalizeHubStatus(query.status) : undefined
   };
   const pagination = parsePaginationQuery(query, {
     defaultLimit: 30,
@@ -298,8 +248,6 @@ const updateHub = async (hubId, payload) => {
   const normalized = normalizePayload({
     hub_code: payload?.hub_code ?? payload?.team_code ?? existing.hub_code,
     hub_name: payload?.hub_name ?? payload?.team_name ?? existing.hub_name,
-    hub_priority:
-      payload?.hub_priority !== undefined ? payload.hub_priority : existing.hub_priority,
     status: payload?.status ?? existing.status,
     description:
       payload?.description !== undefined ? payload.description : existing.description
@@ -428,12 +376,17 @@ const addHubMember = async (hubId, payload = {}, actorUserId = null) => {
       throw new Error("Student is already an active member of this hub");
     }
 
-    await ensureStudentCanJoinHubPriority(hub, studentId, conn);
+    const hubPriority = normalizeHubPriority(payload.hub_priority, {
+      fieldName: "hub_priority",
+      required: true
+    });
+    await ensureStudentCanJoinHubPriority(hubPriority, studentId, conn);
 
     const result = await repo.createHubMembership(
       {
         hub_id: Number(hubId),
         student_id: studentId,
+        hub_priority: hubPriority,
         assigned_by: actorUserId || null,
         notes: normalizeNotes(payload.notes)
       },
@@ -462,6 +415,7 @@ const joinHubAsSelf = async (hubId, userId, payload = {}) => {
     hubId,
     {
       student_id: student.student_id,
+      hub_priority: payload.hub_priority,
       notes: payload.notes
     },
     userId

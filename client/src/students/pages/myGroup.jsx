@@ -195,16 +195,6 @@ const MyGroup = () => {
     [members]
   );
   const canRequestLeadershipRole = currentRole === "MEMBER";
-  const activeLeadershipCount = useMemo(
-    () =>
-      members.filter((member) =>
-        ["CAPTAIN", "VICE_CAPTAIN", "STRATEGIST", "MANAGER"].includes(
-          String(member?.role || "").toUpperCase()
-        )
-      ).length,
-    [members]
-  );
-  const canCaptainOverrideRank = isCaptain && activeLeadershipCount > 2;
   const currentGroupLeadershipRequests = useMemo(
     () =>
       leadershipRequests.filter(
@@ -364,11 +354,13 @@ const MyGroup = () => {
     setRankErr("");
 
     try {
-      const [historyRows, rulesData] = await Promise.all([
+      const [memberData, historyRows, rulesData] = await Promise.all([
+        fetchGroupMembers(data.group_id),
         fetchGroupRankHistory(data.group_id),
         fetchGroupRankRules(data.group_id)
       ]);
 
+      setMembers(Array.isArray(memberData) ? memberData : []);
       setRankHistory(Array.isArray(historyRows) ? historyRows : []);
       setRankRules(rulesData || null);
     } catch (err) {
@@ -691,7 +683,7 @@ const MyGroup = () => {
               <MyGroupMembersSection
                 currentStudentId={data?.student_id}
                 isCaptain={isCaptain}
-                canEditRank={canCaptainOverrideRank}
+                canEditRank={false}
                 members={members}
                 onChanged={load}
                 showRankCriteria={false}
@@ -701,7 +693,6 @@ const MyGroup = () => {
               <MyGroupRankSection
                 currentStudentId={data?.student_id}
                 isCaptain={isCaptain}
-                canOverrideRank={canCaptainOverrideRank}
                 members={members}
                 rankHistory={rankHistory}
                 rankRules={rankRules}

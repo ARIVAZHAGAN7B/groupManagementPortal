@@ -1,7 +1,10 @@
 const groupRepo = require("./group.repository");
+const db = require("../../config/db");
 const systemConfigService = require("../systemConfig/systemConfig.service");
 const phaseRepo = require("../phase/phase.repository");
 const eligibilityRepo = require("../eligibility/eligibility.repository");
+const activityPointsWriteService = require("../activityPointsWrite/activityPointsWrite.service");
+const cacheService = require("../../utils/cacheService");
 
 const toEligibilityStatus = (value) => {
   if (value === true || value === 1) return "ELIGIBLE";
@@ -38,6 +41,100 @@ const toOptionalNumber = (value) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const normalizeText = (value) => String(value || "").trim();
+
+const normalizeAcceptingApplications = (value) => {
+  const normalized = toOptionalBoolean(value);
+  return normalized === null ? true : normalized;
+};
+
+const normalizeJoiningConditions = (value) => {
+  const normalized = normalizeText(value);
+  if (normalized.length > 255) {
+    throw new Error("joining_conditions must be 255 characters or less");
+  }
+  return normalized || null;
+};
+
+const normalizeTier = (value) => {
+  const tier = normalizeText(value).toUpperCase() || "D";
+  if (!["D", "C", "B", "A"].includes(tier)) {
+    throw new Error("tier must be one of D, C, B, A");
+  }
+  return tier;
+};
+
+const normalizeStatus = (value) => {
+  const status = normalizeText(value).toUpperCase() || "INACTIVE";
+  if (!["ACTIVE", "INACTIVE", "FROZEN", "ARCHIVED"].includes(status)) {
+    throw new Error("status must be one of ACTIVE, INACTIVE, FROZEN, ARCHIVED");
+  }
+  return status;
+};
+
+const ensureCaptainCanManageGroup = async (groupId, actorUser) => {
+  const actorRole = String(actorUser?.role || "").toUpperCase();
+  if (["ADMIN", "SYSTEM_ADMIN"].includes(actorRole)) {
+    return;
+  }
+
+  const userId = normalizeText(actorUser?.userId);
+  if (!userId) throw new Error("Unauthorized");
+
+  const [studentRows] = await db.query(
+    `SELECT student_id
+     FROM students
+     WHERE user_id = ?
+     LIMIT 1`,
+    [userId]
+  );
+  const studentId = studentRows?.[0]?.student_id || null;
+  if (!studentId) {
+    throw new Error("Student not found");
+  }
+
+  const [membershipRows] = await db.query(
+    `SELECT membership_id
+     FROM memberships
+     WHERE student_id = ?
+       AND group_id = ?
+       AND status = 'ACTIVE'
+       AND role = 'CAPTAIN'
+     LIMIT 1`,
+    [studentId, Number(groupId)]
+  );
+
+  if (membershipRows.length === 0) {
+    throw new Error("Only admin or the active captain can manage group application settings");
+  }
+};
+
+const normalizeGroupPayload = (groupData = {}, fallback = {}) => {
+  const group_code = normalizeText(groupData.group_code ?? fallback.group_code);
+  const group_name = normalizeText(groupData.group_name ?? fallback.group_name);
+
+  if (!group_code) {
+    throw new Error("group_code is required");
+  }
+
+  if (!group_name) {
+    throw new Error("group_name is required");
+  }
+
+  return {
+    group_code,
+    group_name,
+    tier: normalizeTier(groupData.tier ?? fallback.tier),
+    status: normalizeStatus(groupData.status ?? fallback.status),
+    accepting_applications: normalizeAcceptingApplications(
+      groupData.accepting_applications ?? fallback.accepting_applications
+    ),
+    joining_conditions: normalizeJoiningConditions(
+      groupData.joining_conditions ?? fallback.joining_conditions
+    )
+  };
+};
+
 const addDiscoveryFields = (group, policy, options = {}) => {
   if (!group) return group;
 
@@ -67,8 +164,13 @@ const addDiscoveryFields = (group, policy, options = {}) => {
       ? null
       : Math.max(0, maxMembers - activeMemberCount);
   const status = String(group.status || "").toUpperCase();
+  const acceptingApplicationsSetting =
+    group.accepting_applications === undefined || group.accepting_applications === null
+      ? true
+      : Boolean(Number(group.accepting_applications));
   const acceptingApplications =
-    status !== "FROZEN" && vacancies !== null ? vacancies > 0 : status !== "FROZEN";
+    acceptingApplicationsSetting &&
+    (status !== "FROZEN" && vacancies !== null ? vacancies > 0 : status !== "FROZEN");
 
   return {
     ...group,
@@ -84,26 +186,36 @@ const addDiscoveryFields = (group, policy, options = {}) => {
     lifetime_total_points: Number.isNaN(lifetimeTotalPoints) ? 0 : lifetimeTotalPoints,
     vacancies,
     accepting_applications: acceptingApplications,
+    accepting_applications_setting: acceptingApplicationsSetting,
+    joining_conditions: group.joining_conditions || null,
     current_phase_id: options.currentPhaseId || null,
     current_phase_eligibility_status: options.eligibilityStatus || "NOT_EVALUATED"
   };
 };
 
 exports.createGroup = async (groupData) => {
-  if (!groupData.group_code || !groupData.group_name) {
-    throw new Error("Group code and name required");
-  }
-
-  return await groupRepo.createGroup({
-    ...groupData,
-    tier: (groupData.tier || "D").toUpperCase(),
-    status: groupData.status || "INACTIVE"
+  const normalized = normalizeGroupPayload(groupData, {
+    tier: "D",
+    status: "INACTIVE",
+    accepting_applications: true,
+    joining_conditions: null
   });
+
+  const result = await groupRepo.createGroup(normalized);
+  await activityPointsWriteService.writeGroupTier({
+    group_id: result.insertId,
+    tier: normalized.tier,
+    source_module: "GROUP_SERVICE",
+    sync_context: "GROUP_CREATED"
+  });
+
+  await cacheService.delPrefix("groups:");
+  return result;
 };
 
 exports.getGroups = async (options = {}) => {
   const [groups, policy, currentPhase] = await Promise.all([
-    groupRepo.getAllGroups(),
+    cacheService.getOrSet("groups:catalogue", 8, () => groupRepo.getAllGroups()),
     systemConfigService.getOperationalPolicy(),
     phaseRepo.getCurrentPhase().catch(() => null)
   ]);
@@ -178,7 +290,12 @@ exports.getGroups = async (options = {}) => {
       }
 
       if (searchQuery) {
-        const haystack = [group?.group_id, group?.group_code, group?.group_name]
+        const haystack = [
+          group?.group_id,
+          group?.group_code,
+          group?.group_name,
+          group?.joining_conditions
+        ]
           .map((value) => String(value || "").toLowerCase())
           .join(" ");
 
@@ -225,11 +342,44 @@ exports.getGroup = async (id) => {
 };
 
 exports.updateGroup = async (id, data) => {
-  return await groupRepo.updateGroup(id, data);
+  const existing = await groupRepo.getGroupById(id);
+  if (!existing) {
+    throw new Error("Group not found");
+  }
+
+  const normalized = normalizeGroupPayload(data, existing);
+  const result = await groupRepo.updateGroup(id, normalized);
+  await activityPointsWriteService.writeGroupTier({
+    group_id: id,
+    tier: normalized.tier,
+    previous_tier: existing.tier,
+    source_module: "GROUP_SERVICE",
+    sync_context: "GROUP_UPDATED"
+  });
+  await cacheService.delPrefix("groups:");
+  return result;
+};
+
+exports.updateApplicationSettings = async (id, data, actorUser) => {
+  const existing = await groupRepo.getGroupById(id);
+  if (!existing) {
+    throw new Error("Group not found");
+  }
+
+  await ensureCaptainCanManageGroup(id, actorUser);
+
+  await groupRepo.setApplicationSettings(id, {
+    accepting_applications: normalizeAcceptingApplications(data?.accepting_applications),
+    joining_conditions: normalizeJoiningConditions(data?.joining_conditions)
+  });
+  await cacheService.delPrefix("groups:");
+  return exports.getGroup(id);
 };
 
 exports.deleteGroup = async (id) => {
-  return await groupRepo.deleteGroup(id);
+  const result = await groupRepo.deleteGroup(id);
+  await cacheService.delPrefix("groups:");
+  return result;
 };
 
 exports.activateGroup = async (id, options = {}) => {
@@ -265,6 +415,7 @@ exports.activateGroup = async (id, options = {}) => {
   }
 
   await groupRepo.activateGroup(id);
+  await cacheService.delPrefix("groups:");
   return {
     group_id: Number(id),
     activated: true,
@@ -282,5 +433,7 @@ exports.activateGroup = async (id, options = {}) => {
 };
 
 exports.freezeGroup = async (id) => {
-  return await groupRepo.freezeGroup(id, { status: "FROZEN" });
+  const result = await groupRepo.freezeGroup(id, { status: "FROZEN" });
+  await cacheService.delPrefix("groups:");
+  return result;
 };

@@ -4,6 +4,7 @@ const eventRepo = require("../event/event.repository");
 const eventHubEligibilityService = require("../event/eventHubEligibility.service");
 const participationService = require("../event/eventParticipation.service");
 const eventTeamInvitationService = require("../eventTeamInvitation/eventTeamInvitation.service");
+const onDutyRepo = require("../onDuty/onDuty.repository");
 const { expandDepartmentCode } = require("../../utils/department.service");
 const { buildPaginatedResponse, parsePaginationQuery } = require("../../utils/pagination");
 
@@ -110,6 +111,11 @@ const normalizeTeamStatus = (value) => {
   return normalized;
 };
 
+const normalizeOptionalTeamStatus = (value) => {
+  if (value === undefined || value === null || value === "") return undefined;
+  return normalizeTeamStatus(value);
+};
+
 const normalizeMembershipStatus = (value) => {
   if (value === undefined || value === null || value === "") return undefined;
   const normalized = normalizeText(value).toUpperCase();
@@ -125,6 +131,15 @@ const normalizeEventId = (value) => {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) {
     throw new Error("event_id must be a positive integer");
+  }
+  return parsed;
+};
+
+const normalizeOptionalParentTeamId = (value) => {
+  if (value === undefined || value === null || value === "") return undefined;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error("parent_team_id must be a positive integer");
   }
   return parsed;
 };
@@ -310,16 +325,52 @@ const mapTeamRow = (row) => ({
   team_id: Number(row.team_id),
   event_id:
     row.event_id === null || row.event_id === undefined ? null : Number(row.event_id),
+  parent_team_id:
+    row.parent_team_id === null || row.parent_team_id === undefined
+      ? null
+      : Number(row.parent_team_id),
   rounds_cleared: Number(row.rounds_cleared) || 0,
-  active_member_count: Number(row.active_member_count) || 0
+  active_member_count: Number(row.active_member_count) || 0,
+  ...getRegistrationStateFields(row)
 });
+
+const getRequiredMinMembers = (teamLike) => {
+  const parsed = Number(teamLike?.event_min_members ?? teamLike?.min_members);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+};
+
+const getRegistrationStateFields = (teamLike) => {
+  if (!isEventGroupTeam(teamLike)) {
+    return {};
+  }
+
+  const activeMemberCount = Number(teamLike?.active_member_count) || 0;
+  const requiredMinMembers = getRequiredMinMembers(teamLike);
+  const missingMemberCount = Math.max(requiredMinMembers - activeMemberCount, 0);
+  const teamStatus = normalizeText(teamLike?.status ?? teamLike?.team_status).toUpperCase();
+  const registrationStatus =
+    teamStatus === "ACTIVE"
+      ? missingMemberCount === 0
+        ? "REGISTERED"
+        : "PENDING"
+      : teamStatus || "UNKNOWN";
+
+  return {
+    required_min_members: requiredMinMembers,
+    registration_status: registrationStatus,
+    registration_missing_member_count: missingMemberCount,
+    is_registration_valid: registrationStatus === "REGISTERED"
+  };
+};
 
 const mapMembershipRow = (row) => ({
   ...row,
   department: expandDepartmentCode(row.department),
   team_membership_id: Number(row.team_membership_id),
   team_id: Number(row.team_id),
-  event_id: row.event_id === null || row.event_id === undefined ? null : Number(row.event_id)
+  event_id: row.event_id === null || row.event_id === undefined ? null : Number(row.event_id),
+  active_member_count: Number(row.active_member_count) || 0,
+  ...getRegistrationStateFields(row)
 });
 
 const isEventGroupTeam = (team) => {
@@ -689,6 +740,8 @@ const getTeams = async (query = {}) => {
     filters.event_id = normalizeEventId(query.event_id);
   }
   filters.team_type = normalizeOptionalTeamType(query?.team_type, "team_type");
+  filters.status = normalizeOptionalTeamStatus(query?.team_status);
+  filters.parent_team_id = normalizeOptionalParentTeamId(query?.parent_team_id);
   if (filters.team_type) {
     ensureTeamRouteType(filters.team_type);
   }
@@ -860,6 +913,35 @@ const updateEventTeamRoundsCleared = async (teamId, roundsClearedValue) => {
   const rounds = await eventRepo.getRoundsByEventId(existing.event_id);
   if (roundsCleared > rounds.length) {
     throw new Error(`rounds_cleared cannot exceed configured rounds (${rounds.length})`);
+  }
+
+  const activeMemberCount = Number(existing.active_member_count) || 0;
+  const requiredMinMembers = getRequiredMinMembers(existing);
+  if (roundsCleared > 0 && activeMemberCount < requiredMinMembers) {
+    throw new Error(
+      `Registration is pending until it reaches ${requiredMinMembers} active member(s)`
+    );
+  }
+
+  const currentRoundsCleared = Number(existing.rounds_cleared) || 0;
+  if (roundsCleared > currentRoundsCleared) {
+    for (let roundOrder = currentRoundsCleared + 1; roundOrder <= roundsCleared; roundOrder += 1) {
+      const round = (rounds || []).find(
+        (row) => Number(row?.round_order) === Number(roundOrder)
+      );
+      const roundMode = normalizeText(round?.round_mode).toUpperCase();
+      if (roundMode !== "OFFLINE") continue;
+
+      const odRequest = await onDutyRepo.getRequestByRoundAndTeam(
+        round.round_id,
+        Number(teamId)
+      );
+      if (normalizeText(odRequest?.admin_status).toUpperCase() !== "APPROVED") {
+        throw new Error(
+          `Round ${roundOrder} requires an approved OD request before it can be cleared`
+        );
+      }
+    }
   }
 
   await repo.updateTeamRoundsCleared(teamId, roundsCleared);

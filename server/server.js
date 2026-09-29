@@ -1,3 +1,17 @@
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught Exception:", error);
+});
+
+const os = require("os");
+// Scale libuv threadpool to avoid bottlenecking bcrypt / crypto operations under concurrency
+const cpuCount = (os.cpus() || []).length || 4;
+process.env.UV_THREADPOOL_SIZE =
+  process.env.UV_THREADPOOL_SIZE || String(Math.min(128, Math.max(4, cpuCount * 2)));
+
 const http = require("http");
 const env = require("./config/env");
 const app = require("./app");
@@ -16,18 +30,23 @@ const startServer = async () => {
     const [rows] = await db.query("SELECT 1 + 1 AS result");
     console.log("DB connected, test query result:", rows[0].result);
 
-    await startPhaseEndScheduler();
-    startPhaseFinalizationCron();
+    const cluster = require("node:cluster");
+    const isPrimaryWorker = !cluster.isWorker || cluster.worker?.id === 1;
 
-    void membershipService.syncPendingGroupRankReviews().catch((error) => {
-      console.error("Group rank review warmup failed:", error?.message || error);
-    });
-    
-    void eligibilityService
-      .syncStoredEligibilityPointAllocationsForAllPhases()
-      .catch((error) => {
-        console.error("Eligibility point sync warmup failed:", error?.message || error);
+    if (isPrimaryWorker) {
+      await startPhaseEndScheduler();
+      startPhaseFinalizationCron();
+
+      void membershipService.syncPendingGroupRankReviews().catch((error) => {
+        console.error("Group rank review warmup failed:", error?.message || error);
       });
+      
+      void eligibilityService
+        .syncStoredEligibilityPointAllocationsForAllPhases()
+        .catch((error) => {
+          console.error("Eligibility point sync warmup failed:", error?.message || error);
+        });
+    }
 
     const httpServer = http.createServer(app);
     initializeRealtime(httpServer);

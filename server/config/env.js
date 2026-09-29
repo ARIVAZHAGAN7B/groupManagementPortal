@@ -21,6 +21,14 @@ const parseBooleanEnv = (name) => {
   throw new Error(`Invalid boolean environment variable: ${name}`);
 };
 
+const parseOptionalBooleanEnv = (name, defaultValue = false) => {
+  const raw = readOptionalEnv(name).toLowerCase();
+  if (!raw) return defaultValue;
+  if (["true", "1", "yes", "on"].includes(raw)) return true;
+  if (["false", "0", "no", "off"].includes(raw)) return false;
+  return defaultValue;
+};
+
 const parsePositiveIntEnv = (name) => {
   const parsed = Number(readRequiredEnv(name));
   if (!Number.isInteger(parsed) || parsed <= 0) {
@@ -76,6 +84,7 @@ module.exports = {
   dbUser: readRequiredEnv("DB_USER"),
   dbPassword: readRequiredEnv("DB_PASSWORD"),
   dbName: readRequiredEnv("DB_NAME"),
+  dbSsl: parseOptionalBooleanEnv("DB_SSL", false),
   dbWaitForConnections: parseBooleanEnv("DB_WAIT_FOR_CONNECTIONS"),
   dbConnectionLimit: parsePositiveIntEnv("DB_CONNECTION_LIMIT"),
   dbMaxIdle: parsePositiveIntEnv("DB_MAX_IDLE"),

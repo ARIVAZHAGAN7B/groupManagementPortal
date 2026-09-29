@@ -1,6 +1,5 @@
-import MoreVertRoundedIcon from "@mui/icons-material/MoreVertRounded";
 import {
-  formatPhaseDateRange,
+  formatLongDate,
   formatStatusLabel,
   getPhaseWorkingDaysLabel,
   getStatusBadgeClass,
@@ -23,10 +22,7 @@ function PhaseHistoryRow({ phase }) {
   return (
     <tr className="transition-colors hover:bg-slate-50/80">
       <td className="px-6 py-4">
-        <div className="font-bold text-slate-900">
-          {phase?.phase_name || phase?.phase_id || "Unnamed Phase"}
-        </div>
-        <div className="mt-1 text-[10px] font-medium text-slate-400">{phase?.phase_id || "-"}</div>
+        <div className="font-bold text-slate-900">{phase?.phase_name || "no name"}</div>
       </td>
 
       <td className="px-6 py-4">
@@ -40,7 +36,11 @@ function PhaseHistoryRow({ phase }) {
       </td>
 
       <td className="px-6 py-4">
-        <div className="text-xs font-semibold text-slate-700">{formatPhaseDateRange(phase)}</div>
+        <div className="text-xs font-semibold text-slate-700">{formatLongDate(phase?.start_date)}</div>
+      </td>
+
+      <td className="px-6 py-4">
+        <div className="text-xs font-semibold text-slate-700">{formatLongDate(phase?.end_date)}</div>
       </td>
 
       <td className="px-6 py-4 text-xs font-bold text-slate-600">
@@ -70,17 +70,6 @@ function PhaseHistoryRow({ phase }) {
           )}
         </div>
       </td>
-
-      <td className="px-6 py-4 text-right">
-        <button
-          type="button"
-          disabled
-          aria-label="Phase row actions unavailable"
-          className="text-[#1754cf] disabled:cursor-default disabled:opacity-100"
-        >
-          <MoreVertRoundedIcon sx={{ fontSize: 20 }} />
-        </button>
-      </td>
     </tr>
   );
 }
@@ -102,13 +91,16 @@ export default function PhaseConfigurationHistoryTable({
           <thead className="border-b border-slate-200 bg-slate-50">
             <tr>
               <th className="px-6 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
-                Phase Name &amp; ID
+                Phase Name
               </th>
               <th className="px-6 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
                 Status
               </th>
               <th className="px-6 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
-                Start/End Dates
+                Start Date
+              </th>
+              <th className="px-6 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+                End Date
               </th>
               <th className="px-6 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
                 Working Days
@@ -116,7 +108,6 @@ export default function PhaseConfigurationHistoryTable({
               <th className="px-6 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
                 Targets Summary
               </th>
-              <th className="px-6 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500" />
             </tr>
           </thead>
 

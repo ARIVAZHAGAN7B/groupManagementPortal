@@ -39,12 +39,6 @@ import {
   getEventRegistrationStatus
 } from "./events.constants";
 
-const HUB_RULE_REQUIREMENTS = [
-  { key: "PROMINENT", label: "prominent", required: 2 },
-  { key: "MEDIUM", label: "medium", required: 2 },
-  { key: "LOW", label: "low", required: 2 }
-];
-
 export default function StudentEventGroupsPage() {
   const navigate = useNavigate();
   const { eventId } = useParams();
@@ -227,36 +221,6 @@ export default function StudentEventGroupsPage() {
   const individualRegistration =
     String(event?.registration_mode || "TEAM").trim().toUpperCase() === "INDIVIDUAL";
   const registrationStatus = getEventRegistrationStatus(event);
-  const hubPriorityCounts = useMemo(
-    () =>
-      myHubMemberships.reduce(
-        (accumulator, membership) => {
-          const priority = String(membership?.hub_priority || "").toUpperCase();
-          if (!priority) return accumulator;
-          return {
-            ...accumulator,
-            [priority]: (accumulator[priority] || 0) + 1
-          };
-        },
-        {
-          PROMINENT: 0,
-          MEDIUM: 0,
-          LOW: 0
-        }
-      ),
-    [myHubMemberships]
-  );
-  const missingHubRequirements = useMemo(
-    () =>
-      HUB_RULE_REQUIREMENTS.filter(
-        (entry) => Number(hubPriorityCounts[entry.key]) < entry.required
-      ).map((entry) => ({
-        ...entry,
-        current: Number(hubPriorityCounts[entry.key]) || 0,
-        remaining: entry.required - (Number(hubPriorityCounts[entry.key]) || 0)
-      })),
-    [hubPriorityCounts]
-  );
   const allowedHubIdSet = useMemo(
     () =>
       new Set(
@@ -275,9 +239,6 @@ export default function StudentEventGroupsPage() {
       allowedHubIdSet.has(Number(membership.team_id))
     );
   }, [allowedHubIdSet, myHubMemberships]);
-  const missingHubSummary = missingHubRequirements
-    .map((entry) => `${entry.remaining} ${entry.label}`)
-    .join(", ");
   const studentApplicationsEnabled =
     event?.apply_by_student === undefined || event?.apply_by_student === null
       ? true
@@ -288,7 +249,6 @@ export default function StudentEventGroupsPage() {
       !eventActive ||
       !studentApplicationsEnabled ||
       !registrationStatus.isOpen ||
-      missingHubRequirements.length > 0 ||
       !hasAllowedHubMembership ||
       !!myActiveMembershipInEvent ||
       savingTeam;
@@ -298,8 +258,6 @@ export default function StudentEventGroupsPage() {
       ? "Student applications are disabled for this event."
     : !registrationStatus.isOpen
       ? "Registration is not open for this event right now."
-      : missingHubRequirements.length > 0
-        ? `Complete your hub quota first. Still needed: ${missingHubSummary}.`
       : !hasAllowedHubMembership
         ? `This event is restricted to ${getEventAllowedHubSummary(event)}. Join one of those hubs first.`
       : myActiveMembershipInEvent
@@ -357,9 +315,7 @@ export default function StudentEventGroupsPage() {
     : "Review registrations, request states, and event details from one clean workspace.";
   const membershipText = myActiveMembershipInEvent
     ? `You belong to ${myActiveMembershipInEvent.team_code || myActiveMembershipInEvent.team_name}`
-    : missingHubRequirements.length > 0
-      ? `Hub quota pending: ${missingHubSummary}`
-      : !hasAllowedHubMembership
+    : !hasAllowedHubMembership
         ? `Join one of these hubs first: ${getEventAllowedHubSummary(event)}`
         : individualRegistration
           ? "Review this event before registering individually"
@@ -579,13 +535,7 @@ export default function StudentEventGroupsPage() {
         </div>
       ) : null}
 
-      {missingHubRequirements.length > 0 ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Complete the hub quota before participating in events. Still needed: {missingHubSummary}.
-        </div>
-      ) : null}
-
-      {event && missingHubRequirements.length === 0 && !hasAllowedHubMembership ? (
+      {event && !hasAllowedHubMembership ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           This event is restricted to {getEventAllowedHubSummary(event)}. Join one of those hubs to participate.
         </div>

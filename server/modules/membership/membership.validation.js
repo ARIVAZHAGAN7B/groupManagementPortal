@@ -20,10 +20,20 @@ const validateRole = (req, res, next) => {
 };
 
 const validateRank = (req, res, next) => {
+  if (
+    req.body?.rank === null ||
+    req.body?.rank === undefined ||
+    String(req.body?.rank || "").trim().toUpperCase() === "AUTO"
+  ) {
+    req.body.rank = null;
+    next();
+    return;
+  }
+
   const rank = Number(req.body?.rank);
 
   if (!Number.isInteger(rank) || rank < 1 || rank > 5) {
-    return res.status(400).json({ message: "Rank must be an integer between 1 and 5" });
+    return res.status(400).json({ message: "Rank must be AUTO or an integer between 1 and 5" });
   }
 
   req.body.rank = rank;

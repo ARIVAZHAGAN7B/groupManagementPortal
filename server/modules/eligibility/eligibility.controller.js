@@ -200,9 +200,9 @@ const getMyIndividualEligibilityHistory = async (req, res) => {
   }
 };
 
-const getAdminStudentOverview = async (_req, res) => {
+const getAdminStudentOverview = async (req, res) => {
   try {
-    const data = await eligibilityService.getAdminStudentOverview();
+    const data = await eligibilityService.getAdminStudentOverview(req.query || {});
     res.json(data);
   } catch (error) {
     res.status(500).json({ message: error.message });

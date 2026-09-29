@@ -133,6 +133,7 @@ const syncSocketsInRoom = async (roomName) => {
 
 const syncStudentRooms = async (studentId) => {
   if (!studentId) return;
+  realtimeRepo.clearSocketSnapshotCache();
   await syncSocketsInRoom(getStudentRoom(studentId));
 };
 
@@ -171,6 +172,18 @@ const emitToTeam = (teamId, eventName, payload = {}) => {
   emitToRoom(getTeamRoom(teamId), eventName, payload);
 };
 
+const getRealtimeSummary = () => {
+  const authenticatedConnections = Number(
+    io?.sockets?.adapter?.rooms?.get(AUTHENTICATED_ROOM)?.size
+  ) || 0;
+  const adminConnections = Number(io?.sockets?.adapter?.rooms?.get(ADMINS_ROOM)?.size) || 0;
+
+  return {
+    authenticated_connections: authenticatedConnections,
+    admin_connections: adminConnections
+  };
+};
+
 const initializeRealtime = (httpServer) => {
   if (io) return io;
 
@@ -180,6 +193,28 @@ const initializeRealtime = (httpServer) => {
       credentials: true
     }
   });
+
+  // Multi-node horizontal scaling hook: use Redis adapter if REDIS_URL is provided
+  if (process.env.REDIS_URL) {
+    try {
+      const { createAdapter } = require("@socket.io/redis-adapter");
+      const { createClient } = require("redis");
+      const pubClient = createClient({ url: process.env.REDIS_URL });
+      const subClient = pubClient.duplicate();
+      Promise.all([pubClient.connect(), subClient.connect()])
+        .then(() => {
+          io.adapter(createAdapter(pubClient, subClient));
+          console.log("[realtime] Redis adapter initialized for multi-node clustering");
+        })
+        .catch((err) => {
+          console.error("[realtime] Failed to connect to Redis adapter:", err.message);
+        });
+    } catch (_err) {
+      console.warn(
+        "[realtime] REDIS_URL configured, but @socket.io/redis-adapter is not installed. Using in-memory adapter."
+      );
+    }
+  }
 
   io.use(authenticateSocket);
 
@@ -215,6 +250,7 @@ module.exports = {
   getGroupRoom,
   getTeamRoom,
   initializeRealtime,
+  getRealtimeSummary,
   emitToAuthenticated,
   emitToAdmins,
   emitToStudent,

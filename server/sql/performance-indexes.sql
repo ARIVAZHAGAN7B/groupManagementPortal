@@ -27,7 +27,8 @@ ALTER TABLE group_eligibility_points
   ADD KEY idx_group_points_group_multiplier (group_id, is_eligible, multiplier);
 
 ALTER TABLE group_points
-  ADD KEY idx_group_points_group_membership_created (group_id, membership_id, created_at);
+  ADD KEY idx_group_points_group_membership_created (group_id, membership_id, created_at),
+  ADD KEY idx_group_points_group_student_points (group_id, student_id, points);
 
 ALTER TABLE users
   ADD UNIQUE KEY uq_users_email (email),
@@ -42,3 +43,13 @@ ALTER TABLE students
 ALTER TABLE admins
   ADD UNIQUE KEY uq_admins_user_id (user_id),
   ADD KEY idx_admins_role (role);
+
+ALTER TABLE on_duty_requests
+  ADD KEY idx_od_admin_status_event (admin_status, event_id);
+
+ALTER TABLE audit_logs
+  ADD KEY idx_audit_entity_time (entity_type, created_at),
+  ADD KEY idx_audit_actor_time (actor_user_id, created_at);
+
+ALTER TABLE base_point_history
+  ADD KEY idx_bph_student_points (student_id, points);

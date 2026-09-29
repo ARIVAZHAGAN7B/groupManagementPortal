@@ -133,7 +133,6 @@ export default function HubDetailsPage() {
                 {hub.team_code || hub.hub_code || "No code"}
               </span>
               <AllGroupsBadge value={formatLabel(hub.status, "Unknown")} />
-              <AllGroupsBadge value={formatLabel(hub.hub_priority, "Not set")} />
               {myMembership ? (
                 <span className="inline-flex items-center rounded-full border border-white/80 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700">
                   Active Membership
@@ -170,9 +169,9 @@ export default function HubDetailsPage() {
             subtext={`${members.length} loaded in roster`}
           />
           <TeamPageDetailTile
-            label="Priority"
-            value={formatLabel(hub.hub_priority, "Not set")}
-            subtext="Hub placement tier"
+            label="My Priority"
+            value={myMembership ? formatLabel(myMembership.hub_priority, "Not set") : "Not joined"}
+            subtext="Set when you join this hub"
           />
           <TeamPageDetailTile
             label="Created"
@@ -201,10 +200,7 @@ export default function HubDetailsPage() {
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <TeamPageDetailTile label="Type" value="Hub" />
           <TeamPageDetailTile label="Status" value={formatLabel(hub.status, "Unknown")} />
-          <TeamPageDetailTile
-            label="Priority"
-            value={formatLabel(hub.hub_priority, "Not set")}
-          />
+          <TeamPageDetailTile label="Members" value={formatMemberCount(hub.active_member_count)} />
         </div>
 
         <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">

@@ -376,7 +376,7 @@ const AdminHeader = ({ onMenuClick }) => {
             type="button"
             aria-label="Open navigation menu"
             onClick={() => onMenuClick?.()}
-            className="grid h-10 w-10 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden"
+            className="grid h-10 w-10 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 lg:hidden"
           >
             <MenuRoundedIcon fontSize="small" />
           </button>
@@ -391,24 +391,24 @@ const AdminHeader = ({ onMenuClick }) => {
         />
 
           <div className="hidden sm:block">
-            <h1 className="text-lg font-bold text-slate-900">GM Portal</h1>
-            <p className="text-[10px] font-semibold uppercase text-slate-500">Admin Console</p>
+            <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">GM Portal</h1>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Admin Console</p>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="hidden sm:flex text-xs font-bold text-[#3211d4]">{remainingText}</div>
+          <div className="hidden rounded-full bg-brand-50 px-3 py-1 text-xs font-bold text-brand-700 dark:bg-brand-950/60 dark:text-brand-300 sm:flex">{remainingText}</div>
 
-          <div className="hidden xl:flex text-xs">
-            Current Phase: <span className="ml-1 font-bold">{phaseSummaryText}</span>
+          <div className="hidden text-xs text-slate-600 dark:text-slate-400 xl:flex">
+            Current Phase: <span className="ml-1 font-bold text-slate-900 dark:text-slate-100">{phaseSummaryText}</span>
           </div>
 
-          <div className="hidden xl:flex text-xs">
-            Change Date: <span className="ml-1 font-bold">{changeDateText}</span>
+          <div className="hidden text-xs text-slate-600 dark:text-slate-400 xl:flex">
+            Change Date: <span className="ml-1 font-bold text-slate-900 dark:text-slate-100">{changeDateText}</span>
           </div>
 
-          <div className="hidden xl:flex text-xs">
-            Targets: <span className="ml-1 font-bold">{targetSummaryText}</span>
+          <div className="hidden text-xs text-slate-600 dark:text-slate-400 xl:flex">
+            Targets: <span className="ml-1 font-bold text-slate-900 dark:text-slate-100">{targetSummaryText}</span>
           </div>
 
           <ThemeModeControl />
@@ -426,21 +426,21 @@ const AdminHeader = ({ onMenuClick }) => {
                 ? `${formatCountLabel(totalNotificationCount, "notification")} need attention`
                 : "Notifications"
             }
-            className="relative grid h-10 w-10 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50"
+            className="relative grid h-10 w-10 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
           >
             <NotificationsNoneRoundedIcon sx={{ fontSize: 20 }} />
             {totalNotificationCount > 0 ? (
-              <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
+              <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900" />
             ) : null}
           </button>
 
           <div className="flex items-center gap-3">
             <div className="hidden lg:block text-right">
-              <p className="text-sm font-bold text-slate-900">{userName}</p>
-              <p className="text-[10px] text-slate-500">{profileSubtitle}</p>
+              <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{userName}</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400">{profileSubtitle}</p>
             </div>
 
-            <div className="grid h-10 w-10 place-items-center rounded-full bg-slate-200 text-xs font-bold text-slate-700">
+            <div className="grid h-10 w-10 place-items-center rounded-full bg-brand-100 text-xs font-bold text-brand-700 dark:bg-brand-950 dark:text-brand-300">
               {initials}
             </div>
           </div>

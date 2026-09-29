@@ -2,10 +2,12 @@ const repo = require("./phase.repository");
 const db = require("../../config/db");
 const { v4: uuidv4 } = require("uuid");
 const eligibilityService = require("../eligibility/eligibility.service");
+const targetComputationService = require("./targetComputation.service");
 const { completePhaseWithEvaluation } = require("./phase.finalization");
 const { syncPhaseEndSchedule } = require("../../jobs/phaseEndScheduler");
 const { broadcastPhaseChanged } = require("../../realtime/events");
 const env = require("../../config/env");
+const cacheService = require("../../utils/cacheService");
 
 const REQUIRED_TIERS = ["D", "C", "B", "A"];
 const HOLIDAY_CACHE_TTL_MS = env.holidayCacheTtlMs;
@@ -491,8 +493,20 @@ const createPhase = async (data) => {
     changeDay = calculatedDates.changeDay;
     endDate = calculatedDates.endDate;
   }
-  const normalizedTargets = normalizeTargets(data.targets);
-  const normalizedIndividualTarget = normalizeIndividualTarget(data.individual_target);
+  const recommendedTargets =
+    data?.targets === undefined || data?.individual_target === undefined
+      ? await targetComputationService.getRecommendedTargets({
+          reference_date: formatDateOnly(startDate)
+        })
+      : null;
+  const normalizedTargets = normalizeTargets(
+    data?.targets === undefined ? recommendedTargets?.targets : data.targets
+  );
+  const normalizedIndividualTarget = normalizeIndividualTarget(
+    data?.individual_target === undefined
+      ? recommendedTargets?.individual_target
+      : data.individual_target
+  );
 
   await ensureNoPhaseWindowOverlap({
     currentPhaseId: null,
@@ -586,6 +600,7 @@ const createPhase = async (data) => {
     });
   }
 
+  await cacheService.delPrefix("phases:");
   return phase;
 };
 
@@ -619,44 +634,52 @@ const getPhaseTargets = async (phase_id) => {
     individual_target: individual?.target ?? fallbackTarget ?? null
   };
 };
+
+const getRecommendedTargets = async (query = {}) =>
+  targetComputationService.getRecommendedTargets({
+    reference_date: query?.start_date || null
+  });
+
 const getCurrentPhase = async () => {
-  const phase = await repo.getCurrentPhase();
-  if (!phase) return null;
+  return cacheService.getOrSet("phases:current", 30, async () => {
+    const phase = await repo.getCurrentPhase();
+    if (!phase) return null;
 
-  const { holidaySet } = await getHolidayDateList();
+    const { holidaySet } = await getHolidayDateList();
 
-  const today = toStartOfDay(new Date());
-  const startDate = toStartOfDay(phase.start_date);
-  const endDate = toStartOfDay(phase.end_date);
+    const today = toStartOfDay(new Date());
+    const startDate = toStartOfDay(phase.start_date);
+    const endDate = toStartOfDay(phase.end_date);
 
-  if (!today || !startDate || !endDate) {
-    return {
-      ...phase,
-      remaining_working_days: 0
-    };
-  }
-
-  if (today > endDate) {
-    return {
-      ...phase,
-      remaining_working_days: 0
-    };
-  }
-
-  let current = today > startDate ? today : startDate;
-  let remainingWorkingDays = 0;
-
-  while (current <= endDate) {
-    if (isWorkingDay(current, holidaySet)) {
-      remainingWorkingDays += 1;
+    if (!today || !startDate || !endDate) {
+      return {
+        ...phase,
+        remaining_working_days: 0
+      };
     }
-    current.setDate(current.getDate() + 1);
-  }
 
-  return {
-    ...phase,
-    remaining_working_days: remainingWorkingDays
-  };
+    if (today > endDate) {
+      return {
+        ...phase,
+        remaining_working_days: 0
+      };
+    }
+
+    let current = today > startDate ? today : startDate;
+    let remainingWorkingDays = 0;
+
+    while (current <= endDate) {
+      if (isWorkingDay(current, holidaySet)) {
+        remainingWorkingDays += 1;
+      }
+      current.setDate(current.getDate() + 1);
+    }
+
+    return {
+      ...phase,
+      remaining_working_days: remainingWorkingDays
+    };
+  });
 };
 const getPhaseById = async (phase_id) => {
   return repo.getPhaseById(phase_id);
@@ -752,6 +775,7 @@ const updatePhaseSettings = async (phase_id, payload = {}) => {
     await syncPhaseEndSchedule(updatedPhase);
   }
 
+  await cacheService.delPrefix("phases:");
   return updatedPhase;
 };
 
@@ -809,6 +833,7 @@ const updatePhaseChangeDay = async (phase_id, change_day) => {
   }
 
   await repo.updatePhaseChangeDay(phase_id, formatDateOnly(selectedDate), changeDayNumber);
+  await cacheService.delPrefix("phases:");
   return repo.getPhaseById(phase_id);
 };
 
@@ -842,6 +867,7 @@ module.exports = {
   createPhase,
   setPhaseTargets,
   getPhaseTargets,
+  getRecommendedTargets,
   finalizeExpiredActivePhases,
   getCurrentPhase,
   getPhaseById,

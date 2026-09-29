@@ -15,9 +15,9 @@ const ELIGIBILITY_INVALIDATION_TAGS = [
   CLIENT_CACHE_TAGS.GROUP_RANKS
 ];
 
-export async function fetchAdminStudentOverview() {
-  const { data } = await api.get("/api/eligibility/admin/student-overview");
-  return data; // { phase, students }
+export async function fetchAdminStudentOverview(params = {}) {
+  const { data } = await api.get("/api/eligibility/admin/student-overview", { params });
+  return data; // { phase, students, total, page, limit, totalPages }
 }
 
 export async function fetchAdminStudentProfile(studentId) {

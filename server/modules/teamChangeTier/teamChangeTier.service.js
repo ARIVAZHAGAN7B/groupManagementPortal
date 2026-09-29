@@ -4,6 +4,7 @@ const phaseRepo = require("../phase/phase.repository");
 const eligibilityRepo = require("../eligibility/eligibility.repository");
 const eligibilityService = require("../eligibility/eligibility.service");
 const groupRepo = require("../group/group.repository");
+const activityPointsWriteService = require("../activityPointsWrite/activityPointsWrite.service");
 
 const ADMIN_ROLES = ["ADMIN", "SYSTEM_ADMIN"];
 const TIERS = ["D", "C", "B", "A"];
@@ -21,8 +22,27 @@ const getAdminIdByUserIdFrom = async (queryable, userId) => {
     "SELECT admin_id FROM admins WHERE user_id=? LIMIT 1",
     [userId]
   );
-  if (rows.length === 0) throw new Error("Admin not found");
-  return rows[0].admin_id;
+  if (rows.length > 0) return rows[0].admin_id;
+
+  const [users] = await queryable.query(
+    "SELECT user_id, name, email, role FROM users WHERE user_id=? AND role IN ('ADMIN', 'SYSTEM_ADMIN') LIMIT 1",
+    [userId]
+  );
+  if (users.length > 0) {
+    const u = users[0];
+    const adminRole = u.role === 'ADMIN' ? 'SYSTEM_ADMIN' : u.role;
+    try {
+      await queryable.query(
+        "INSERT INTO admins (admin_id, user_id, name, email, role) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE user_id=VALUES(user_id)",
+        [u.user_id, u.user_id, u.name || 'Admin', u.email, adminRole]
+      );
+      return u.user_id;
+    } catch {
+      return u.user_id;
+    }
+  }
+
+  throw new Error("Admin not found");
 };
 
 const ensureAdminActor = async (queryable, actorUser) => {
@@ -379,6 +399,18 @@ const applyPhaseTierChange = async (phaseId, groupId, actorUser, payload = {}) =
       rule_code: preview.rule_code,
       approved_by_admin_id: adminId
     });
+    await activityPointsWriteService.writeGroupTier(
+      {
+        phase_id: phaseId,
+        group_id: numericGroupId,
+        tier: preview.recommended_tier,
+        previous_tier: preview.current_tier,
+        change_action: preview.change_action,
+        source_module: "TEAM_CHANGE_TIER",
+        sync_context: "PHASE_TIER_CHANGE_APPLIED"
+      },
+      conn
+    );
 
     await conn.commit();
 

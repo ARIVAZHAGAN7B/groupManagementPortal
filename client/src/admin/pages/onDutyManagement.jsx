@@ -99,6 +99,8 @@ function ReviewModal({
                   <img
                     src={proofUrl}
                     alt="Shortlist proof"
+                    loading="lazy"
+                    decoding="async"
                     className="h-48 w-full rounded-xl border border-slate-200 object-cover"
                   />
                 </div>

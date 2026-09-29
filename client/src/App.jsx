@@ -10,6 +10,7 @@ import { resetStudentMembershipState } from "./store/slices/studentMembershipSli
 import { useAuth } from "./utils/AuthContext";
 import AdminRoutes from "./admin/adminRoutes";
 import StudentRoutes from "./students/studentRoutes";
+import SupportChatWidget from "./shared/components/support/SupportChatWidget";
 import "./App.css";
 
 const App = () => {
@@ -42,11 +43,14 @@ const App = () => {
           path="/*"
           element={
             user ? (
-              user.role === "ADMIN" || user.role === "SYSTEM_ADMIN" ? (
-                <AdminRoutes />
-              ) : (
-                <StudentRoutes />
-              )
+              <>
+                {user.role === "ADMIN" || user.role === "SYSTEM_ADMIN" ? (
+                  <AdminRoutes />
+                ) : (
+                  <StudentRoutes />
+                )}
+                <SupportChatWidget />
+              </>
             ) : (
               <Navigate to="/login" replace />
             )

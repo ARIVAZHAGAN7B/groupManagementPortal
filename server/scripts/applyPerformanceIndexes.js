@@ -52,6 +52,11 @@ const INDEX_DEFINITIONS = [
     ddl: "ALTER TABLE group_points ADD KEY idx_group_points_group_membership_created (group_id, membership_id, created_at)"
   },
   {
+    tableName: "group_points",
+    indexName: "idx_group_points_group_student_points",
+    ddl: "ALTER TABLE group_points ADD KEY idx_group_points_group_student_points (group_id, student_id, points)"
+  },
+  {
     tableName: "users",
     indexName: "uq_users_email",
     ddl: "ALTER TABLE users ADD UNIQUE KEY uq_users_email (email)"
@@ -90,6 +95,26 @@ const INDEX_DEFINITIONS = [
     tableName: "admins",
     indexName: "idx_admins_role",
     ddl: "ALTER TABLE admins ADD KEY idx_admins_role (role)"
+  },
+  {
+    tableName: "on_duty_requests",
+    indexName: "idx_od_admin_status_event",
+    ddl: "ALTER TABLE on_duty_requests ADD KEY idx_od_admin_status_event (admin_status, event_id)"
+  },
+  {
+    tableName: "audit_logs",
+    indexName: "idx_audit_entity_time",
+    ddl: "ALTER TABLE audit_logs ADD KEY idx_audit_entity_time (entity_type, created_at)"
+  },
+  {
+    tableName: "audit_logs",
+    indexName: "idx_audit_actor_time",
+    ddl: "ALTER TABLE audit_logs ADD KEY idx_audit_actor_time (actor_user_id, created_at)"
+  },
+  {
+    tableName: "base_point_history",
+    indexName: "idx_bph_student_points",
+    ddl: "ALTER TABLE base_point_history ADD KEY idx_bph_student_points (student_id, points)"
   }
 ];
 

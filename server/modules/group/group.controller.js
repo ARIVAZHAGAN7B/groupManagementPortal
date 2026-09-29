@@ -76,6 +76,31 @@ exports.updateGroup = async (req, res) => {
   }
 };
 
+exports.updateApplicationSettings = async (req, res) => {
+  try {
+    const group = await groupService.updateApplicationSettings(req.params.id, req.body, req.user);
+
+    await auditService.logActionSafe({
+      req,
+      actorUser: req.user,
+      action: "GROUP_APPLICATION_SETTINGS_UPDATED",
+      entityType: "GROUP",
+      entityId: req.params.id,
+      details: {
+        accepting_applications: group?.accepting_applications_setting ?? null,
+        joining_conditions: group?.joining_conditions || null
+      }
+    });
+
+    res.json({
+      message: "Group application settings updated",
+      data: group
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
 exports.deleteGroup = async (req, res) => {
   try {
     await groupService.deleteGroup(req.params.id);

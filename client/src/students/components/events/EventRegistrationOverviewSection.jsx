@@ -51,7 +51,7 @@ export default function EventRegistrationOverviewSection({
         />
         <OverviewRow
           label="Registration Status"
-          value={formatLabel(group?.status, "Unknown")}
+          value={formatLabel(group?.registration_status || group?.status, "Unknown")}
         />
         <OverviewRow label="My Role" value={myRoleLabel} />
         <OverviewRow

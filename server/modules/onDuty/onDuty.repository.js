@@ -36,6 +36,7 @@ const REQUEST_SELECT = `
     er.start_time,
     er.end_time,
     er.round_mode,
+    COALESCE(er.od_proof_required, FALSE) AS od_proof_required,
     er.location AS round_location,
     er.status AS round_status,
     t.team_code,

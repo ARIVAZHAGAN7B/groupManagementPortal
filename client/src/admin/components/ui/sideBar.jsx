@@ -15,68 +15,51 @@ const ADMIN_SIDEBAR_SECTION_STATE_KEY = "gmp.admin.sidebar.sections";
 
 const menuSections = [
   {
-    title: "Overview",
+    title: "Command Center",
     items: [
-      { name: "Dashboard", path: "/", icon: Icons.Dashboard, end: true }
+      { name: "Dashboard", path: "/", icon: Icons.Dashboard, end: true },
+      { name: "Audit Logs", path: "/audit-logs", icon: Icons.AuditLogs }
     ]
   },
   {
-    title: "Group Services",
+    title: "Student & Group Ops",
     items: [
-      { name: "Group Management", path: "/groups", icon: Icons.CreateGroup },
+      { name: "Group Directory", path: "/groups", icon: Icons.GroupManagement },
       { name: "Group Memberships", path: "/membership-management", icon: Icons.MembershipManagement },
-      { name: "Eligibility", path: "/eligibility", icon: Icons.Leaderboard },
-      { name: "Leadership Requests", path: "/leadership-management", icon: Icons.Notifications },
-      { name: "Tier Changes", path: "/tier-management", icon: Icons.Leaderboard }
+      { name: "Student Roster", path: "/student-management", icon: Icons.StudentManagement },
+      { name: "Leadership Requests", path: "/leadership-management", icon: Icons.Leadership },
+      { name: "Tier Change Requests", path: "/tier-management", icon: Icons.Tier }
     ]
   },
   {
-    title: "Phase Services",
-    items: [
-      { name: "Phase Creation", path: "/phase-creation", icon: Icons.PhaseConfiguration },
-      { name: "All Phases", path: "/phase-history", icon: Icons.PhaseConfiguration },
-      { name: "Change Day", path: "/change-day-management", icon: Icons.PhaseConfiguration },
-      { name: "Incubation Configuration", path: "/incubation-configuration", icon: Icons.IncubationConfiguration },
-      { name: "Holiday Management", path: "/holiday-management", icon: Icons.HolidayManagement },
-      { name: "Base Points", path: "/base-points", icon: Icons.Leaderboard }
-    ]
-  },
-  {
-    title: "Team Services",
+    title: "Activities & Events",
     items: [
       { name: "Team Management", path: "/team-management", icon: Icons.TeamManagement },
-      { name: "Team Memberships", path: "/team-membership-management", icon: Icons.MembershipManagement },
+      { name: "Hub Management", path: "/hub-management", icon: Icons.School },
+      { name: "Event Lifecycles", path: "/event-management", icon: Icons.EventManagement },
+      { name: "Event Groups", path: "/event-group-management", icon: Icons.Explore },
+      { name: "Event Join Requests", path: "/event-join-requests", icon: Icons.Requests },
+      { name: "On-Duty Events", path: "/on-duty-management", icon: Icons.OnDuty },
+      { name: "On-Duty Requests", path: "/on-duty-requests", icon: Icons.Badge },
       { name: "Team Targets", path: "/team-target-management", icon: Icons.Leaderboard }
     ]
   },
   {
-    title: "Hub Services",
+    title: "Academic & Phase Engine",
     items: [
-      { name: "Hub Management", path: "/hub-management", icon: Icons.TeamManagement },
-      { name: "Hub Memberships", path: "/hub-membership-management", icon: Icons.MembershipManagement }
-    ]
-  },
-  {
-    title: "Event Services",
-    items: [
-      { name: "Event Management", path: "/event-management", icon: Icons.EventManagement },
-      { name: "On Duty Management", path: "/on-duty-management", icon: Icons.EventManagement },
-      { name: "Event Groups", path: "/event-group-management", icon: Icons.EventManagement },
-      { name: "Event Group Memberships", path: "/event-group-membership-management", icon: Icons.MembershipManagement },
-      { name: "Event Group Requests", path: "/event-join-requests", icon: Icons.EventManagement }
-    ]
-  },
-  {
-    title: "Admin Tools",
-    items: [
-      { name: "Student Management", path: "/student-management", icon: Icons.StudentManagement },
-      { name: "Audit Logs", path: "/audit-logs", icon: Icons.AuditLogs }
+      { name: "Phase Planner & History", path: "/phase-history", icon: Icons.Timeline },
+      { name: "Create Phase", path: "/phase-creation", icon: Icons.PhaseConfiguration },
+      { name: "Eligibility & Multipliers", path: "/eligibility", icon: Icons.Eligibility },
+      { name: "Base Points Rules", path: "/base-points", icon: Icons.BasePoints },
+      { name: "Change Day Rules", path: "/change-day-management", icon: Icons.ChangeDay },
+      { name: "Incubation Settings", path: "/incubation-configuration", icon: Icons.IncubationConfiguration },
+      { name: "Holiday Calendar", path: "/holiday-management", icon: Icons.HolidayManagement }
     ]
   }
 ];
 
 const utilityItems = [
-  { name: "Help & Support", icon: HelpOutlineRoundedIcon },
+  { name: "Help & Support", path: "/support", icon: HelpOutlineRoundedIcon },
   { name: "Settings", icon: SettingsOutlinedIcon, path: "/settings" },
 ];
 
@@ -136,14 +119,14 @@ const SideBar = ({ onNavigate }) => {
 
   const linkClass = ({ isActive }) =>
     [
-      "group relative flex w-full cursor-pointer items-center gap-3 overflow-hidden rounded-none px-5 py-3 text-sm font-medium transition-[background-color,color,transform] duration-200 ease-out after:absolute after:right-0 after:top-0 after:h-full after:w-[4px] after:origin-bottom after:scale-y-0 after:bg-[#3211d4] after:transition-transform after:duration-200 after:ease-out after:content-['']",
+      "group relative flex w-full cursor-pointer items-center gap-3 overflow-hidden rounded-none px-5 py-2.5 text-sm font-medium transition-[background-color,color,transform] duration-150 ease-out after:absolute after:right-0 after:top-0 after:h-full after:w-[3px] after:origin-bottom after:scale-y-0 after:bg-brand-600 after:transition-transform after:duration-150 after:ease-out after:content-['']",
       isActive
-        ? "bg-[#3211d4]/12 font-bold text-[#2b0fb8] shadow-[inset_0_0_0_1px_rgba(50,17,212,0.08)] after:scale-y-100"
-        : "text-slate-600 hover:bg-slate-100/80 hover:text-[#3211d4]",
+        ? "bg-brand-50/90 font-bold text-brand-700 shadow-[inset_0_0_0_1px_rgba(99,102,241,0.1)] after:scale-y-100 dark:bg-brand-950/60 dark:text-brand-300"
+        : "text-slate-600 hover:bg-slate-100/80 hover:text-brand-600 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-200",
     ].join(" ");
 
   const utilityButtonClass =
-    "flex w-full cursor-pointer items-center gap-3 rounded-none px-5 py-3 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100/80 hover:text-[#3211d4]";
+    "flex w-full cursor-pointer items-center gap-3 rounded-none px-5 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100/80 hover:text-brand-600 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-200";
 
   useRealtimeEvents(REALTIME_EVENTS.ADMIN_NOTIFICATIONS, handleNotificationRefresh);
 
@@ -174,86 +157,86 @@ const SideBar = ({ onNavigate }) => {
 
   return (
     <div className="flex h-full flex-col">
-      <nav className="space-y-5 pt-3">
+      <nav className="flex-1 space-y-2 pt-2">
         {menuSections.map(({ title, items }) => {
-          const sectionIsActive = items.some((item) => isItemActive(location.pathname, item));
-          const sectionIsOpen = Boolean(openSections[title]);
+          const sectionIsOpen = openSections[title] ?? true;
+          const hasActiveItem = items.some((item) =>
+            isItemActive(location.pathname, item)
+          );
 
           return (
-          <section key={title} className="space-y-1">
-            <button
-              type="button"
-              onClick={() => toggleSection(title)}
-              className={`flex w-full cursor-pointer items-center justify-between gap-3 px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.24em] transition-colors ${
-                sectionIsActive
-                  ? sectionIsOpen
-                    ? "bg-[#3211d4]/8 text-[#3211d4]"
-                    : "border-r-[4px] border-[#3211d4] bg-[#3211d4]/8 text-[#3211d4]"
-                  : "text-slate-400 hover:bg-slate-100/60 hover:text-slate-600"
-              }`}
-              aria-expanded={sectionIsOpen}
-            >
-              <span>{title}</span>
-              <KeyboardArrowDownRoundedIcon
-                sx={{ fontSize: 18 }}
-                className={`transition-transform duration-200 ${
-                  sectionIsOpen ? "rotate-0" : "-rotate-90"
+            <section key={title} className="space-y-0.5">
+              <button
+                type="button"
+                onClick={() => toggleSection(title)}
+                className={`flex w-full cursor-pointer items-center justify-between px-5 py-1.5 text-left text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                  hasActiveItem
+                    ? "text-brand-600 dark:text-brand-400"
+                    : "text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
                 }`}
-              />
-            </button>
+                aria-expanded={sectionIsOpen}
+              >
+                <span>{title}</span>
+                <KeyboardArrowDownRoundedIcon
+                  sx={{ fontSize: 16 }}
+                  className={`transform transition-transform duration-200 ${
+                    sectionIsOpen ? "rotate-0" : "-rotate-90"
+                  }`}
+                />
+              </button>
 
-            {sectionIsOpen
-              ? items.map(({ name, path, icon: Icon, end }) => (
-                  <NavLink
-                    key={name}
-                    to={path}
-                    end={end}
-                    onClick={() => onNavigate?.()}
-                    className={linkClass}
-                  >
-                    {({ isActive }) => (
-                      <>
-                        <span
-                          className={
-                            isActive
-                              ? "relative z-10 scale-105 text-[#2b0fb8] transition-all duration-200"
-                              : "relative z-10 text-slate-500 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-[#3211d4]"
-                          }
-                        >
-                          <Icon fontSize="small" />
-                        </span>
-                        <span
-                          className={
-                            isActive
-                              ? "relative z-10 truncate translate-x-0.5 transition-transform duration-200"
-                              : "relative z-10 truncate transition-transform duration-200 group-hover:translate-x-0.5"
-                          }
-                        >
-                          {name}
-                        </span>
-                        {path === "/leadership-management" && leadershipAttentionCount > 0 ? (
+              {sectionIsOpen
+                ? items.map(({ name, path, icon: Icon, end }) => (
+                    <NavLink
+                      key={name}
+                      to={path}
+                      end={end}
+                      onClick={() => onNavigate?.()}
+                      className={linkClass}
+                    >
+                      {({ isActive }) => (
+                        <>
                           <span
-                            className={`relative z-10 ml-auto inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold transition-colors duration-200 ${
+                            className={
                               isActive
-                                ? "bg-[#3211d4]/12 text-[#2b0fb8]"
-                                : "bg-red-100 text-red-700"
-                            }`}
-                            title={`${leadershipAttentionCount} leadership alert${leadershipAttentionCount === 1 ? "" : "s"}`}
+                                ? "relative z-10 scale-105 text-brand-600 transition-all duration-150 dark:text-brand-400"
+                                : "relative z-10 text-slate-400 transition-all duration-150 group-hover:translate-x-0.5 group-hover:text-brand-600 dark:text-slate-500 dark:group-hover:text-brand-400"
+                            }
                           >
-                            {leadershipAttentionCount}
+                            {Icon ? <Icon sx={{ fontSize: 18 }} /> : <span className="h-4 w-4 rounded-full bg-slate-300 dark:bg-slate-700" />}
                           </span>
-                        ) : null}
-                      </>
-                    )}
-                  </NavLink>
-                ))
-              : null}
-          </section>
-        );
+                          <span
+                            className={
+                              isActive
+                                ? "relative z-10 truncate translate-x-0.5 transition-transform duration-150"
+                                : "relative z-10 truncate transition-transform duration-150 group-hover:translate-x-0.5"
+                            }
+                          >
+                            {name}
+                          </span>
+                          {path === "/leadership-management" && leadershipAttentionCount > 0 ? (
+                            <span
+                              className={`relative z-10 ml-auto inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold transition-colors duration-150 ${
+                                isActive
+                                  ? "bg-brand-100 text-brand-700 dark:bg-brand-900/60 dark:text-brand-300"
+                                  : "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300"
+                              }`}
+                              title={`${leadershipAttentionCount} leadership alert${leadershipAttentionCount === 1 ? "" : "s"}`}
+                            >
+                              {leadershipAttentionCount}
+                            </span>
+                          ) : null}
+                        </>
+                      )}
+                    </NavLink>
+                  ))
+                : null}
+            </section>
+          );
         })}
       </nav>
 
-      <div className="mt-6 border-t border-slate-200 pt-6">
+      <div className="mt-auto border-t border-slate-200 pt-3 pb-3 dark:border-slate-800">
         {utilityItems.map(({ name, icon: Icon, path }) =>
           path ? (
             <NavLink
@@ -267,17 +250,17 @@ const SideBar = ({ onNavigate }) => {
                   <span
                     className={
                       isActive
-                        ? "relative z-10 scale-105 text-[#2b0fb8] transition-all duration-200"
-                        : "relative z-10 text-slate-500 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-[#3211d4]"
+                        ? "relative z-10 scale-105 text-brand-600 transition-all duration-150 dark:text-brand-400"
+                        : "relative z-10 text-slate-400 transition-all duration-150 group-hover:translate-x-0.5 group-hover:text-brand-600 dark:text-slate-500 dark:group-hover:text-brand-400"
                     }
                   >
-                    <Icon fontSize="small" />
+                    {Icon ? <Icon sx={{ fontSize: 18 }} /> : <span className="h-4 w-4 rounded-full bg-slate-300 dark:bg-slate-700" />}
                   </span>
                   <span
                     className={
                       isActive
-                        ? "relative z-10 truncate translate-x-0.5 transition-transform duration-200"
-                        : "relative z-10 truncate transition-transform duration-200 group-hover:translate-x-0.5"
+                        ? "relative z-10 truncate translate-x-0.5 transition-transform duration-150"
+                        : "relative z-10 truncate transition-transform duration-150 group-hover:translate-x-0.5"
                     }
                   >
                     {name}
@@ -287,8 +270,8 @@ const SideBar = ({ onNavigate }) => {
             </NavLink>
           ) : (
             <button key={name} type="button" className={utilityButtonClass}>
-              <span className="text-slate-500">
-                <Icon fontSize="small" />
+              <span className="text-slate-400 dark:text-slate-500">
+                {Icon ? <Icon sx={{ fontSize: 18 }} /> : <span className="h-4 w-4 rounded-full bg-slate-300 dark:bg-slate-700" />}
               </span>
               <span className="truncate">{name}</span>
             </button>
@@ -298,10 +281,10 @@ const SideBar = ({ onNavigate }) => {
         <button
           type="button"
           onClick={handleLogout}
-          className="flex w-full cursor-pointer items-center gap-3 rounded-none px-5 py-3 text-sm font-medium text-red-500 transition-colors hover:bg-red-50"
+          className="flex w-full cursor-pointer items-center gap-3 rounded-none px-5 py-2.5 text-sm font-medium text-rose-600 transition-colors hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/30"
         >
           <span>
-            <LogoutRoundedIcon fontSize="small" />
+            <LogoutRoundedIcon sx={{ fontSize: 18 }} />
           </span>
           <span className="truncate">Logout</span>
         </button>

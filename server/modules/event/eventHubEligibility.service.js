@@ -2,8 +2,6 @@ const eventRepo = require("./event.repository");
 const hubRepo = require("../hub/hub.repository");
 const {
   buildHubPriorityCountMap,
-  formatHubPriorityLabel,
-  formatHubPriorityRequirementSummary,
   getMissingHubPriorityRequirements
 } = require("../hub/hubRules");
 
@@ -24,13 +22,10 @@ const ensureStudentMeetsHubQuotaForParticipation = async (
   executor = undefined
 ) => {
   const snapshot = await getStudentHubQuotaSnapshot(studentId, executor);
-  if (snapshot.satisfied) {
-    return snapshot;
-  }
-
-  throw new Error(
-    `Students must join ${formatHubPriorityRequirementSummary()} priority hubs before participating in events`
-  );
+  return {
+    ...snapshot,
+    bypassed: !snapshot.satisfied
+  };
 };
 
 const ensureStudentMatchesEventHubRestriction = async (
@@ -56,10 +51,7 @@ const ensureStudentMatchesEventHubRestriction = async (
     const labels = allowedHubs
       .map((hub) => {
         const name = hub?.team_name || hub?.team_code || `Hub ${hub?.hub_id}`;
-        const priority = hub?.hub_priority
-          ? ` (${formatHubPriorityLabel(hub.hub_priority)})`
-          : "";
-        return `${name}${priority}`;
+        return name;
       })
       .join(", ");
 

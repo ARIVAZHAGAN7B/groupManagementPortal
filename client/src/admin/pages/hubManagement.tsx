@@ -29,7 +29,6 @@ const buildInitialForm = () => ({
   team_code: "",
   team_name: "",
   team_type: "HUB",
-  hub_priority: "",
   status: "ACTIVE",
   description: ""
 });
@@ -126,7 +125,6 @@ export default function HubManagement() {
       team_code: row.team_code || "",
       team_name: row.team_name || "",
       team_type: "HUB",
-      hub_priority: row.hub_priority || "",
       status: row.status || "ACTIVE",
       description: row.description || ""
     });
@@ -180,15 +178,11 @@ export default function HubManagement() {
         team_code: String(form.team_code || "").trim().toUpperCase(),
         team_name: String(form.team_name || "").trim(),
         team_type: "HUB",
-        hub_priority: String(form.hub_priority || "").trim().toUpperCase(),
         status: form.status,
         description: String(form.description || "").trim()
       };
       if (!payload.team_code || !payload.team_name) {
         throw new Error("Hub code and name are required");
-      }
-      if (!payload.hub_priority) {
-        throw new Error("Hub priority is required");
       }
       if (editingId) {
         await updateHub(editingId, payload);

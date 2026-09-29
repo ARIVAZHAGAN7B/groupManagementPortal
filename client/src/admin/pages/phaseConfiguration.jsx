@@ -8,6 +8,7 @@ import {
   fetchAllPhases,
   fetchCurrentPhase,
   fetchPhaseTargets,
+  fetchRecommendedPhaseTargets,
   fetchWorkingDaysPreview
 } from "../../service/phase.api";
 import PhaseConfigurationCreateCard from "../components/PhaseConfigurationCreateCard";
@@ -64,9 +65,10 @@ export default function PhaseConfiguration() {
     setError("");
 
     try {
-      const [currentPhase, allPhases] = await Promise.all([
+      const [currentPhase, allPhases, recommendedTargets] = await Promise.all([
         fetchCurrentPhase(),
-        fetchAllPhases()
+        fetchAllPhases(),
+        fetchRecommendedPhaseTargets().catch(() => null)
       ]);
 
       setPhase(currentPhase || null);
@@ -77,14 +79,13 @@ export default function PhaseConfiguration() {
         ).length
       );
 
-      if (currentPhase?.phase_id) {
-        const currentPhaseTargets = await fetchPhaseTargets(currentPhase.phase_id);
-        setTargets(mapTargetInputs(currentPhaseTargets));
-        setIndividualTarget(getIndividualTargetInput(currentPhaseTargets));
-      } else {
-        setTargets(defaultTargets());
-        setIndividualTarget("");
+      let targetSeed = recommendedTargets;
+      if ((!targetSeed || !Array.isArray(targetSeed?.targets)) && currentPhase?.phase_id) {
+        targetSeed = await fetchPhaseTargets(currentPhase.phase_id);
       }
+
+      setTargets(targetSeed?.targets ? mapTargetInputs(targetSeed) : defaultTargets());
+      setIndividualTarget(targetSeed ? getIndividualTargetInput(targetSeed) : "");
     } catch (e) {
       setPhase(null);
       setTargets(defaultTargets());

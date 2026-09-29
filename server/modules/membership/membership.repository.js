@@ -362,6 +362,34 @@ const getStudentReliabilityCounts = async (studentIds, reviewAt, executor) => {
   return rows;
 };
 
+const getMembershipReliabilityCounts = async (membershipIds, reviewAt, executor) => {
+  if (!Array.isArray(membershipIds) || membershipIds.length === 0) {
+    return [];
+  }
+
+  const placeholders = buildInClause(membershipIds);
+  const [rows] = await getExecutor(executor).query(
+    `SELECT
+       m.membership_id,
+       COUNT(ie.phase_id) AS reliability_eligible_phase_count
+     FROM memberships m
+     LEFT JOIN individual_eligibility ie
+       ON ie.student_id = m.student_id
+      AND ie.is_eligible = 1
+     LEFT JOIN phases p
+       ON p.phase_id = ie.phase_id
+      AND p.status = 'COMPLETED'
+      AND ${PHASE_END_AT_EXPR} <= ?
+      AND ${PHASE_END_AT_EXPR} >= m.join_date
+      AND (m.leave_date IS NULL OR ${PHASE_END_AT_EXPR} < m.leave_date)
+     WHERE m.membership_id IN (${placeholders})
+     GROUP BY m.membership_id`,
+    [reviewAt, ...membershipIds]
+  );
+
+  return rows;
+};
+
 const getLatestGroupRanksByMembershipIds = async (membershipIds, executor) => {
   if (!Array.isArray(membershipIds) || membershipIds.length === 0) {
     return [];
@@ -602,7 +630,7 @@ const getActiveMembershipWithGroupByStudent = async (studentId) => {
          COALESCE(
            SUM(
              CASE
-               WHEN gep.is_eligible = 1 THEN ROUND(gep.source_group_points * GREATEST(gep.multiplier - 1, 0), 2)
+               WHEN gep.is_eligible = 1 THEN COALESCE(gep.awarded_points, 0)
                ELSE 0
              END
            ),
@@ -717,6 +745,7 @@ module.exports = {
   getMembershipContributionTotals,
   getMembershipLoyaltyCounts,
   getStudentReliabilityCounts,
+  getMembershipReliabilityCounts,
   getLatestGroupRanksByMembershipIds,
   getLatestGroupRanksByMembershipIdsBeforeCycle,
   upsertGroupRankRows,

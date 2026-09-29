@@ -730,7 +730,7 @@ export default function GroupDetailsPage() {
         <GroupMembersTable
           members={members}
           canEditRole={["CAPTAIN", "ADMIN", "SYSTEM_ADMIN"].includes(String(user?.role || "").toUpperCase())}
-          canEditRank={["CAPTAIN", "ADMIN", "SYSTEM_ADMIN"].includes(String(user?.role || "").toUpperCase())}
+          canEditRank={["ADMIN", "SYSTEM_ADMIN"].includes(String(user?.role || "").toUpperCase())}
           canRemoveMember={["CAPTAIN", "ADMIN", "SYSTEM_ADMIN"].includes(String(user?.role || "").toUpperCase())}
           onChanged={loadAll}
           highlightStudentId={highlightStudentId}

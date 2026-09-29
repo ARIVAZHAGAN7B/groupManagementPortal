@@ -9,7 +9,7 @@ const { validateApplyRequest, validateDecision } = require("./joinRequest.valida
 router.post(
   "/apply",
   authenticate,
-  authorize("STUDENT"),
+  authorize("STUDENT", "CAPTAIN"),
   validateApplyRequest,
   controller.applyJoinRequest
 );

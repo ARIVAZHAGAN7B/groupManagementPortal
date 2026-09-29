@@ -1,4 +1,18 @@
 const db = require("../config/db");
+const SNAPSHOT_CACHE_TTL_MS = 15 * 1000;
+const snapshotCache = new Map();
+const inFlightSnapshots = new Map();
+
+const clearSocketSnapshotCache = (userId) => {
+  if (userId) {
+    snapshotCache.delete(String(userId));
+    inFlightSnapshots.delete(String(userId));
+  } else {
+    snapshotCache.clear();
+    inFlightSnapshots.clear();
+  }
+};
+
 
 const getStudentByUserId = async (userId, executor = db) => {
   const [rows] = await executor.query(
@@ -58,7 +72,7 @@ const getActiveTeamIdsByStudentId = async (studentId, executor = db) => {
     .filter((teamId) => Number.isInteger(teamId) && teamId > 0);
 };
 
-const getSocketAccessSnapshot = async (userId, executor = db) => {
+const getSocketAccessSnapshot = async (userId, executor = db, skipCache = false) => {
   if (!userId) {
     return {
       userId: null,
@@ -69,26 +83,63 @@ const getSocketAccessSnapshot = async (userId, executor = db) => {
     };
   }
 
-  const [student, admin] = await Promise.all([
-    getStudentByUserId(userId, executor),
-    getAdminByUserId(userId, executor)
-  ]);
+  const userKey = String(userId);
 
-  const studentId = student?.student_id || null;
-  const [groupIds, teamIds] = await Promise.all([
-    getActiveGroupIdsByStudentId(studentId, executor),
-    getActiveTeamIdsByStudentId(studentId, executor)
-  ]);
+  if (!skipCache && executor === db) {
+    const cached = snapshotCache.get(userKey);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.snapshot;
+    }
 
-  return {
-    userId: String(userId),
-    studentId: studentId ? String(studentId) : null,
-    adminId: admin?.admin_id ? String(admin.admin_id) : null,
-    groupIds,
-    teamIds
-  };
+    if (inFlightSnapshots.has(userKey)) {
+      return inFlightSnapshots.get(userKey);
+    }
+  }
+
+  const fetchPromise = (async () => {
+    try {
+      const [student, admin] = await Promise.all([
+        getStudentByUserId(userId, executor),
+        getAdminByUserId(userId, executor)
+      ]);
+
+      const studentId = student?.student_id || null;
+      const [groupIds, teamIds] = await Promise.all([
+        getActiveGroupIdsByStudentId(studentId, executor),
+        getActiveTeamIdsByStudentId(studentId, executor)
+      ]);
+
+      const snapshot = {
+        userId: userKey,
+        studentId: studentId ? String(studentId) : null,
+        adminId: admin?.admin_id ? String(admin.admin_id) : null,
+        groupIds,
+        teamIds
+      };
+
+      if (executor === db) {
+        snapshotCache.set(userKey, {
+          snapshot,
+          expiresAt: Date.now() + SNAPSHOT_CACHE_TTL_MS
+        });
+      }
+
+      return snapshot;
+    } finally {
+      if (executor === db) {
+        inFlightSnapshots.delete(userKey);
+      }
+    }
+  })();
+
+  if (!skipCache && executor === db) {
+    inFlightSnapshots.set(userKey, fetchPromise);
+  }
+
+  return fetchPromise;
 };
 
 module.exports = {
-  getSocketAccessSnapshot
+  getSocketAccessSnapshot,
+  clearSocketSnapshotCache
 };

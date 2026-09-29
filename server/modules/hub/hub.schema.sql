@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS hubs (
   hub_id INT NOT NULL AUTO_INCREMENT,
   hub_code VARCHAR(50) NOT NULL,
   hub_name VARCHAR(150) NOT NULL,
-  hub_priority ENUM('PROMINENT','MEDIUM','LOW') NOT NULL,
+  hub_priority ENUM('PROMINENT','MEDIUM','LOW') NULL,
   status ENUM('ACTIVE','INACTIVE','FROZEN','ARCHIVED') NOT NULL DEFAULT 'ACTIVE',
   description VARCHAR(255) NULL,
   created_by VARCHAR(36) NULL,
@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS hub_membership (
   hub_membership_id INT NOT NULL AUTO_INCREMENT,
   hub_id INT NOT NULL,
   student_id VARCHAR(36) NOT NULL,
+  hub_priority ENUM('PROMINENT','MEDIUM','LOW') NOT NULL DEFAULT 'LOW',
   status ENUM('ACTIVE','LEFT') NOT NULL DEFAULT 'ACTIVE',
   join_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   leave_date DATETIME NULL,
@@ -28,6 +29,7 @@ CREATE TABLE IF NOT EXISTS hub_membership (
   PRIMARY KEY (hub_membership_id),
   KEY idx_hub_membership_hub_status (hub_id, status),
   KEY idx_hub_membership_student_status (student_id, status),
+  KEY idx_hub_membership_student_priority_status (student_id, hub_priority, status),
   CONSTRAINT fk_hub_membership_hub
     FOREIGN KEY (hub_id) REFERENCES hubs(hub_id)
     ON DELETE CASCADE,
@@ -35,6 +37,44 @@ CREATE TABLE IF NOT EXISTS hub_membership (
     FOREIGN KEY (student_id) REFERENCES students(student_id)
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+SET @hub_schema := DATABASE();
+
+SET @ddl := IF(
+  EXISTS(
+    SELECT 1 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = @hub_schema AND TABLE_NAME = 'hub_membership' AND COLUMN_NAME = 'hub_priority'
+  ),
+  'SELECT 1',
+  'ALTER TABLE hub_membership ADD COLUMN hub_priority ENUM(''PROMINENT'',''MEDIUM'',''LOW'') NOT NULL DEFAULT ''LOW'' AFTER student_id'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @ddl := IF(
+  EXISTS(
+    SELECT 1 FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = @hub_schema AND TABLE_NAME = 'hub_membership' AND INDEX_NAME = 'idx_hub_membership_student_priority_status'
+  ),
+  'SELECT 1',
+  'ALTER TABLE hub_membership ADD KEY idx_hub_membership_student_priority_status (student_id, hub_priority, status)'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @ddl := IF(
+  EXISTS(
+    SELECT 1 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = @hub_schema AND TABLE_NAME = 'hubs' AND COLUMN_NAME = 'hub_priority' AND IS_NULLABLE = 'YES'
+  ),
+  'SELECT 1',
+  'ALTER TABLE hubs MODIFY hub_priority ENUM(''PROMINENT'',''MEDIUM'',''LOW'') NULL'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 CREATE TABLE IF NOT EXISTS event_hub_access (
   event_id INT NOT NULL,

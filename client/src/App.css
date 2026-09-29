@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme {
+  --color-brand-50: #f6f3ff;
+  --color-brand-100: #eee8ff;
+  --color-brand-200: #ddd2ff;
+  --color-brand-300: #c2aeff;
+  --color-brand-400: #a07dff;
+  --color-brand-500: #855dff;
+  --color-brand-600: #7148e7;
+  --color-brand-700: #6037d2;
+  --color-brand-800: #4d2cac;
+  --color-brand-900: #341d73;
+  --color-brand-950: #211149;
+}
+
 :root {
   --theme-canvas-rgb: 248 250 252;
   --theme-surface-rgb: 255 255 255;
@@ -661,6 +677,21 @@ body {
 
   .scrollbar-hidden::-webkit-scrollbar {
     display: none;
+  }
+
+  .surface-card {
+    border-radius: 1rem;
+    border-width: 1px;
+    border-color: rgb(var(--theme-border-rgb));
+    background-color: rgb(var(--theme-surface-rgb));
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
+  }
+
+  .surface-subtle {
+    border-radius: 0.75rem;
+    border-width: 1px;
+    border-color: rgb(var(--theme-border-soft-rgb));
+    background-color: rgb(var(--theme-surface-soft-rgb));
   }
 }
 

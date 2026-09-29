@@ -30,7 +30,7 @@ const HUB_SELECT_WITH_COUNTS = `
     h.hub_name,
     h.hub_name AS team_name,
     'HUB' AS team_type,
-    h.hub_priority,
+    NULL AS hub_priority,
     h.status,
     h.description,
     h.created_by,
@@ -55,12 +55,6 @@ const HUB_ORDER_BY = `
       WHEN 'INACTIVE' THEN 3
       WHEN 'ARCHIVED' THEN 4
       ELSE 5
-    END,
-    CASE h.hub_priority
-      WHEN 'PROMINENT' THEN 1
-      WHEN 'MEDIUM' THEN 2
-      WHEN 'LOW' THEN 3
-      ELSE 4
     END,
     h.hub_name ASC,
     h.hub_id ASC
@@ -87,7 +81,7 @@ const HUB_MEMBERSHIP_SELECT = `
     h.hub_name,
     h.hub_name AS team_name,
     'HUB' AS team_type,
-    h.hub_priority,
+    hm.hub_priority,
     h.status AS team_status,
     NULL AS event_code,
     NULL AS event_name,
@@ -111,16 +105,14 @@ const createHub = async (hub, executor) => {
       (
         hub_code,
         hub_name,
-        hub_priority,
         status,
         description,
         created_by
       )
-     VALUES (?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?)`,
     [
       hub.hub_code,
       hub.hub_name,
-      hub.hub_priority,
       hub.status,
       hub.description || null,
       hub.created_by || null
@@ -136,11 +128,6 @@ const getAllHubs = async (filters = {}, options = {}, executor) => {
   if (filters.status) {
     clauses.push("h.status = ?");
     values.push(String(filters.status).toUpperCase());
-  }
-
-  if (filters.hub_priority) {
-    clauses.push("h.hub_priority = ?");
-    values.push(String(filters.hub_priority).toUpperCase());
   }
 
   const baseSql = `
@@ -195,7 +182,6 @@ const getHubByCode = async (hubCode, executor) => {
        hub_id,
        hub_code,
        hub_name,
-       hub_priority,
        status
      FROM hubs
      WHERE hub_code = ?
@@ -224,7 +210,6 @@ const getHubsByIds = async (hubIds = [], executor) => {
        hub_id,
        hub_code,
        hub_name,
-       hub_priority,
        status
      FROM hubs
      WHERE hub_id IN (${placeholders})`,
@@ -239,14 +224,12 @@ const updateHub = async (hubId, hub, executor) => {
      SET
        hub_code = ?,
        hub_name = ?,
-       hub_priority = ?,
        status = ?,
        description = ?
      WHERE hub_id = ?`,
     [
       hub.hub_code,
       hub.hub_name,
-      hub.hub_priority,
       hub.status,
       hub.description || null,
       hubId
@@ -290,11 +273,12 @@ const getStudentByUserId = async (userId, executor) => {
 const createHubMembership = async (payload, executor) => {
   const [result] = await getExecutor(executor).query(
     `INSERT INTO hub_membership
-      (hub_id, student_id, status, assigned_by, notes)
-     VALUES (?, ?, 'ACTIVE', ?, ?)`,
+      (hub_id, student_id, hub_priority, status, assigned_by, notes)
+     VALUES (?, ?, ?, 'ACTIVE', ?, ?)`,
     [
       payload.hub_id,
       payload.student_id,
+      payload.hub_priority,
       payload.assigned_by || null,
       payload.notes || null
     ]
@@ -380,7 +364,7 @@ const getAllHubMemberships = async (filters = {}, options = {}, executor) => {
   }
 
   if (filters.hub_priority) {
-    clauses.push("h.hub_priority = ?");
+    clauses.push("hm.hub_priority = ?");
     values.push(String(filters.hub_priority).toUpperCase());
   }
 
@@ -445,14 +429,14 @@ const leaveHubMembership = async (membershipId, payload = {}, executor) => {
 const getActiveHubMembershipCountsByStudent = async (studentId, executor) => {
   const [rows] = await getExecutor(executor).query(
     `SELECT
-       h.hub_priority,
+       hm.hub_priority,
        COUNT(*) AS membership_count
      FROM hub_membership hm
      INNER JOIN hubs h ON h.hub_id = hm.hub_id
      WHERE hm.student_id = ?
        AND hm.status = 'ACTIVE'
        AND h.status = 'ACTIVE'
-     GROUP BY h.hub_priority`,
+     GROUP BY hm.hub_priority`,
     [studentId]
   );
   return rows;
@@ -464,9 +448,9 @@ const findActiveAllowedHubMembershipForEvent = async (studentId, eventId, execut
        hm.hub_membership_id,
        hm.student_id,
        hm.hub_id,
+       hm.hub_priority,
        h.hub_code,
-       h.hub_name,
-       h.hub_priority
+       h.hub_name
      FROM hub_membership hm
      INNER JOIN hubs h ON h.hub_id = hm.hub_id
      INNER JOIN event_hub_access eha ON eha.hub_id = h.hub_id

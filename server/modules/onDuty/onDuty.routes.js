@@ -8,6 +8,19 @@ const router = express.Router();
 
 router.use(authenticate);
 
+// Admin routes - must be before /:id pattern
+router.get(
+  "/admin/events",
+  authorize("ADMIN", "SYSTEM_ADMIN"),
+  controller.listEventsWithOd
+);
+
+router.get(
+  "/admin/events/:eventId/teams",
+  authorize("ADMIN", "SYSTEM_ADMIN"),
+  controller.getEventTeamsWithOd
+);
+
 router.get(
   "/",
   authorize("ADMIN", "SYSTEM_ADMIN"),
